@@ -14,7 +14,7 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 0 - Requirements and Architecture.
-- Current slice: Architecture boundaries completed and independently reviewed; the next slice is the first Architecture Decision Record.
+- Current slice: ADR-001 accepted after independent review; the next slice is ADR-002 for PostgreSQL-backed delivery jobs.
 - Repository state: Git repository on `main`; minimal backend and frontend skeletons exist under `backend/` and `frontend/`.
 - Backend baseline observed: Java 25, Spring Boot 4.1.0, Maven, and Spring Web MVC only.
 
@@ -67,11 +67,12 @@ This file is the durable source of truth for project scope and progress. Update 
 - Added and independently reviewed the Portfolio v1 product requirements, actors, use cases, non-goals, resource bounds, and measurable acceptance criteria.
 - Added and independently reviewed the delivery invariants, state transitions, attempt boundary, claim/lease lifecycle, failure matrix, and required concurrency evidence.
 - Added and independently reviewed the four business-module boundaries, acyclic dependency graph, API/worker runtime composition, and transaction ownership rules.
+- Accepted ADR-001 for one modular-monolith artifact/image with separate explicit API and worker runtime modes.
 
 ## Not completed
 
 - Concrete retry, timeout, lease, and remaining non-functional defaults.
-- Architecture Decision Records.
+- Remaining Architecture Decision Records.
 - Database model and migrations.
 - API contracts.
 - Any RelayForge production code or tests.
@@ -85,17 +86,18 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-09 | Portfolio v1 requirements | An independent review ran three passes. The final pass reported no unresolved P0/P1 contradiction and returned `ready for the next Phase 0 slice`. No application code changed, so backend tests were not run. |
 | 2026-08-09 | Delivery correctness model | An independent reviewer checked concurrency, transaction, lease, attempt, recovery, and replay semantics. Two correction passes resolved six P1 findings; the final pass reported no unresolved P0/P1 and returned `READY`. `git diff --check` passed. No application code changed, so backend tests were not run. |
 | 2026-08-09 | Architecture boundaries | `docs/ARCHITECTURE_BOUNDARIES.md` defines four capability modules, dependency and runtime rules, transaction ownership, and future architecture-test evidence. Independent review found one P1 claim-eligibility gap; the correction added a batch endpoint contract inside the short claim transaction, and re-review returned `READY` with no unresolved P0/P1. `git diff --check` passed. No application code changed, so backend tests were not run. |
+| 2026-08-09 | ADR-001 modular-monolith runtime | `docs/adr/0001-modular-monolith-api-worker-runtime.md` records context, alternatives, consequences, failure behavior, guardrails, and evidence-based revisit triggers. Independent review returned `READY` on the first pass with no P0/P1 findings. `git diff --check` passed. No application code changed, so backend tests were not run. |
 
 ## Next recommended slice
 
-Create one ADR for the foundational deployment decision:
+Create ADR-002 for the durable work-transport decision:
 
-- modular monolith instead of initial microservices;
-- one artifact and image with explicit `api` or `worker` runtime mode;
-- PostgreSQL coordination instead of internal HTTP or a message broker;
-- consequences and evidence that would justify revisiting the decision.
+- PostgreSQL-backed delivery jobs instead of Kafka, RabbitMQ, or SQS;
+- short batch claiming with lease and claim token;
+- at-least-once and ambiguous-outcome consequences;
+- evidence that would justify adding or migrating to a broker.
 
-Do not create module packages, add dependencies, or implement runtime configuration in that slice.
+Do not design tables, claim SQL, indexes, isolation levels, or add broker dependencies in that slice.
 
 ## Deferred until evidence justifies them
 
@@ -120,3 +122,4 @@ Do not create module packages, add dependencies, or implement runtime configurat
 - Defined the durable attempt boundary, token-and-lease conditional transitions, PostgreSQL time authority, immutable unknown outcomes, and one-extension/no-heartbeat lease policy.
 - Completed the reviewed architecture-boundaries baseline with four capability modules and an acyclic public-contract dependency graph.
 - Defined one-image `api`/`worker` runtime composition and the batch endpoint eligibility boundary required by the short claim transaction.
+- Accepted ADR-001 documenting why RelayForge uses one modular-monolith artifact/image with separate API and worker process modes.
