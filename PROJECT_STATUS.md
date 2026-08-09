@@ -14,7 +14,7 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 0 - Requirements and Architecture.
-- Current slice: ADR-002 accepted after independent review; the next slice is bounded delivery runtime defaults.
+- Current slice: Bounded delivery runtime defaults completed; the next slice is database model Part 1 for identity, project, and endpoint configuration.
 - Repository state: Git repository on `main`; minimal backend and frontend skeletons exist under `backend/` and `frontend/`.
 - Backend baseline observed: Java 25, Spring Boot 4.1.0, Maven, and Spring Web MVC only.
 
@@ -55,6 +55,9 @@ This file is the durable source of truth for project scope and progress. Update 
 | Claim eligibility boundary | `delivery` checks endpoint enabled state in one batch inside the short claim transaction before changing candidates to `CLAIMED` | Preserves endpoint pause semantics without importing endpoint persistence. |
 | Queue representation | Persisted delivery state is the PostgreSQL job; no separate generic job record in v1 | Avoids two lifecycle records drifting while only one background capability exists. |
 | Worker capacity admission | Reserve local dispatch permits before claim; return at most the reserved capacity and hold one permit until each local claim task stops | Prevents unbounded local prefetch and avoids releasing capacity merely because a stale task's lease expired. |
+| Delivery timing defaults | 2-second connect, 10-second dispatch, 15-second initial lease, 20-second attempt lease, 5-second recovery scan, and 20-second shutdown | Gives Portfolio v1 bounded, internally consistent starting values that can be tuned from metrics. |
+| Retry timing defaults | 5-second base, multiplier 4, 300-second cap, and equal jitter | Demonstrates persisted exponential backoff while keeping the portfolio workflow observable in a short session. |
+| Worker polling defaults | 8 local permits, claim only up to free permits, poll every 500 ms plus 0-100 ms jitter | Bounds local concurrency and avoids claimed-work prefetch while retaining responsive demo latency. |
 | Boundary enforcement | Use capability packages plus ArchUnit architecture tests when the module skeleton is implemented | Shared-process boundaries need executable enforcement rather than naming convention alone. |
 | Resource bounds | 64 KiB event payload, 8 KiB response preview, 30-day terminal-history retention | Prevents unbounded persistence while keeping Portfolio v1 manageable. |
 | Hardening timebox | Maximum 16 hours inside the 80-96 hour Portfolio v1 target | Bounds CI, cloud, load, JFR, and documentation work so correctness remains first. |
@@ -72,10 +75,11 @@ This file is the durable source of truth for project scope and progress. Update 
 - Accepted ADR-001 for one modular-monolith artifact/image with separate explicit API and worker runtime modes.
 - Accepted ADR-002 for PostgreSQL-backed delivery jobs, bounded batch claims, leases, claim tokens, and evidence-based broker migration triggers.
 - Added a compact agent operating guide and project context so routine agent tasks can load stable constraints without repeatedly loading the full progress ledger.
+- Chosen bounded delivery runtime defaults with validation relationships, metrics, tuning triggers, and future test evidence.
 
 ## Not completed
 
-- Concrete retry, timeout, lease, and remaining non-functional defaults.
+- Owner-dashboard authentication, HMAC format, and remaining security-specific defaults.
 - Database model and migrations.
 - API contracts.
 - Any RelayForge production code or tests.
@@ -92,18 +96,19 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-09 | ADR-001 modular-monolith runtime | `docs/adr/0001-modular-monolith-api-worker-runtime.md` records context, alternatives, consequences, failure behavior, guardrails, and evidence-based revisit triggers. Independent review returned `READY` on the first pass with no P0/P1 findings. `git diff --check` passed. No application code changed, so backend tests were not run. |
 | 2026-08-09 | Agent context and workflow | Added `AGENTS.md` as the repository entrypoint, `docs/AGENT_CONTEXT.md` as compact working memory, and updated the RelayForge mentor skill to route routine work to them before the full ledger. `git diff --check` passed. No application code changed, so backend tests were not run. |
 | 2026-08-09 | ADR-002 PostgreSQL-backed delivery jobs | `docs/adr/0002-postgresql-backed-delivery-jobs.md` records the database-job decision, batch claim contract, permit lifecycle, alternatives, failure behavior, correctness evidence, and broker revisit criteria. Independent review found unbounded test oracles and an incomplete permit lifecycle; two correction passes resolved them, and final re-review returned `READY` with no unresolved P0/P1. `git diff --check` passed. No application code changed, so backend tests were not run. |
+| 2026-08-09 | Delivery runtime defaults | `docs/DELIVERY_RUNTIME_DEFAULTS.md` defines bounded HTTP, lease, retry, polling, concurrency, recovery, and shutdown values with validation rules and tuning evidence. Per the user's documentation-only policy, no independent reviewer was used. `git diff --check`, timing arithmetic, and retry-schedule checks passed. No application code changed, so backend tests were not run. |
 
 ## Next recommended slice
 
-Create one bounded delivery-runtime-defaults document choosing initial values for:
+Create database model Part 1 containing only identity, project, and endpoint configuration storage:
 
-- HTTP connect/request timeout and completion margin;
-- initial claim lease and attempt-execution lease;
-- retry delays and jitter;
-- polling idle delay, claim capacity, and worker concurrency;
-- graceful-shutdown deadline.
+- module ownership and table responsibilities;
+- identifiers, timestamps, and lifecycle columns;
+- project ownership and API-key hash constraints;
+- endpoint URL, enabled state, immutable signing-secret storage, and exact subscriptions;
+- uniqueness, foreign-key, and deletion rules for this bounded scope.
 
-For every value, record the reason, failure risk, metric, and condition that would justify tuning it. Do not design tables, SQL, indexes, APIs, or production code in that slice.
+Do not design event, delivery, attempt, replay, claim, or retry tables. Do not create migrations, JPA entities, repositories, APIs, or production code in that slice.
 
 ## Deferred until evidence justifies them
 
@@ -131,3 +136,4 @@ For every value, record the reason, failure risk, metric, and condition that wou
 - Accepted ADR-001 documenting why RelayForge uses one modular-monolith artifact/image with separate API and worker process modes.
 - Added a token-efficient agent workflow: `AGENTS.md` is the startup contract, `docs/AGENT_CONTEXT.md` is compact working memory, and the full status file is read only for phase/decision/handoff work or targeted sections. The mentor skill now enforces that routing.
 - Accepted ADR-002 documenting why delivery state is the PostgreSQL job and how lease, token, local permits, and broker-migration evidence bound that choice.
+- Chosen the initial bounded delivery runtime values and the metrics and evidence required before tuning them.

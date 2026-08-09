@@ -9,7 +9,7 @@ Use this as the default working memory for a RelayForge task. It is intentionall
 - Build a portfolio-grade **outbound webhook delivery platform** in roughly 80-96 hours. Correctness, failure handling, testing, and observability come before scale.
 - Current phase: **Phase 0 — requirements and architecture**.
 - Current implementation: minimal Spring Boot backend (Java 25, Spring Boot 4.1.0, Maven, Web MVC) and React/Vite/TypeScript frontend skeletons. No product behavior, schema, migrations, or API contract exists yet.
-- Active architecture work: ADR-002 (PostgreSQL-backed delivery jobs) is accepted after independent concurrency review. The next slice is bounded delivery runtime defaults; do not start schema, SQL, API, or production-code work in that slice.
+- Active architecture work: bounded delivery runtime defaults are recorded in `docs/DELIVERY_RUNTIME_DEFAULTS.md`. The next slice is database model Part 1 for identity, project, and endpoint configuration only; do not include delivery tables, migrations, APIs, or production code.
 
 ## Product contract to preserve
 
@@ -28,6 +28,7 @@ Use this as the default working memory for a RelayForge task. It is intentionall
 - Modules expose narrow commands, queries, identifiers, results, and ports—not JPA entities, repositories, or mutable domain objects. Each module owns persistence.
 - `delivery` owns publish idempotency, events, deliveries, attempts, replay, claim/retry/recovery, and worker orchestration. It calls narrow `endpoint` contracts inside short transactions for routing, claim eligibility, and attempt snapshots.
 - Persisted delivery state is the v1 PostgreSQL job; there is no separate generic job record or broker. A worker reserves local dispatch permits before a bounded claim, and each returned claim keeps one permit until its old local task has stopped all HTTP/state work.
+- Initial delivery runtime values: 2-second connect, 10-second dispatch, 15-second initial lease, 20-second attempt lease, 5-second recovery scan, 20-second shutdown, retry bases 5/20/80/300 seconds with equal jitter, and 8 permits polled every 500 ms plus 0-100 ms jitter.
 
 ## Work routing and durable memory
 
