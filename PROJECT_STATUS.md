@@ -14,9 +14,9 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 1 - Foundation.
-- Current slice: capability package skeleton and executable module-boundary rules completed and independently reviewed.
+- Current slice: explicit `api|worker` runtime selection, fail-fast validation, and mutually exclusive composition markers completed and independently reviewed.
 - Repository state: Git repository on `main`; RelayForge backend foundation exists under `backend/` and the React/Vite skeleton remains under `frontend/`.
-- Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, and ArchUnit 1.4.2; no RelayForge business behavior or database migration exists.
+- Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, ArchUnit 1.4.2, and a required strict runtime-mode contract; no RelayForge business behavior or database migration exists.
 - Local environment note: the default terminal Java is JDK 21 while this project requires JDK 25; Maven verification currently selects `C:\Program Files\Java\jdk-25` explicitly.
 
 ## Approved decisions
@@ -97,11 +97,13 @@ This file is the durable source of truth for project scope and progress. Update 
 - Owner approved the Phase 0 baseline by starting Phase 1.
 - Renamed the generic backend identity to RelayForge and established the `identity`, `project`, `endpoint`, and `delivery` capability packages.
 - Added executable ArchUnit rules for the allowed module graph, cycle freedom, cross-module public-API access, and public-contract isolation.
+- Implemented strict `relayforge.runtime=api|worker` binding with fail-fast missing/invalid behavior and mutually exclusive API/worker composition markers.
+- Added focused and real-application tests proving exact runtime values, component scanning, and role exclusion.
 
 ## Not completed
 
 - Physical database design, migrations, indexes, lock SQL, mappings, and repositories.
-- Runtime-mode selection and all RelayForge business behavior, persistence, API, security, and worker implementation.
+- All RelayForge business behavior, persistence, HTTP API, security, and worker implementation; runtime markers currently contain no role behavior.
 - Docker, CI, frontend, observability, performance testing, or cloud infrastructure.
 
 ## Verification log
@@ -120,17 +122,18 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-09 | Final Phase 0 documentation batch | Added database model Part 2, API contract, security baseline, and Phase 0 handoff; aligned the earlier requirements, delivery, architecture, persistence, workflow, status, and compact-context documents. Per the user's documentation-only policy, no independent reviewer was used. `git diff --check` and all local Markdown-link checks passed; `quick_validate.py` returned `Skill is valid!`; structural checks found five conceptual tables in each database-model part, 26 unique API endpoint headings, a 740-word compact context, and no application-path changes. No application code changed, so backend tests were not run. |
 | 2026-08-09 | Learning-first agent workflow | Rewrote `AGENTS.md` as the repository-wide learning, source-of-truth, validation, and reporting policy; reduced `docs/AGENT_CONTEXT.md` to orientation/navigation; added `docs/README.md` and `tasks/CURRENT.md`; and limited the mentor skill to learner-specific behavior. `git diff --check` passed. No application code changed, so backend tests were not run. |
 | 2026-08-09 | Phase 1 capability boundaries | Added product-specific Maven/Spring identity, four behavior-free capability package anchors, and ArchUnit 1.4.2 rules. Focused architecture tests passed 5/5; the full JDK 25 Maven suite passed 6/6 including Spring context startup. Independent review found one P1 stale `spring.application.name`; it was corrected and re-review returned `READY` with no P0/P1. `git diff --check` passed. The full test run emitted a non-failing Mockito/Byte Buddy future dynamic-agent warning inherited from the Spring test stack. |
+| 2026-08-09 | Phase 1 runtime mode | Added strict required `relayforge.runtime=api|worker` binding, mutually exclusive conditional composition markers, and architecture rules preventing reverse runtime dependencies or runtime access to business internals. Focused runtime tests passed 9/9; the final full JDK 25 suite passed 16/16 with seven architecture rules. Packaged-JAR smoke tests proved missing mode and noncanonical `API` exit 1, while exact `api` and `worker` exit 0. Independent review found two P1 gaps in lenient enum/condition semantics and real component-scan evidence; corrections resolved both. A final review found one P1 over-broad runtime package selector; anchoring it to `com.gialong.relayforge.runtime..` resolved the false-fail risk, and final re-review returned `READY` with no P0/P1. `git diff --check` passed. |
 
 ## Next recommended slice
 
-Implement the explicit runtime-mode contract as the next Phase 1 slice:
+Establish the PostgreSQL persistence test foundation as the next Phase 1 slice:
 
-- bind and validate exactly one `relayforge.runtime=api|worker` value;
-- fail startup for missing or invalid values outside deliberately isolated tests;
-- establish minimal conditional API/worker configuration markers;
-- prove with Spring tests that API mode excludes worker markers, worker mode excludes API markers, and valid modes still start.
+- make and record the focused Flyway-versus-Liquibase choice;
+- add Spring JDBC, the PostgreSQL driver, migration support, and PostgreSQL Testcontainers test dependencies;
+- prove a real PostgreSQL container can start, accept a pooled connection, and run the selected migration mechanism;
+- keep runtime-mode tests and architecture tests green.
 
-Do not add business controllers, polling, recovery, outbound HTTP, persistence, security, Docker, or frontend behavior in that slice.
+Do not create owner, project, endpoint, event, delivery, or attempt tables; do not add JPA entities, repositories, Docker Compose, cloud infrastructure, or business behavior in that slice.
 
 ## Deferred until evidence justifies them
 
@@ -165,3 +168,4 @@ Do not add business controllers, polling, recovery, outbound HTTP, persistence, 
 - Separated learning-first agent workflow responsibilities: `AGENTS.md` holds repository rules and source authority; `AGENT_CONTEXT.md` provides navigation; `docs/README.md` indexes sources; `tasks/CURRENT.md` holds the active unit; and the mentor skill supplies only teaching behavior.
 - Approved the Phase 0 baseline and started Phase 1 with the `com.gialong.relayforge` package skeleton and executable modular-monolith boundary tests.
 - Corrected the independent review finding by aligning Spring's runtime application name with the RelayForge Maven and Java identity.
+- Implemented and reviewed strict API/worker runtime selection, correcting lenient enum/condition disagreement and proving real component-scan mutual exclusion.

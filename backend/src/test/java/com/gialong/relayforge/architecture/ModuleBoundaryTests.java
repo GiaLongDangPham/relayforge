@@ -25,6 +25,7 @@ import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.sli
 class ModuleBoundaryTests {
 
     static final String BASE_PACKAGE = "com.gialong.relayforge";
+    private static final String RUNTIME_COMPOSITION_PACKAGE = BASE_PACKAGE + ".runtime..";
 
     private static final Set<String> BUSINESS_MODULES = Set.of(
             "identity",
@@ -75,6 +76,21 @@ class ModuleBoundaryTests {
             .should().haveSimpleNameEndingWith("Repository")
             .allowEmptyShould(true);
 
+    @ArchTest
+    static final ArchRule BUSINESS_MODULES_DO_NOT_DEPEND_ON_RUNTIME_COMPOSITION = noClasses()
+            .that().resideInAnyPackage(
+                    "..identity..",
+                    "..project..",
+                    "..endpoint..",
+                    "..delivery.."
+            )
+            .should().dependOnClassesThat().resideInAPackage(RUNTIME_COMPOSITION_PACKAGE);
+
+    @ArchTest
+    static final ArchRule RUNTIME_COMPOSITION_TARGETS_ONLY_BUSINESS_PUBLIC_API = classes()
+            .that().resideInAPackage(RUNTIME_COMPOSITION_PACKAGE)
+            .should(accessBusinessModulesOnlyThroughApi());
+
     private static ArchCondition<JavaClass> accessOtherBusinessModulesOnlyThroughApi() {
         return new ArchCondition<>("access other business modules only through their api package") {
             @Override
@@ -100,6 +116,32 @@ class ModuleBoundaryTests {
                     if (!targetsPublicApi) {
                         String message = dependency.getDescription()
                                 + " targets another module outside its public api package";
+                        events.add(SimpleConditionEvent.violated(source, message));
+                    }
+                }
+            }
+        };
+    }
+
+    private static ArchCondition<JavaClass> accessBusinessModulesOnlyThroughApi() {
+        return new ArchCondition<>("access business modules only through their api package") {
+            @Override
+            public void check(JavaClass source, ConditionEvents events) {
+                for (Dependency dependency : source.getDirectDependenciesFromSelf()) {
+                    JavaClass target = dependency.getTargetClass();
+                    Optional<String> targetModule = businessModuleOf(target);
+                    if (targetModule.isEmpty()) {
+                        continue;
+                    }
+
+                    String publicApiPackage = BASE_PACKAGE + "." + targetModule.get() + ".api";
+                    String targetPackage = target.getPackageName();
+                    boolean targetsPublicApi = targetPackage.equals(publicApiPackage)
+                            || targetPackage.startsWith(publicApiPackage + ".");
+
+                    if (!targetsPublicApi) {
+                        String message = dependency.getDescription()
+                                + " targets a business module outside its public api package";
                         events.add(SimpleConditionEvent.violated(source, message));
                     }
                 }
