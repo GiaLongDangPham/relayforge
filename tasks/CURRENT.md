@@ -4,70 +4,67 @@ Status: Completed
 
 ## Goal
 
-Establish a real PostgreSQL persistence test foundation with JDBC pooling, Flyway migrations, and Testcontainers before creating any RelayForge business table.
+Create the first RelayForge business-table migration for `owner_accounts` and prove its database-owned invariants against real PostgreSQL.
 
 ## Learning outcome
 
-Understand why integration tests for PostgreSQL-specific behavior need a real PostgreSQL engine, how Spring Boot service connections supply container credentials, and how Flyway turns schema evolution into ordered, auditable application inputs.
+Understand which invariants belong in PostgreSQL constraints and defaults, which remain application responsibilities, and why a migration test should exercise failing writes rather than only inspect table metadata.
 
 ## Scope
 
-- Use Flyway SQL migrations managed by the Spring Boot dependency set.
-- Use PostgreSQL 17.10 as the pinned test baseline and `public` as the v1 application schema.
-- Add Spring JDBC, PostgreSQL driver, Spring Boot Flyway/PostgreSQL support, Spring Boot Testcontainers, and PostgreSQL/JUnit Testcontainers modules.
-- Add a technical V1 migration that verifies PostgreSQL 17 or newer without creating business tables.
-- Prove a pooled JDBC connection, PostgreSQL version, Flyway history, and absence of business tables on a real container.
-- Keep runtime-mode and architecture tests isolated and green.
-- Remove the accidental bundled `api` runtime default so missing mode continues to fail outside focused tests.
+- Add only Flyway V2 for `public.owner_accounts`.
+- Require application-supplied UUID identifiers.
+- Enforce canonical lowercase ASCII login names, bounded storage, and global uniqueness.
+- Require a bounded, nonblank, whitespace-free password-hash value without coupling the database to one hash format.
+- Default optimistic version to zero and reject negative versions.
+- Default lifecycle timestamps from PostgreSQL time.
+- Update migration tests for the new schema version and expected table set.
 
 ## Decisions and trade-offs
 
-- Choose Flyway over Liquibase because later migrations will intentionally use PostgreSQL SQL for constraints, indexes, and queue behavior. Liquibase's database-neutral changelog and richer diff/rollback tooling do not solve a current need.
-- Pin `postgres:17.10-alpine`, the current supported minor in the chosen mature major line. A floating major tag would make test evidence change without a code diff.
-- Keep one `public` schema. Separate schemas would not enforce module ownership inside one database user and would add search-path and cross-schema migration complexity.
-- Let Spring Boot manage library versions so its tested Flyway/Testcontainers set remains coherent.
-- Use `@ServiceConnection` so container connection details override only the integration-test context; no credentials enter application configuration.
-- Defer production migration ownership. Local/test startup may run Flyway automatically, while cloud rollout may later use one migration job with API/worker instances validating compatibility.
+- Accept login names matching `^[a-z0-9][a-z0-9._-]*$` under PostgreSQL's `C` collation. The database rejects noncanonical input instead of silently trimming or lowercasing it, and the ASCII meaning does not vary with deployment collation.
+- Do not enforce a BCrypt prefix or cost in SQL. The security layer owns hash generation and verification, while the table requires the whitespace-free shape common to encoded hashes and supports later algorithm/cost changes.
+- Do not generate UUIDs in PostgreSQL. The accepted model requires application-generated UUIDv4 and avoids a database extension.
+- Use PostgreSQL defaults for `version`, `created_at`, and `updated_at`, but leave timestamp advancement on mutation to the future owner update use case.
+- Test behavior through real inserts and constraint violations. Metadata assertions alone would not prove PostgreSQL actually rejects invalid state.
 
 ## Out of scope
 
-- Owner, project, endpoint, event, delivery, attempt, replay, session, or other business tables.
-- JPA, entities, repositories, transaction use cases, claim SQL, or indexes.
-- Docker Compose, persistent local volumes, cloud databases, migration rollback automation, and production credentials.
+- JPA entities, repositories, bootstrap services, Spring Security, password hashing, login endpoints, sessions, or seed configuration.
+- Optimistic update SQL and concurrent bootstrap behavior.
+- Projects, API keys, endpoints, events, deliveries, attempts, or indexes beyond constraints created for this table.
 
 ## Test evidence
 
-- Docker-backed Spring context starts with a PostgreSQL 17.10 service connection.
-- Auto-configured datasource is pooled and returns a valid PostgreSQL JDBC connection.
-- Server major version is 17 and database/session time zone is UTC.
-- Flyway applies exactly the technical V1 migration successfully and creates schema history.
-- No RelayForge business table exists after migration.
-- Runtime-mode focused tests do not need PostgreSQL and existing architecture rules remain green.
+- Flyway reaches V2 in `public` and the only business table is `owner_accounts`.
+- A minimal valid row receives version zero and PostgreSQL timestamps.
+- Duplicate canonical login is rejected and does not replace the existing password hash.
+- Uppercase, whitespace, disallowed alphabet, empty, and overlength logins are rejected.
+- Null/blank/whitespace-containing/overlength password hashes and negative versions are rejected.
+- Omitting `id` is rejected and the column has no database default.
 
 ## Definition of done
 
-- Focused PostgreSQL integration test and full JDK 25 Maven suite pass with Docker running.
+- Focused PostgreSQL migration tests and the full JDK 25 Maven suite pass with Docker.
 - Independent review has no unresolved P0/P1.
-- Persistence documents and project memory record only verified foundation decisions.
-- No business schema or behavior enters this slice.
+- Project memory records verified behavior and the next bounded slice.
+- No application persistence or authentication behavior enters this slice.
 
 ## Actual verification
 
-- The first focused run exposed a Spring Boot 4.1 modularization detail: `flyway-core` alone provided no Flyway auto-configuration bean. Replacing it with `spring-boot-starter-flyway` fixed the context while retaining Boot-managed versions.
-- The focused Docker-backed PostgreSQL test passed 2/2 against `postgres:17.10-alpine` after the final correction.
-- The final JDK 25 Maven suite passed 18/18: two PostgreSQL foundation tests, nine runtime tests, and seven architecture rules.
-- Flyway created `public.flyway_schema_history` and applied only V1; the test found zero other tables in `public`.
-- Hikari returned a valid PostgreSQL connection whose session timezone is UTC and current schema is `public`.
-- Independent review found one P1: `public` initially depended on the container's default search path. Explicit Flyway default-schema and Hikari search-path configuration plus a `current_schema()` assertion resolved it; re-review returned `READY` with no P0/P1.
-- `git diff --check` is required once more after this final Markdown update.
+- Flyway applied V1 then V2 to a clean `public` schema on `postgres:17.10-alpine`.
+- Focused JDK 25 PostgreSQL tests passed 14/14 after the final corrections.
+- The final full Maven suite passed 30/30: fourteen database invocations, nine runtime tests, and seven architecture rules.
+- Independent review found three P1 gaps: ordinary-space-only trimming, collation-dependent ASCII ranges, and missing evidence for application-owned UUIDs.
+- `C` collation, a whitespace-free encoded-hash constraint, and metadata plus omitted-ID tests resolved all findings; re-review returned `READY` with no remaining P0/P1.
+- Final `git diff --check` passed after the progress documentation update.
 
 ## Remaining scope
 
-- No RelayForge business table, JPA mapping, repository, transaction use case, index, or claim SQL exists.
-- Production migration ownership and rollout compatibility checks remain a later deployment decision.
-- Docker is required for the PostgreSQL integration test.
-- The existing non-failing Mockito/Byte Buddy future dynamic-agent warning remains inherited from the Spring test stack.
+- The database cannot prove a stored value is BCrypt or that plaintext never reached the persistence call; bootstrap/security tests must prove those responsibilities later.
+- Bootstrap idempotency, concurrent seed behavior, optimistic update SQL, and `updated_at` advancement are not implemented.
+- No JPA mapping, repository, identity use case, authentication, session, or owner HTTP endpoint exists.
 
 ## Next task
 
-Create and Testcontainers-test only the V2 `owner_accounts` migration and its database invariants. Keep JPA, repositories, authentication behavior, and every other business table out of that slice.
+Map only `owner_accounts` through JPA inside the `identity` module and prove insert/load plus optimistic-version behavior against PostgreSQL. Keep bootstrap and authentication out of that slice.

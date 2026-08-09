@@ -91,6 +91,10 @@ Module ownership means other modules use public contracts rather than importing 
 
 Email is not stored in v1 because registration, email verification, and password reset are non-goals.
 
+### 4.3 Physical implementation status
+
+Flyway V2 now creates `public.owner_accounts` with an application-supplied UUID primary key, globally unique `login_name`, nonnegative version defaulting to zero, and PostgreSQL-owned lifecycle timestamp defaults. The login constraint uses the exact `^[a-z0-9][a-z0-9._-]*$` policy under `C` collation so its ASCII meaning does not change with deployment collation. Encoded password hashes must be bounded, nonempty, and contain no ASCII whitespace; BCrypt generation, cost validation, plaintext exclusion, bootstrap idempotency, and optimistic update behavior remain application responsibilities and require later evidence.
+
 ## 5. `projects`
 
 ### 5.1 Columns
