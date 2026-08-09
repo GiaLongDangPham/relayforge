@@ -252,9 +252,9 @@ A message broker is reconsidered only if PostgreSQL job polling creates a measur
 - Exact Java base package and internal package layout.
 - Concrete module public interfaces and command/result types.
 - Spring conditional-configuration mechanism for runtime modes.
-- Owner dashboard authentication mechanism and session/token storage.
-- Database schema, foreign keys, transaction isolation, locks, and migration ownership.
-- HTTP API paths, request/response contracts, and pagination.
+- Owner authentication/session implementation following `SECURITY_BASELINE.md`.
+- Physical schema, foreign keys, transaction isolation, locks, and migration ownership following both database-model documents.
+- OpenAPI/DTO/controller implementation following `API_CONTRACT.md`.
 - Exact ArchUnit version and boundary rules expressed as code.
 - Observability, retention scheduling, and deployment configuration.
 

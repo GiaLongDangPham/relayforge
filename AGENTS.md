@@ -1,49 +1,55 @@
-# RelayForge Agent Operating Guide
+# RelayForge Repository Working Rules
 
-This repository builds RelayForge, an outbound webhook delivery platform. Work in one small, verifiable vertical slice at a time. Do not infer approval to implement unrelated roadmap items.
+RelayForge is a learning project for an outbound webhook delivery platform. Treat the user as the project owner and learner, not as a requester for bulk code generation.
 
-## Fast start (default context budget)
+## Start and scope every task
 
-1. Read `docs/AGENT_CONTEXT.md` and run `git status --short --branch`.
-2. State one outcome for this turn and what is out of scope. Prefer changing 1-3 files; explain before exceeding five.
-3. Read only the document routed below and the code directly involved in the slice. Do not scan the whole repository or repeat prior analysis.
-4. Before a production-code change, state the invariant, the failure it prevents, the trade-off, and what the test will prove.
-5. Make the smallest coherent change, run the narrowest relevant verification, review the diff, then update the compact context and `PROJECT_STATUS.md` if a durable fact changed.
+1. Understand the requested outcome, then read `docs/AGENT_CONTEXT.md`, `tasks/CURRENT.md`, and run `git status --short --branch`.
+2. Read only the authoritative documents relevant to the task, using `docs/README.md` as the navigation map.
+3. State one small, coherent outcome and what is out of scope. Do not implement an entire phase or large feature unless the user explicitly asks.
+4. Inspect only the code directly involved; do not scan or refactor unrelated areas.
 
-Read the full `PROJECT_STATUS.md` only when starting a new phase, resolving a contradiction, making/revising an architectural decision, or preparing a handoff. Otherwise use its `Current position`, `Approved decisions`, and `Next recommended slice` sections as needed.
+## Learning mode
 
-## Documentation router
+Before significant implementation, explain in RelayForge terms what will be built and why, where it belongs in the accepted architecture, the important Java/Spring/PostgreSQL concepts, and the invariant, failure mode, trade-off, and test evidence.
 
-| Need | Read first |
-| --- | --- |
-| Product scope, actors, acceptance criteria | `docs/REQUIREMENTS.md` |
-| Retries, leases, idempotency, delivery states | `docs/DELIVERY_MODEL.md` |
-| Module ownership, transactions, API/worker modes | `docs/ARCHITECTURE_BOUNDARIES.md` |
-| A decision and its alternatives | relevant file in `docs/adr/` |
-| Current milestone, completed work, verification history | `PROJECT_STATUS.md` |
+For a meaningful core behavior, when the user has not asked for a complete implementation, offer a small checkpoint or invite them to implement the central part first. Do not hide important concepts behind generated boilerplate.
 
-## Non-negotiable constraints
+When reviewing user-written code, first identify what works, explain mistakes and their impact, and propose a focused correction. Do not replace the implementation wholesale unless the user asks or agrees after review. Increase difficulty gradually and connect each slice to the previous one.
 
-- Portfolio v1 is an outbound-only modular monolith: one artifact/image, one explicit `api` or `worker` process mode, PostgreSQL as the coordination boundary.
-- Delivery is at-least-once, not exactly-once. Never hold a database transaction open during outbound HTTP.
-- Publish idempotency is required per project. Use short lease-based claims with opaque claim tokens; PostgreSQL time decides due/expiry correctness.
-- Do not promise delivery ordering. No broker, Redis, microservices, Kubernetes, or broad shared/common module without an ADR backed by evidence.
-- Preserve module direction: `endpoint -> project`; `delivery -> project, endpoint`; no reverse dependency and no cross-module repository/entity access.
-- Treat pre-existing/untracked changes as user-owned. Do not overwrite, stage, or reformat them unless the user asks.
+## Engineering guardrails
 
-## Memory and token discipline
+- Read the relevant authoritative documentation before non-trivial design or implementation work.
+- Do not silently change architecture, invariants, module boundaries, runtime behavior, or an accepted ADR. Surface the impact and request a decision when a change is material.
+- Do not add dependencies, infrastructure, or a new service/store without a documented need, compatible source-of-truth guidance, and explicit user approval when it expands scope.
+- Avoid unrelated cleanup, formatting, renames, and refactors. A change may touch many files when one cohesive outcome requires it, but it must not add unrelated behavior.
+- Treat pre-existing or untracked changes as user-owned. Do not overwrite, stage, or reformat them unless asked.
+- After implementation, run the narrowest relevant tests or build checks, then broaden verification when risk warrants it. Never claim a check passed unless it actually passed.
 
-- `docs/AGENT_CONTEXT.md` is the compact working memory. Keep it under roughly 1,200 words and update it only for active phase, active slice, changed invariants, or changed navigation.
-- `PROJECT_STATUS.md` is the durable audit ledger, not a prompt dump. Add concise facts, changed files, real command results, decisions, limitations, and one next slice. Do not copy entire designs into it.
-- Put stable rationale in an ADR; put detailed behavior and test evidence in the focused design document; link instead of duplicating.
-- Use targeted commands (`rg`, exact paths, narrow tests). Summarize inspected evidence rather than pasting large files into follow-up prompts.
-- If context is missing or conflicts, stop guessing: read the authoritative routed source and record the resolution where future agents can find it.
+## Documentation and memory
 
-## Completion checklist
+- `docs/AGENT_CONTEXT.md` is concise orientation and navigation only; it is not a specification.
+- `tasks/CURRENT.md` records only the active unit of work. Update it when that unit is started, materially refined, or completed.
+- `PROJECT_STATUS.md` records project-wide phase, completed slices, durable decisions, evidence, limitations, and the next recommended slice. Update it after a completed slice when durable progress changed.
+- ADRs record an architectural decision, alternatives, rationale, and consequences. Accepted ADRs are not silently reversed or merged into general documentation.
+- Do not create a new documentation file unless the information has a clearly different responsibility from all existing documents. Prefer updating an existing authoritative document and linking to it rather than duplicating it.
 
-- [ ] Scope stayed within one primary outcome.
-- [ ] Critical behavior has a focused test or an explicit reason it cannot yet be tested.
-- [ ] Reported verification actually passed.
-- [ ] No unrelated diff or user-owned change was touched.
-- [ ] Durable memory was updated when needed.
+## Source-of-truth policy
 
+For a topic, read the highest relevant source first. This order defines authority and where a correction belongs:
+
+1. `docs/REQUIREMENTS.md` - product scope, rules, and acceptance criteria.
+2. Accepted files in `docs/adr/` - material architectural decisions, rationale, alternatives, and consequences.
+3. `docs/ARCHITECTURE_BOUNDARIES.md` - module ownership, dependency direction, runtime composition, and transaction ownership.
+4. `docs/DELIVERY_MODEL.md`, then `docs/DELIVERY_RUNTIME_DEFAULTS.md` - delivery invariants/failure behavior, then concrete runtime values.
+5. `docs/DATABASE_MODEL_PART1.md` and `docs/DATABASE_MODEL_PART2.md` - conceptual persistence and database responsibilities.
+6. `docs/API_CONTRACT.md` - HTTP behavior and DTO boundaries.
+7. `docs/SECURITY_BASELINE.md` - authentication, authorization, secret handling, SSRF, and redaction.
+8. `PROJECT_STATUS.md` - progress ledger and current-phase record; it does not redefine accepted behavior.
+9. `docs/PHASE_*_HANDOFF.md` and other summaries - review/navigation aids, not specifications.
+
+This order does **not** authorize silently resolving a conflict. If two authoritative sources disagree, stop implementation; cite the conflicting statements, explain the behavioral or architectural impact, and ask the user which direction to take. An unaccepted ADR draft is not authoritative.
+
+## Completion report
+
+Report the outcome in plain language, including files changed and each file's purpose, what was implemented or decided, tests/checks run and their real results, remaining issues or decisions, and one small proposed next step when appropriate.

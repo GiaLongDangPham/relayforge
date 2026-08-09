@@ -14,9 +14,9 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 0 - Requirements and Architecture.
-- Current slice: Bounded delivery runtime defaults completed; the next slice is database model Part 1 for identity, project, and endpoint configuration.
+- Current slice: the complete Phase 0 documentation baseline is ready for owner review; no further architecture-first document is planned before code.
 - Repository state: Git repository on `main`; minimal backend and frontend skeletons exist under `backend/` and `frontend/`.
-- Backend baseline observed: Java 25, Spring Boot 4.1.0, Maven, and Spring Web MVC only.
+- Backend baseline observed: Java 25, Spring Boot 4.1.0, Maven, and Spring Web MVC only; no RelayForge production behavior or database migration exists.
 
 ## Approved decisions
 
@@ -58,6 +58,15 @@ This file is the durable source of truth for project scope and progress. Update 
 | Delivery timing defaults | 2-second connect, 10-second dispatch, 15-second initial lease, 20-second attempt lease, 5-second recovery scan, and 20-second shutdown | Gives Portfolio v1 bounded, internally consistent starting values that can be tuned from metrics. |
 | Retry timing defaults | 5-second base, multiplier 4, 300-second cap, and equal jitter | Demonstrates persisted exponential backoff while keeping the portfolio workflow observable in a short session. |
 | Worker polling defaults | 8 local permits, claim only up to free permits, poll every 500 ms plus 0-100 ms jitter | Bounds local concurrency and avoids claimed-work prefetch while retaining responsive demo latency. |
+| Configuration identifiers | Application-generated UUIDv4 with PostgreSQL `uuid`; lifecycle timestamps use `timestamptz` and PostgreSQL time | Keeps identifiers opaque and timestamps unambiguous without another generator dependency. |
+| Configuration concurrency | Optimistic `bigint version` on mutable owner, project, and endpoint aggregates | Detects dashboard lost updates without confusing them with worker lease/token fencing. |
+| Secret persistence | Password hashes and API-key digests are nonrecoverable; endpoint signing secrets use encrypted envelopes with an external key reference | Signing needs plaintext recovery while authentication secrets must never be recoverable from persistence. |
+| Owner authentication | Spring Security with PostgreSQL-backed server sessions, BCrypt cost 12, CSRF on owner mutations, and a 30-minute idle timeout | Fits one first-party dashboard and keeps logout/invalidation server-controlled without JWT or Redis. |
+| Publisher authentication | One-time project API key with public selector and 32-byte secret; persist only a peppered HMAC-SHA-256 digest | Enables direct record lookup, revocation, and nonrecoverable credential storage. |
+| Outbound authenticity | One-time 32-byte endpoint secret, encrypted at rest, signs versioned canonical identity fields plus exact body digest with HMAC-SHA-256 | Lets receivers verify origin and body integrity while preserving recoverability only where dispatch needs it. |
+| SSRF boundary | Validate configuration, then resolve, reject prohibited address classes, and pin the actual connection on every attempt; do not follow redirects | URL syntax checks alone cannot prevent DNS rebinding or internal-network access. |
+| HTTP contract | Versioned REST under `/api/v1`, Problem Details errors, opaque cursor pagination, optimistic version conflicts, and one-time secret responses | Keeps the demo API explicit, bounded, and safe without exposing worker internals. |
+| Configuration lifecycle | No owner/project/endpoint hard deletion in v1; revoke API keys and disable endpoints | Prevents configuration actions from accidentally cascading into future delivery history or nonterminal work. |
 | Boundary enforcement | Use capability packages plus ArchUnit architecture tests when the module skeleton is implemented | Shared-process boundaries need executable enforcement rather than naming convention alone. |
 | Resource bounds | 64 KiB event payload, 8 KiB response preview, 30-day terminal-history retention | Prevents unbounded persistence while keeping Portfolio v1 manageable. |
 | Hardening timebox | Maximum 16 hours inside the 80-96 hour Portfolio v1 target | Bounds CI, cloud, load, JFR, and documentation work so correctness remains first. |
@@ -76,12 +85,18 @@ This file is the durable source of truth for project scope and progress. Update 
 - Accepted ADR-002 for PostgreSQL-backed delivery jobs, bounded batch claims, leases, claim tokens, and evidence-based broker migration triggers.
 - Added a compact agent operating guide and project context so routine agent tasks can load stable constraints without repeatedly loading the full progress ledger.
 - Chosen bounded delivery runtime defaults with validation relationships, metrics, tuning triggers, and future test evidence.
+- Defined database model Part 1 for owner accounts, projects, API keys, endpoint configuration, subscriptions, secrecy, optimistic locking, and restrictive deletion.
+- Defined database model Part 2 for immutable events, PostgreSQL delivery queue state, append-only attempts, late diagnostics, replay idempotency, transaction boundaries, retention, and future evidence.
+- Defined the owner, publisher, inspection, replay, and outbound webhook HTTP contract.
+- Defined the Portfolio v1 security baseline for sessions, CSRF, API keys, ownership, signing secrets, outbound HMAC, SSRF-resistant connections, and redaction.
+- Added the Phase 0 handoff, review map, exit checklist, locked decisions, and first Phase 1 slice.
+- Replaced the file-count workflow limit with a cohesive-scope rule in the repository guide and RelayForge mentor skill.
+- Refined repository guidance for learning-first collaboration: separated repository policy, compact navigation, mentor behavior, the documentation index, and the single active-task record.
 
 ## Not completed
 
-- Owner-dashboard authentication, HMAC format, and remaining security-specific defaults.
-- Database model and migrations.
-- API contracts.
+- Owner review and approval of the final Phase 0 documentation batch.
+- Physical database design, migrations, indexes, lock SQL, mappings, and repositories.
 - Any RelayForge production code or tests.
 - Docker, CI, frontend, observability, performance testing, or cloud infrastructure.
 
@@ -97,18 +112,15 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-09 | Agent context and workflow | Added `AGENTS.md` as the repository entrypoint, `docs/AGENT_CONTEXT.md` as compact working memory, and updated the RelayForge mentor skill to route routine work to them before the full ledger. `git diff --check` passed. No application code changed, so backend tests were not run. |
 | 2026-08-09 | ADR-002 PostgreSQL-backed delivery jobs | `docs/adr/0002-postgresql-backed-delivery-jobs.md` records the database-job decision, batch claim contract, permit lifecycle, alternatives, failure behavior, correctness evidence, and broker revisit criteria. Independent review found unbounded test oracles and an incomplete permit lifecycle; two correction passes resolved them, and final re-review returned `READY` with no unresolved P0/P1. `git diff --check` passed. No application code changed, so backend tests were not run. |
 | 2026-08-09 | Delivery runtime defaults | `docs/DELIVERY_RUNTIME_DEFAULTS.md` defines bounded HTTP, lease, retry, polling, concurrency, recovery, and shutdown values with validation rules and tuning evidence. Per the user's documentation-only policy, no independent reviewer was used. `git diff --check`, timing arithmetic, and retry-schedule checks passed. No application code changed, so backend tests were not run. |
+| 2026-08-09 | Database model Part 1 | `docs/DATABASE_MODEL_PART1.md` defines five configuration tables, ownership, bounded columns, constraints, transaction rules, secret representation, lifecycle behavior, query patterns, and future Testcontainers evidence. Per the user's documentation-only policy, no independent reviewer was used. `git diff --check` passed; the scope check found exactly five Part 1 tables and no SQL block. No application code changed, so backend tests were not run. |
+| 2026-08-09 | Final Phase 0 documentation batch | Added database model Part 2, API contract, security baseline, and Phase 0 handoff; aligned the earlier requirements, delivery, architecture, persistence, workflow, status, and compact-context documents. Per the user's documentation-only policy, no independent reviewer was used. `git diff --check` and all local Markdown-link checks passed; `quick_validate.py` returned `Skill is valid!`; structural checks found five conceptual tables in each database-model part, 26 unique API endpoint headings, a 740-word compact context, and no application-path changes. No application code changed, so backend tests were not run. |
+| 2026-08-09 | Learning-first agent workflow | Rewrote `AGENTS.md` as the repository-wide learning, source-of-truth, validation, and reporting policy; reduced `docs/AGENT_CONTEXT.md` to orientation/navigation; added `docs/README.md` and `tasks/CURRENT.md`; and limited the mentor skill to learner-specific behavior. `git diff --check` passed. No application code changed, so backend tests were not run. |
 
 ## Next recommended slice
 
-Create database model Part 1 containing only identity, project, and endpoint configuration storage:
+The owner reviews `docs/PHASE_0_HANDOFF.md` and the linked final batch. Resolve only concrete contradictions or requested changes.
 
-- module ownership and table responsibilities;
-- identifiers, timestamps, and lifecycle columns;
-- project ownership and API-key hash constraints;
-- endpoint URL, enabled state, immutable signing-secret storage, and exact subscriptions;
-- uniqueness, foreign-key, and deletion rules for this bounded scope.
-
-Do not design event, delivery, attempt, replay, claim, or retry tables. Do not create migrations, JPA entities, repositories, APIs, or production code in that slice.
+After approval, begin Phase 1 with one code slice: create the backend capability-package skeleton and ArchUnit tests that enforce the accepted dependency graph and prevent repository/entity leakage. Compile and run the tests. Do not add migrations, business behavior, controllers, security configuration, worker execution, or frontend changes in that slice.
 
 ## Deferred until evidence justifies them
 
@@ -137,3 +149,7 @@ Do not design event, delivery, attempt, replay, claim, or retry tables. Do not c
 - Added a token-efficient agent workflow: `AGENTS.md` is the startup contract, `docs/AGENT_CONTEXT.md` is compact working memory, and the full status file is read only for phase/decision/handoff work or targeted sections. The mentor skill now enforces that routing.
 - Accepted ADR-002 documenting why delivery state is the PostgreSQL job and how lease, token, local permits, and broker-migration evidence bound that choice.
 - Chosen the initial bounded delivery runtime values and the metrics and evidence required before tuning them.
+- Completed the Part 1 configuration database baseline with opaque UUIDs, optimistic versions, nonrecoverable authentication secrets, encrypted signing material, and restrictive deletion.
+- Changed the incremental workflow from a file-count limit to a small cohesive review-scope limit.
+- Completed the Phase 0 event/delivery persistence, API, and security baselines and linked them through a final handoff and owner-review checklist.
+- Separated learning-first agent workflow responsibilities: `AGENTS.md` holds repository rules and source authority; `AGENT_CONTEXT.md` provides navigation; `docs/README.md` indexes sources; `tasks/CURRENT.md` holds the active unit; and the mentor skill supplies only teaching behavior.

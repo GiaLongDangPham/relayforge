@@ -240,16 +240,14 @@ Sections 9.1 through 9.4 are the Core MVP gate. Section 9.5 is the Portfolio har
 
 These are conservative portfolio defaults, not claims about universal webhook-platform limits.
 
-## 11. Decisions intentionally deferred
+## 11. Downstream resolution of intentionally deferred choices
 
-The following details must be decided in a later, focused slice before their implementation begins:
+Focused Phase 0 documents now resolve the behavioral choices that did not belong in product requirements:
 
-- authentication mechanism for the owner dashboard;
-- exact retry delays, jitter algorithm, request timeout, and lease duration;
-- HMAC canonicalization and header names;
-- the concrete HTTP-client mechanism that enforces the destination-validation invariant;
-- delivery-history pagination contract;
-- cloud runtime and database topology;
-- numerical performance targets after the baseline workload exists.
+- owner dashboard authentication: `SECURITY_BASELINE.md`;
+- retry, jitter, timeout, lease, polling, and concurrency defaults: `DELIVERY_RUNTIME_DEFAULTS.md`;
+- HMAC canonicalization and security headers: `SECURITY_BASELINE.md`;
+- delivery-history pagination and API errors: `API_CONTRACT.md`;
+- conceptual persistence: `DATABASE_MODEL_PART1.md` and `DATABASE_MODEL_PART2.md`.
 
-Deferring these choices prevents the requirements slice from becoming a database, API, or infrastructure design document.
+The concrete IP-pinning HTTP adapter, cloud/database topology, and numerical performance targets remain implementation/measurement decisions. Keeping those details out of this file preserves the separation between product requirements and technical design.

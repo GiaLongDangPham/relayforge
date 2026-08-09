@@ -297,13 +297,13 @@ The implementation is not considered correct until tests demonstrate:
 15. every transition out of `CLAIMED` invalidates the claim token and lease;
 16. terminal deliveries never re-enter automatic processing.
 
-## 11. Decisions deferred to focused slices
+## 11. Downstream decisions and remaining implementation work
 
-- Exact lease duration, HTTP timeout, completion margin, and retry schedule.
-- Exact batch size and worker polling interval.
-- SQL claim statement, indexes, constraints, and isolation-level evidence.
-- Concrete storage representation for effective pause and late diagnostic results.
-- HMAC request format and destination-validation implementation.
-- API error and response contracts.
+Phase 0 resolved the previously deferred behavioral choices in focused documents:
 
-These decisions must preserve the invariants and failure behavior in this document.
+- timing, retry, batch, polling, concurrency, recovery, and shutdown defaults: [Delivery Runtime Defaults](DELIVERY_RUNTIME_DEFAULTS.md);
+- delivery/attempt/late-diagnostic storage concepts: [Database Model Part 2](DATABASE_MODEL_PART2.md);
+- HMAC, secret handling, and destination-validation behavior: [Security Baseline](SECURITY_BASELINE.md);
+- API errors, pagination, idempotency, history, and replay behavior: [API Contract](API_CONTRACT.md).
+
+Implementation still must choose and verify concrete SQL, indexes, constraints, lock modes, isolation levels, Java adapters, and cloud configuration. Those choices must preserve the invariants and failure behavior in this document.
