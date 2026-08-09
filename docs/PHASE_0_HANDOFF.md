@@ -1,6 +1,6 @@
 # RelayForge Phase 0 Handoff
 
-Status: Ready for owner review
+Status: Approved and completed
 Last updated: 2026-08-09
 
 ## 1. Phase outcome
@@ -91,9 +91,9 @@ These decisions must preserve the locked behavior above. They are not permission
 - [x] Owner and publisher HTTP contracts cover the MVP workflow.
 - [x] Authentication, authorization, credential storage, HMAC, SSRF, and redaction have a baseline.
 - [x] Future tests required to prove critical claims are named.
-- [ ] Project owner has reviewed and accepted this Phase 0 batch.
+- [x] Project owner accepted this Phase 0 batch by starting Phase 1.
 
-Phase 0 is complete when the final checkbox is approved. Approval does not mean every implementation choice is frozen; it means coding may start without reopening product or architecture fundamentals.
+Phase 0 is complete. Approval does not mean every implementation choice is frozen; it means coding may proceed without reopening product or architecture fundamentals.
 
 ## 7. First Phase 1 slice after approval
 

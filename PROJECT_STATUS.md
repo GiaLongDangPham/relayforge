@@ -13,10 +13,11 @@ This file is the durable source of truth for project scope and progress. Update 
 
 ## Current position
 
-- Current phase: Phase 0 - Requirements and Architecture.
-- Current slice: the complete Phase 0 documentation baseline is ready for owner review; no further architecture-first document is planned before code.
-- Repository state: Git repository on `main`; minimal backend and frontend skeletons exist under `backend/` and `frontend/`.
-- Backend baseline observed: Java 25, Spring Boot 4.1.0, Maven, and Spring Web MVC only; no RelayForge production behavior or database migration exists.
+- Current phase: Phase 1 - Foundation.
+- Current slice: capability package skeleton and executable module-boundary rules completed and independently reviewed.
+- Repository state: Git repository on `main`; RelayForge backend foundation exists under `backend/` and the React/Vite skeleton remains under `frontend/`.
+- Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, and ArchUnit 1.4.2; no RelayForge business behavior or database migration exists.
+- Local environment note: the default terminal Java is JDK 21 while this project requires JDK 25; Maven verification currently selects `C:\Program Files\Java\jdk-25` explicitly.
 
 ## Approved decisions
 
@@ -68,6 +69,7 @@ This file is the durable source of truth for project scope and progress. Update 
 | HTTP contract | Versioned REST under `/api/v1`, Problem Details errors, opaque cursor pagination, optimistic version conflicts, and one-time secret responses | Keeps the demo API explicit, bounded, and safe without exposing worker internals. |
 | Configuration lifecycle | No owner/project/endpoint hard deletion in v1; revoke API keys and disable endpoints | Prevents configuration actions from accidentally cascading into future delivery history or nonterminal work. |
 | Boundary enforcement | Use capability packages plus ArchUnit architecture tests when the module skeleton is implemented | Shared-process boundaries need executable enforcement rather than naming convention alone. |
+| Java/build identity | Base package `com.gialong.relayforge`, Maven coordinates `com.gialong:relayforge-backend`, and application name `relayforge-backend` | Gives the portfolio product one consistent namespace while retaining personal ownership. |
 | Resource bounds | 64 KiB event payload, 8 KiB response preview, 30-day terminal-history retention | Prevents unbounded persistence while keeping Portfolio v1 manageable. |
 | Hardening timebox | Maximum 16 hours inside the 80-96 hour Portfolio v1 target | Bounds CI, cloud, load, JFR, and documentation work so correctness remains first. |
 
@@ -92,12 +94,14 @@ This file is the durable source of truth for project scope and progress. Update 
 - Added the Phase 0 handoff, review map, exit checklist, locked decisions, and first Phase 1 slice.
 - Replaced the file-count workflow limit with a cohesive-scope rule in the repository guide and RelayForge mentor skill.
 - Refined repository guidance for learning-first collaboration: separated repository policy, compact navigation, mentor behavior, the documentation index, and the single active-task record.
+- Owner approved the Phase 0 baseline by starting Phase 1.
+- Renamed the generic backend identity to RelayForge and established the `identity`, `project`, `endpoint`, and `delivery` capability packages.
+- Added executable ArchUnit rules for the allowed module graph, cycle freedom, cross-module public-API access, and public-contract isolation.
 
 ## Not completed
 
-- Owner review and approval of the final Phase 0 documentation batch.
 - Physical database design, migrations, indexes, lock SQL, mappings, and repositories.
-- Any RelayForge production code or tests.
+- Runtime-mode selection and all RelayForge business behavior, persistence, API, security, and worker implementation.
 - Docker, CI, frontend, observability, performance testing, or cloud infrastructure.
 
 ## Verification log
@@ -115,12 +119,18 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-09 | Database model Part 1 | `docs/DATABASE_MODEL_PART1.md` defines five configuration tables, ownership, bounded columns, constraints, transaction rules, secret representation, lifecycle behavior, query patterns, and future Testcontainers evidence. Per the user's documentation-only policy, no independent reviewer was used. `git diff --check` passed; the scope check found exactly five Part 1 tables and no SQL block. No application code changed, so backend tests were not run. |
 | 2026-08-09 | Final Phase 0 documentation batch | Added database model Part 2, API contract, security baseline, and Phase 0 handoff; aligned the earlier requirements, delivery, architecture, persistence, workflow, status, and compact-context documents. Per the user's documentation-only policy, no independent reviewer was used. `git diff --check` and all local Markdown-link checks passed; `quick_validate.py` returned `Skill is valid!`; structural checks found five conceptual tables in each database-model part, 26 unique API endpoint headings, a 740-word compact context, and no application-path changes. No application code changed, so backend tests were not run. |
 | 2026-08-09 | Learning-first agent workflow | Rewrote `AGENTS.md` as the repository-wide learning, source-of-truth, validation, and reporting policy; reduced `docs/AGENT_CONTEXT.md` to orientation/navigation; added `docs/README.md` and `tasks/CURRENT.md`; and limited the mentor skill to learner-specific behavior. `git diff --check` passed. No application code changed, so backend tests were not run. |
+| 2026-08-09 | Phase 1 capability boundaries | Added product-specific Maven/Spring identity, four behavior-free capability package anchors, and ArchUnit 1.4.2 rules. Focused architecture tests passed 5/5; the full JDK 25 Maven suite passed 6/6 including Spring context startup. Independent review found one P1 stale `spring.application.name`; it was corrected and re-review returned `READY` with no P0/P1. `git diff --check` passed. The full test run emitted a non-failing Mockito/Byte Buddy future dynamic-agent warning inherited from the Spring test stack. |
 
 ## Next recommended slice
 
-The owner reviews `docs/PHASE_0_HANDOFF.md` and the linked final batch. Resolve only concrete contradictions or requested changes.
+Implement the explicit runtime-mode contract as the next Phase 1 slice:
 
-After approval, begin Phase 1 with one code slice: create the backend capability-package skeleton and ArchUnit tests that enforce the accepted dependency graph and prevent repository/entity leakage. Compile and run the tests. Do not add migrations, business behavior, controllers, security configuration, worker execution, or frontend changes in that slice.
+- bind and validate exactly one `relayforge.runtime=api|worker` value;
+- fail startup for missing or invalid values outside deliberately isolated tests;
+- establish minimal conditional API/worker configuration markers;
+- prove with Spring tests that API mode excludes worker markers, worker mode excludes API markers, and valid modes still start.
+
+Do not add business controllers, polling, recovery, outbound HTTP, persistence, security, Docker, or frontend behavior in that slice.
 
 ## Deferred until evidence justifies them
 
@@ -153,3 +163,5 @@ After approval, begin Phase 1 with one code slice: create the backend capability
 - Changed the incremental workflow from a file-count limit to a small cohesive review-scope limit.
 - Completed the Phase 0 event/delivery persistence, API, and security baselines and linked them through a final handoff and owner-review checklist.
 - Separated learning-first agent workflow responsibilities: `AGENTS.md` holds repository rules and source authority; `AGENT_CONTEXT.md` provides navigation; `docs/README.md` indexes sources; `tasks/CURRENT.md` holds the active unit; and the mentor skill supplies only teaching behavior.
+- Approved the Phase 0 baseline and started Phase 1 with the `com.gialong.relayforge` package skeleton and executable modular-monolith boundary tests.
+- Corrected the independent review finding by aligning Spring's runtime application name with the RelayForge Maven and Java identity.
