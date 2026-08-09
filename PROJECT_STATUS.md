@@ -14,7 +14,7 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 0 - Requirements and Architecture.
-- Current slice: Delivery correctness model completed and independently reviewed; the next slice is architecture boundaries.
+- Current slice: Architecture boundaries completed and independently reviewed; the next slice is the first Architecture Decision Record.
 - Repository state: Git repository on `main`; minimal backend and frontend skeletons exist under `backend/` and `frontend/`.
 - Backend baseline observed: Java 25, Spring Boot 4.1.0, Maven, and Spring Web MVC only.
 
@@ -48,6 +48,12 @@ This file is the durable source of truth for project scope and progress. Update 
 | Lease strategy | Extend the lease once at attempt start to cover the bounded HTTP timeout plus completion margin; no periodic heartbeat in v1 | Keeps transactions short and recovery testable without renewal races. |
 | Time authority | PostgreSQL time controls due-time and lease-expiry decisions | Worker clock skew must not determine correctness. |
 | Ambiguous outcome | Recovery finalizes an unfinished started attempt as immutable `UNKNOWN`; a late result is a separate diagnostic | Preserves append-only history and prevents stale observations from changing delivery state. |
+| Business modules | `identity`, `project`, `endpoint`, and `delivery` | Organizes by business capability while keeping Portfolio v1 small and cohesive. |
+| Delivery-module cohesion | Publish idempotency, event, delivery, attempt, replay, and worker state stay in one `delivery` module | Keeps atomic event acceptance local and avoids artificial cycles or asynchronous consistency. |
+| Module dependencies | `endpoint` may use public `project` contracts; `delivery` may use public `project` and `endpoint` contracts; no reverse dependencies | Produces an acyclic graph and prevents repository/entity sharing. |
+| Runtime selection | The same artifact and image start in exactly one explicit `api` or `worker` mode | Gives process isolation and independent instance counts without internal HTTP or microservices. |
+| Claim eligibility boundary | `delivery` checks endpoint enabled state in one batch inside the short claim transaction before changing candidates to `CLAIMED` | Preserves endpoint pause semantics without importing endpoint persistence. |
+| Boundary enforcement | Use capability packages plus ArchUnit architecture tests when the module skeleton is implemented | Shared-process boundaries need executable enforcement rather than naming convention alone. |
 | Resource bounds | 64 KiB event payload, 8 KiB response preview, 30-day terminal-history retention | Prevents unbounded persistence while keeping Portfolio v1 manageable. |
 | Hardening timebox | Maximum 16 hours inside the 80-96 hour Portfolio v1 target | Bounds CI, cloud, load, JFR, and documentation work so correctness remains first. |
 
@@ -60,11 +66,11 @@ This file is the durable source of truth for project scope and progress. Update 
 - Added the repo-scoped `relayforge-mentor` skill and this progress ledger.
 - Added and independently reviewed the Portfolio v1 product requirements, actors, use cases, non-goals, resource bounds, and measurable acceptance criteria.
 - Added and independently reviewed the delivery invariants, state transitions, attempt boundary, claim/lease lifecycle, failure matrix, and required concurrency evidence.
+- Added and independently reviewed the four business-module boundaries, acyclic dependency graph, API/worker runtime composition, and transaction ownership rules.
 
 ## Not completed
 
 - Concrete retry, timeout, lease, and remaining non-functional defaults.
-- Module boundaries and dependency rules.
 - Architecture Decision Records.
 - Database model and migrations.
 - API contracts.
@@ -78,17 +84,18 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-09 | Project workflow setup | `quick_validate.py` returned `Skill is valid!`. No application code changed, so backend tests were not run. |
 | 2026-08-09 | Portfolio v1 requirements | An independent review ran three passes. The final pass reported no unresolved P0/P1 contradiction and returned `ready for the next Phase 0 slice`. No application code changed, so backend tests were not run. |
 | 2026-08-09 | Delivery correctness model | An independent reviewer checked concurrency, transaction, lease, attempt, recovery, and replay semantics. Two correction passes resolved six P1 findings; the final pass reported no unresolved P0/P1 and returned `READY`. `git diff --check` passed. No application code changed, so backend tests were not run. |
+| 2026-08-09 | Architecture boundaries | `docs/ARCHITECTURE_BOUNDARIES.md` defines four capability modules, dependency and runtime rules, transaction ownership, and future architecture-test evidence. Independent review found one P1 claim-eligibility gap; the correction added a batch endpoint contract inside the short claim transaction, and re-review returned `READY` with no unresolved P0/P1. `git diff --check` passed. No application code changed, so backend tests were not run. |
 
 ## Next recommended slice
 
-Create one architecture-boundaries document containing only:
+Create one ADR for the foundational deployment decision:
 
-- business-capability modules and their responsibilities;
-- allowed dependency directions between modules;
-- API and worker process entry points from the same codebase/image;
-- ownership of orchestration and transaction boundaries at a high level.
+- modular monolith instead of initial microservices;
+- one artifact and image with explicit `api` or `worker` runtime mode;
+- PostgreSQL coordination instead of internal HTTP or a message broker;
+- consequences and evidence that would justify revisiting the decision.
 
-Do not design database tables, JPA entities, repository queries, API contracts, or a mechanical layer-by-layer package tree in that slice.
+Do not create module packages, add dependencies, or implement runtime configuration in that slice.
 
 ## Deferred until evidence justifies them
 
@@ -111,3 +118,5 @@ Do not design database tables, JPA entities, repository queries, API contracts, 
 - Bounded hardening to 16 hours and clarified endpoint pause/resume, immutable signing secrets, claim-token completion, replay idempotency, and resource limits.
 - Completed the reviewed delivery correctness baseline and aligned normal and replay attempts on one attempt-start URL snapshot rule.
 - Defined the durable attempt boundary, token-and-lease conditional transitions, PostgreSQL time authority, immutable unknown outcomes, and one-extension/no-heartbeat lease policy.
+- Completed the reviewed architecture-boundaries baseline with four capability modules and an acyclic public-contract dependency graph.
+- Defined one-image `api`/`worker` runtime composition and the batch endpoint eligibility boundary required by the short claim transaction.
