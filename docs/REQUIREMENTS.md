@@ -71,7 +71,7 @@ The developer running RelayForge locally or in the cloud. The operator deploys A
 - **Endpoint:** destination URL, signing secret, enabled state, and exact event-type subscriptions.
 - **Event:** immutable business fact accepted from a publisher.
 - **Delivery:** the intent to send one event to one endpoint selected at event-acceptance time.
-- **Attempt:** one actual outbound HTTP request made for a delivery.
+- **Attempt:** one durable dispatch cycle for a delivery. It normally performs one outbound HTTP request, but security validation may reject the destination before network I/O.
 - **Replay:** an owner-requested new delivery for a previously exhausted delivery, linked to the original history.
 
 These terms describe product behavior, not the future database schema.
@@ -94,7 +94,7 @@ The owner can create, identify, and revoke project API keys. Raw key material is
 
 The owner can create, view, update its name, destination URL and subscriptions, enable, and disable a project endpoint. Each endpoint subscribes to one or more exact event types. Wildcards, expression-based filters, and signing-secret rotation are not part of v1. The generated signing secret is immutable for the lifetime of a v1 endpoint.
 
-Disabling an endpoint prevents new routing and pauses new attempts for its existing nonterminal deliveries. An already-started HTTP attempt may finish. Enabling the endpoint makes its paused deliveries eligible again.
+Disabling an endpoint prevents new routing and pauses new attempts for its existing nonterminal deliveries. An already-started dispatch attempt may finish. Enabling the endpoint makes its paused deliveries eligible again.
 
 ### UC-05 - Publish an event idempotently
 
@@ -109,7 +109,7 @@ The publisher submits an event type, payload, and idempotency key for its projec
 When an event is accepted, RelayForge takes a routing snapshot and creates one delivery for every enabled endpoint subscribed to the exact event type.
 
 - Endpoint subscription changes after acceptance do not add or remove deliveries for the accepted event.
-- A delivery retains the selected endpoint identity. Every new attempt uses the endpoint URL currently configured at claim time and the endpoint's immutable signing secret. Updating the URL does not change an already-started attempt.
+- A delivery retains the selected endpoint identity. Every new attempt atomically snapshots the endpoint URL configured when that attempt starts and uses the endpoint's immutable signing secret. Updating the URL does not change an already-started attempt.
 - An event with no matching endpoint remains an accepted, queryable event with zero deliveries.
 
 ### UC-07 - Deliver asynchronously
@@ -124,7 +124,7 @@ A worker claims eligible delivery work without holding a database transaction du
 
 RelayForge retries network errors, timeouts, HTTP 408, HTTP 429, and HTTP 5xx responses with exponential backoff and jitter.
 
-- A delivery has at most five HTTP attempts, including the initial attempt.
+- A delivery has at most five dispatch attempts, including the initial attempt. Destination security rejection can consume an attempt without sending an HTTP request.
 - Every HTTP 4xx response except 408 and 429 is a permanent failure.
 - If the fifth attempt has a retryable outcome, the attempt is recorded with that outcome and the delivery becomes exhausted without scheduling a sixth attempt.
 
@@ -134,7 +134,7 @@ The owner can inspect an event, its deliveries, and each attempt. Attempt histor
 
 ### UC-10 - Replay an exhausted delivery
 
-The owner can request replay of an exhausted delivery using a replay idempotency key unique within the project. Replay creates a new delivery identifier linked to the original delivery, retains the original attempt history, uses the endpoint configuration current at replay time, and starts a fresh five-attempt budget.
+The owner can request replay of an exhausted delivery using a replay idempotency key unique within the project. Replay creates a new delivery identifier linked to the original delivery, retains the original attempt history, keeps the same endpoint identity, and starts a fresh five-attempt budget. Each replay attempt follows the normal rule of atomically snapshotting the endpoint URL when that attempt starts.
 
 - Repeating the same replay key for the same exhausted delivery returns the original replay result and creates no additional delivery.
 - Reusing the replay key for a different original delivery is rejected as a conflict.
@@ -192,7 +192,7 @@ Sections 9.1 through 9.4 are the Core MVP gate. Section 9.5 is the Portfolio har
 - **AC-F06:** A successful 2xx attempt stops automatic processing for that delivery.
 - **AC-F07:** A retryable failure schedules another attempt until success or the five-attempt limit.
 - **AC-F08:** A permanent failure becomes terminal without consuming unnecessary retry attempts.
-- **AC-F09:** Repeated or concurrent submission using one replay idempotency key creates one linked delivery, preserves the original history, uses current endpoint configuration, and receives a fresh attempt budget. Reusing that key for another original delivery is a conflict.
+- **AC-F09:** Repeated or concurrent submission using one replay idempotency key creates one linked delivery, preserves the original history, keeps the original endpoint identity, and receives a fresh attempt budget. Its attempts snapshot the endpoint URL at their normal attempt-start boundary. Reusing that key for another original delivery is a conflict.
 - **AC-F10:** Disabling an endpoint prevents new attempts after any already-started attempt completes; enabling it makes paused nonterminal deliveries eligible again.
 
 ### 9.2 Correctness and failure handling

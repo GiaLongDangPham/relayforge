@@ -14,7 +14,7 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 0 - Requirements and Architecture.
-- Current slice: Portfolio v1 requirements completed and independently reviewed; the next slice is the delivery model.
+- Current slice: Delivery correctness model completed and independently reviewed; the next slice is architecture boundaries.
 - Repository state: Git repository on `main`; minimal backend and frontend skeletons exist under `backend/` and `frontend/`.
 - Backend baseline observed: Java 25, Spring Boot 4.1.0, Maven, and Spring Web MVC only.
 
@@ -32,7 +32,7 @@ This file is the durable source of truth for project scope and progress. Update 
 | Routing snapshot | Determine matching endpoints when the event is accepted | Later endpoint changes do not rewrite historical delivery intent. |
 | Worker claim | Short transaction with a time-bounded lease and claim token | Avoids holding DB locks during network I/O and supports crash recovery. |
 | Publish idempotency | Require `Idempotency-Key`, unique within a project | Makes client retry behavior explicit and testable. Same key with different content is a conflict. |
-| Retry limit | Maximum 5 total HTTP attempts, including the initial attempt | Bounds retry storms while leaving enough attempts to demonstrate backoff and recovery. |
+| Retry limit | Maximum 5 total dispatch attempts, including the initial attempt | Bounds retry storms while accounting for a security rejection that may stop before network I/O. |
 | Retryable outcomes | Network error, timeout, HTTP 408, 429, and 5xx | These failures may be transient. Most other 4xx responses are permanent. |
 | Success outcome | Any HTTP 2xx response | The receiver accepted the delivery at the transport level. |
 | Ordering | No ordering guarantee in Portfolio v1 | Avoids head-of-line blocking and keeps worker concurrency meaningful. |
@@ -41,8 +41,13 @@ This file is the durable source of truth for project scope and progress. Update 
 | Frontend | React + Vite + TypeScript | The product is an authenticated dashboard and does not need SSR or SEO. |
 | Owner onboarding | Bootstrap accounts only in v1 | Avoids public registration, email verification, and password-reset scope. |
 | Endpoint lifecycle | Disable pauses new attempts; re-enable resumes nonterminal work | Gives the owner an operational stop control without pretending an in-flight HTTP request can be undone. |
-| Endpoint configuration | Future attempts use the current URL; the v1 signing secret is immutable | Avoids secret-versioning scope while making URL updates predictable. |
+| Endpoint configuration | Every normal or replay attempt snapshots the current URL atomically when that attempt starts; the v1 signing secret is immutable | Gives URL changes one deterministic linearization point without secret-versioning scope. |
 | Manual replay | New linked delivery with a project-scoped replay idempotency key | Preserves history and makes repeated or concurrent replay commands deterministic. |
+| Attempt boundary | A dispatch attempt consumes budget when its durable `STARTED` record is created | A crash after that boundary has ambiguous progress and must not reuse the attempt number. |
+| Claim validity | Normal completion requires `CLAIMED`, the current token, and an unexpired lease; every exit from `CLAIMED` clears token and lease | Prevents a stale or expired worker from overwriting recovery or a newer claim. |
+| Lease strategy | Extend the lease once at attempt start to cover the bounded HTTP timeout plus completion margin; no periodic heartbeat in v1 | Keeps transactions short and recovery testable without renewal races. |
+| Time authority | PostgreSQL time controls due-time and lease-expiry decisions | Worker clock skew must not determine correctness. |
+| Ambiguous outcome | Recovery finalizes an unfinished started attempt as immutable `UNKNOWN`; a late result is a separate diagnostic | Preserves append-only history and prevents stale observations from changing delivery state. |
 | Resource bounds | 64 KiB event payload, 8 KiB response preview, 30-day terminal-history retention | Prevents unbounded persistence while keeping Portfolio v1 manageable. |
 | Hardening timebox | Maximum 16 hours inside the 80-96 hour Portfolio v1 target | Bounds CI, cloud, load, JFR, and documentation work so correctness remains first. |
 
@@ -54,11 +59,11 @@ This file is the durable source of truth for project scope and progress. Update 
 - Inspected the existing Spring Boot skeleton without modifying application code.
 - Added the repo-scoped `relayforge-mentor` skill and this progress ledger.
 - Added and independently reviewed the Portfolio v1 product requirements, actors, use cases, non-goals, resource bounds, and measurable acceptance criteria.
+- Added and independently reviewed the delivery invariants, state transitions, attempt boundary, claim/lease lifecycle, failure matrix, and required concurrency evidence.
 
 ## Not completed
 
-- Business invariants and delivery state machine specification.
-- Failure model and non-functional requirements.
+- Concrete retry, timeout, lease, and remaining non-functional defaults.
 - Module boundaries and dependency rules.
 - Architecture Decision Records.
 - Database model and migrations.
@@ -72,17 +77,18 @@ This file is the durable source of truth for project scope and progress. Update 
 | --- | --- | --- |
 | 2026-08-09 | Project workflow setup | `quick_validate.py` returned `Skill is valid!`. No application code changed, so backend tests were not run. |
 | 2026-08-09 | Portfolio v1 requirements | An independent review ran three passes. The final pass reported no unresolved P0/P1 contradiction and returned `ready for the next Phase 0 slice`. No application code changed, so backend tests were not run. |
+| 2026-08-09 | Delivery correctness model | An independent reviewer checked concurrency, transaction, lease, attempt, recovery, and replay semantics. Two correction passes resolved six P1 findings; the final pass reported no unresolved P0/P1 and returned `READY`. `git diff --check` passed. No application code changed, so backend tests were not run. |
 
 ## Next recommended slice
 
-Create one delivery-model document containing only:
+Create one architecture-boundaries document containing only:
 
-- business invariants;
-- delivery and attempt state transitions;
-- lease and claim-token lifecycle;
-- failure scenarios and expected recovery behavior.
+- business-capability modules and their responsibilities;
+- allowed dependency directions between modules;
+- API and worker process entry points from the same codebase/image;
+- ownership of orchestration and transaction boundaries at a high level.
 
-Do not design database tables, JPA entities, repository queries, or API contracts in that slice.
+Do not design database tables, JPA entities, repository queries, API contracts, or a mechanical layer-by-layer package tree in that slice.
 
 ## Deferred until evidence justifies them
 
@@ -103,3 +109,5 @@ Do not design database tables, JPA entities, repository queries, or API contract
 - Chose fan-out routing, leased claims, required publish idempotency, five total attempts, and no ordering guarantee.
 - Completed the reviewed Portfolio v1 requirements baseline after an independent three-pass review.
 - Bounded hardening to 16 hours and clarified endpoint pause/resume, immutable signing secrets, claim-token completion, replay idempotency, and resource limits.
+- Completed the reviewed delivery correctness baseline and aligned normal and replay attempts on one attempt-start URL snapshot rule.
+- Defined the durable attempt boundary, token-and-lease conditional transitions, PostgreSQL time authority, immutable unknown outcomes, and one-extension/no-heartbeat lease policy.
