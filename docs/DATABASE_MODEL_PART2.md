@@ -312,7 +312,7 @@ PostgreSQL Testcontainers tests must eventually prove:
 
 ## 12. Decisions deferred to implementation slices
 
-- Migration tool, PostgreSQL baseline version, schema naming, and migration ownership.
+- Production migration ownership and compatibility validation during rollout. Flyway, a PostgreSQL 17 minimum, the pinned `17.10-alpine` integration-test image, and the `public` schema are already fixed by the Phase 1 persistence foundation.
 - Exact constraints, SQL, indexes, lock modes, isolation levels, and cleanup statements.
 - JPA entity boundaries, repository ports, projections, and fetch plans.
 - JSON canonicalization implementation and fingerprint version format.

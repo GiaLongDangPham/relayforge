@@ -253,11 +253,18 @@ Implementation must eventually prove:
 
 PostgreSQL constraint and transaction behavior must use Testcontainers rather than H2 when implemented.
 
+The Phase 1 persistence foundation now fixes these physical conventions without yet implementing a Part 1 table:
+
+- versioned PostgreSQL SQL migrations use Flyway;
+- the pinned integration-test image is PostgreSQL `17.10-alpine`, and V1 rejects servers older than PostgreSQL 17;
+- Portfolio v1 uses the `public` schema; module ownership remains enforced by Java package, repository, and transaction boundaries rather than separate database schemas;
+- local and test application startup may run Flyway automatically, while the single production migration owner remains a deployment decision.
+
 ## 13. Decisions deferred to the next database slices
 
 - Physical implementation of the Part 2 event, delivery, attempt, replay, diagnostic, token, lease, and due-time model.
 - Claim/recovery SQL, indexes, lock modes, and isolation evidence.
-- Migration tool, PostgreSQL version baseline, schema naming, and migration ownership.
+- Production migration ownership and compatibility validation during rollout.
 - JPA mappings, repository contracts, fetch plans, and pagination.
 - Spring Session JDBC infrastructure migration and security adapter mappings.
 - Cloud endpoint-secret key provider and rotation operations.

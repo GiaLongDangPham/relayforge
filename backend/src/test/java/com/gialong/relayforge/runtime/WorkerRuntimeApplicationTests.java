@@ -10,7 +10,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(
         classes = RelayForgeApplication.class,
-        properties = "relayforge.runtime=worker",
+        properties = {
+                "relayforge.runtime=worker",
+                "spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
+        },
         webEnvironment = SpringBootTest.WebEnvironment.NONE
 )
 class WorkerRuntimeApplicationTests {

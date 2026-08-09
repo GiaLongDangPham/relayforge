@@ -4,68 +4,70 @@ Status: Completed
 
 ## Goal
 
-Implement the explicit `relayforge.runtime=api|worker` startup contract so one RelayForge artifact activates exactly one runtime composition.
+Establish a real PostgreSQL persistence test foundation with JDBC pooling, Flyway migrations, and Testcontainers before creating any RelayForge business table.
 
 ## Learning outcome
 
-Understand the difference between environment profiles and application roles, and how Spring configuration binding plus conditional configuration can make an invalid deployment fail before it serves traffic or claims work.
+Understand why integration tests for PostgreSQL-specific behavior need a real PostgreSQL engine, how Spring Boot service connections supply container credentials, and how Flyway turns schema evolution into ordered, auditable application inputs.
 
 ## Scope
 
-- Model runtime mode as a bounded enum-backed configuration property.
-- Reject missing and unsupported runtime values during context startup.
-- Add behavior-free API and worker configuration markers selected by the property.
-- Test valid API/worker modes, mutual exclusion, missing mode, invalid mode, and the main Spring context.
+- Use Flyway SQL migrations managed by the Spring Boot dependency set.
+- Use PostgreSQL 17.10 as the pinned test baseline and `public` as the v1 application schema.
+- Add Spring JDBC, PostgreSQL driver, Spring Boot Flyway/PostgreSQL support, Spring Boot Testcontainers, and PostgreSQL/JUnit Testcontainers modules.
+- Add a technical V1 migration that verifies PostgreSQL 17 or newer without creating business tables.
+- Prove a pooled JDBC connection, PostgreSQL version, Flyway history, and absence of business tables on a real container.
+- Keep runtime-mode and architecture tests isolated and green.
+- Remove the accidental bundled `api` runtime default so missing mode continues to fail outside focused tests.
 
-## Implementation choice
+## Decisions and trade-offs
 
-- Use constructor-bound `@ConfigurationProperties` for the required runtime value.
-- Reject unsupported and noncanonical values in the immutable configuration constructor.
-- Bind the raw value as a string and map only exact `api|worker` literals to the enum, preventing Spring's lenient enum conversion from disagreeing with property conditions.
-- Enforce the non-null invariant in the immutable properties constructor so missing values fail too.
-- Use `@ConditionalOnProperty` only for activating the matching composition marker; it does not validate the property by itself.
-- Use `ApplicationContextRunner` for focused failure and conditional-bean evidence, while the existing `@SpringBootTest` proves component scanning in the real application.
-- Treat Spring's normal property-source precedence as producing one effective scalar value; “ambiguous” means the effective value cannot select exactly one role, not that a lower-precedence source also declared the key.
+- Choose Flyway over Liquibase because later migrations will intentionally use PostgreSQL SQL for constraints, indexes, and queue behavior. Liquibase's database-neutral changelog and richer diff/rollback tooling do not solve a current need.
+- Pin `postgres:17.10-alpine`, the current supported minor in the chosen mature major line. A floating major tag would make test evidence change without a code diff.
+- Keep one `public` schema. Separate schemas would not enforce module ownership inside one database user and would add search-path and cross-schema migration complexity.
+- Let Spring Boot manage library versions so its tested Flyway/Testcontainers set remains coherent.
+- Use `@ServiceConnection` so container connection details override only the integration-test context; no credentials enter application configuration.
+- Defer production migration ownership. Local/test startup may run Flyway automatically, while cloud rollout may later use one migration job with API/worker instances validating compatibility.
 
 ## Out of scope
 
-- API controllers, authentication, delivery polling, recovery, outbound HTTP, database access, health endpoints, Docker, and frontend behavior.
-- Spring profiles as runtime role selectors.
-- Runtime-specific thread pools, connection pools, or configuration beyond role selection.
+- Owner, project, endpoint, event, delivery, attempt, replay, session, or other business tables.
+- JPA, entities, repositories, transaction use cases, claim SQL, or indexes.
+- Docker Compose, persistent local volumes, cloud databases, migration rollback automation, and production credentials.
 
 ## Test evidence
 
-- `api` starts with API configuration present and worker configuration absent.
-- `worker` starts with worker configuration present and API configuration absent.
-- Missing `relayforge.runtime` fails with an actionable message.
-- Unsupported runtime value fails binding and starts neither composition.
-- The real application context starts in a deliberately specified test mode.
-- Existing ArchUnit rules remain green.
-- Business capabilities cannot depend on runtime composition, and runtime composition can target business capabilities only through their public API packages.
+- Docker-backed Spring context starts with a PostgreSQL 17.10 service connection.
+- Auto-configured datasource is pooled and returns a valid PostgreSQL JDBC connection.
+- Server major version is 17 and database/session time zone is UTC.
+- Flyway applies exactly the technical V1 migration successfully and creates schema history.
+- No RelayForge business table exists after migration.
+- Runtime-mode focused tests do not need PostgreSQL and existing architecture rules remain green.
 
 ## Definition of done
 
-- Full JDK 25 Maven suite passes.
-- Independent code review has no unresolved P0/P1.
-- No real API or worker behavior entered this slice.
-- Project memory records the verified result and next bounded task.
+- Focused PostgreSQL integration test and full JDK 25 Maven suite pass with Docker running.
+- Independent review has no unresolved P0/P1.
+- Persistence documents and project memory record only verified foundation decisions.
+- No business schema or behavior enters this slice.
 
 ## Actual verification
 
-- Focused runtime suite passed 9/9 on Java 25.0.1: two real-application composition tests plus seven binding/selection cases.
-- Final full Maven suite passed 16/16: nine runtime tests and seven architecture rules.
-- Packaged JAR smoke tests: missing mode exited 1 with the actionable message; exact `api` and `worker` each exited 0; noncanonical `API` exited 1.
-- Independent review found two P1 gaps: lenient enum binding could disagree with exact property conditions, and the original context test did not prove real component scanning.
-- Strict literal parsing plus real API/worker `@SpringBootTest` coverage resolved both findings; re-review returned `READY` with no remaining P0/P1.
-- A final architecture review found one P1 over-broad `..runtime..` selector; anchoring both rules to `com.gialong.relayforge.runtime..` resolved the false-fail risk and final re-review returned `READY`.
-- `git diff --check` passed after all corrections.
+- The first focused run exposed a Spring Boot 4.1 modularization detail: `flyway-core` alone provided no Flyway auto-configuration bean. Replacing it with `spring-boot-starter-flyway` fixed the context while retaining Boot-managed versions.
+- The focused Docker-backed PostgreSQL test passed 2/2 against `postgres:17.10-alpine` after the final correction.
+- The final JDK 25 Maven suite passed 18/18: two PostgreSQL foundation tests, nine runtime tests, and seven architecture rules.
+- Flyway created `public.flyway_schema_history` and applied only V1; the test found zero other tables in `public`.
+- Hikari returned a valid PostgreSQL connection whose session timezone is UTC and current schema is `public`.
+- Independent review found one P1: `public` initially depended on the container's default search path. Explicit Flyway default-schema and Hikari search-path configuration plus a `current_schema()` assertion resolved it; re-review returned `READY` with no P0/P1.
+- `git diff --check` is required once more after this final Markdown update.
 
 ## Remaining scope
 
-- Runtime configurations are composition markers only; no owner/publisher endpoint or delivery worker component exists.
-- Normal Spring property-source precedence chooses one effective scalar value. Lower-precedence duplicate declarations are not treated as ambiguity.
+- No RelayForge business table, JPA mapping, repository, transaction use case, index, or claim SQL exists.
+- Production migration ownership and rollout compatibility checks remain a later deployment decision.
+- Docker is required for the PostgreSQL integration test.
 - The existing non-failing Mockito/Byte Buddy future dynamic-agent warning remains inherited from the Spring test stack.
 
 ## Next task
 
-Establish the PostgreSQL persistence test foundation with a focused migration-tool decision, JDBC connectivity, and Testcontainers evidence before creating business tables.
+Create and Testcontainers-test only the V2 `owner_accounts` migration and its database invariants. Keep JPA, repositories, authentication behavior, and every other business table out of that slice.

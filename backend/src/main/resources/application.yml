@@ -1,6 +1,8 @@
 spring:
   application:
     name: relayforge-backend
-
-relayforge:
-  runtime: api
+  datasource:
+    hikari:
+      connection-init-sql: SET search_path TO public; SET TIME ZONE 'UTC'
+  flyway:
+    default-schema: public
