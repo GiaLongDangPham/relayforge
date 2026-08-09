@@ -14,8 +14,8 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 0 - Requirements and Architecture.
-- Current slice: workflow setup completed; the next slice is the Portfolio v1 requirements document.
-- Repository state: a minimal backend skeleton exists under `backend/`; the workspace is not yet a Git repository.
+- Current slice: Portfolio v1 requirements completed and independently reviewed; the next slice is the delivery model.
+- Repository state: Git repository on `main`; minimal backend and frontend skeletons exist under `backend/` and `frontend/`.
 - Backend baseline observed: Java 25, Spring Boot 4.1.0, Maven, and Spring Web MVC only.
 
 ## Approved decisions
@@ -39,6 +39,12 @@ This file is the durable source of truth for project scope and progress. Update 
 | Redirects | Do not follow redirects in v1 | Reduces SSRF risk and keeps delivery semantics explicit. |
 | Production endpoint policy | Public HTTPS endpoints only; local HTTP is allowed only in a development profile | Protects transport security while retaining a practical local demo path. |
 | Frontend | React + Vite + TypeScript | The product is an authenticated dashboard and does not need SSR or SEO. |
+| Owner onboarding | Bootstrap accounts only in v1 | Avoids public registration, email verification, and password-reset scope. |
+| Endpoint lifecycle | Disable pauses new attempts; re-enable resumes nonterminal work | Gives the owner an operational stop control without pretending an in-flight HTTP request can be undone. |
+| Endpoint configuration | Future attempts use the current URL; the v1 signing secret is immutable | Avoids secret-versioning scope while making URL updates predictable. |
+| Manual replay | New linked delivery with a project-scoped replay idempotency key | Preserves history and makes repeated or concurrent replay commands deterministic. |
+| Resource bounds | 64 KiB event payload, 8 KiB response preview, 30-day terminal-history retention | Prevents unbounded persistence while keeping Portfolio v1 manageable. |
+| Hardening timebox | Maximum 16 hours inside the 80-96 hour Portfolio v1 target | Bounds CI, cloud, load, JFR, and documentation work so correctness remains first. |
 
 ## Completed
 
@@ -47,10 +53,10 @@ This file is the durable source of truth for project scope and progress. Update 
 - Chosen the core delivery semantics listed above.
 - Inspected the existing Spring Boot skeleton without modifying application code.
 - Added the repo-scoped `relayforge-mentor` skill and this progress ledger.
+- Added and independently reviewed the Portfolio v1 product requirements, actors, use cases, non-goals, resource bounds, and measurable acceptance criteria.
 
 ## Not completed
 
-- Product requirements, actors, use cases, and non-goals.
 - Business invariants and delivery state machine specification.
 - Failure model and non-functional requirements.
 - Module boundaries and dependency rules.
@@ -65,18 +71,18 @@ This file is the durable source of truth for project scope and progress. Update 
 | Date | Slice | Evidence |
 | --- | --- | --- |
 | 2026-08-09 | Project workflow setup | `quick_validate.py` returned `Skill is valid!`. No application code changed, so backend tests were not run. |
+| 2026-08-09 | Portfolio v1 requirements | An independent review ran three passes. The final pass reported no unresolved P0/P1 contradiction and returned `ready for the next Phase 0 slice`. No application code changed, so backend tests were not run. |
 
 ## Next recommended slice
 
-Create one requirements document containing only:
+Create one delivery-model document containing only:
 
-- product definition;
-- actors;
-- Portfolio v1 use cases;
-- explicit non-goals;
-- measurable Portfolio v1 acceptance criteria.
+- business invariants;
+- delivery and attempt state transitions;
+- lease and claim-token lifecycle;
+- failure scenarios and expected recovery behavior.
 
-Do not design the database or API contract in that slice.
+Do not design database tables, JPA entities, repository queries, or API contracts in that slice.
 
 ## Deferred until evidence justifies them
 
@@ -95,3 +101,5 @@ Do not design the database or API contract in that slice.
 - Established the incremental learning workflow.
 - Recorded the pre-Phase 0 choices and the remaining Phase 0 decisions.
 - Chose fan-out routing, leased claims, required publish idempotency, five total attempts, and no ordering guarantee.
+- Completed the reviewed Portfolio v1 requirements baseline after an independent three-pass review.
+- Bounded hardening to 16 hours and clarified endpoint pause/resume, immutable signing secrets, claim-token completion, replay idempotency, and resource limits.
