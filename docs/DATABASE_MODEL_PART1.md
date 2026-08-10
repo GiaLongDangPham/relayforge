@@ -95,6 +95,8 @@ Email is not stored in v1 because registration, email verification, and password
 
 Flyway V2 now creates `public.owner_accounts` with an application-supplied UUID primary key, globally unique `login_name`, nonnegative version defaulting to zero, and PostgreSQL-owned lifecycle timestamp defaults. The login constraint uses the exact `^[a-z0-9][a-z0-9._-]*$` policy under `C` collation so its ASCII meaning does not change with deployment collation. Encoded password hashes must be bounded, nonempty, and contain no ASCII whitespace; BCrypt generation, cost validation, plaintext exclusion, bootstrap idempotency, and optimistic update behavior remain application responsibilities and require later evidence.
 
+The Phase 1 JPA mapping now keeps `OwnerAccountEntity` internal to `identity.persistence`. Hibernate validates rather than creates the Flyway schema, maps assigned UUID and boxed `Long @Version`, maps `timestamptz` to `Instant`, and asks PostgreSQL to generate creation/update timestamps. Integration evidence covers persistence-context identity, detach/reload, dirty checking, one version increment, and rejection of a stale detached merge. Repository and bootstrap transaction behavior remain deliberately absent.
+
 ## 5. `projects`
 
 ### 5.1 Columns

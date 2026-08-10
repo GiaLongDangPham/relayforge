@@ -6,3 +6,11 @@ spring:
       connection-init-sql: SET search_path TO public; SET TIME ZONE 'UTC'
   flyway:
     default-schema: public
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC

@@ -14,9 +14,9 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 1 - Foundation.
-- Current slice: `owner_accounts` V2 migration and PostgreSQL constraint evidence completed and independently reviewed.
+- Current slice: internal `owner_accounts` JPA mapping, persistence-context behavior, and optimistic locking completed and independently reviewed.
 - Repository state: Git repository on `main`; RelayForge backend foundation exists under `backend/` and the React/Vite skeleton remains under `frontend/`.
-- Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Spring JDBC/Hikari, Flyway, PostgreSQL, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. `owner_accounts` is the only business table; no RelayForge application behavior exists.
+- Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. `owner_accounts` is the only business table and mapped entity; no RelayForge application use case exists.
 - Local environment note: the default terminal Java is JDK 21 while this project requires JDK 25; Maven verification currently selects `C:\Program Files\Java\jdk-25` explicitly.
 
 ## Approved decisions
@@ -105,10 +105,11 @@ This file is the durable source of truth for project scope and progress. Update 
 - Established the PostgreSQL persistence foundation with Spring JDBC/Hikari, Flyway PostgreSQL support, a pinned PostgreSQL 17.10 Testcontainer, and a technical V1 version guard.
 - Added integration evidence for pooled connectivity, UTC sessions, migration history, and the deliberate absence of business tables.
 - Added Flyway V2 for `public.owner_accounts` and real PostgreSQL evidence for canonical login, exact uniqueness/no-overwrite, application-owned UUIDs, password-hash storage shape, version defaults, and database timestamps.
+- Added the internal identity JPA mapping and PostgreSQL evidence for assigned UUIDs, boxed optimistic version, first-level persistence-context identity, detach/reload, dirty checking, database-sourced timestamps, and stale-merge rejection.
 
 ## Not completed
 
-- Physical tables beyond `owner_accounts`, persistence mappings, repositories, bootstrap behavior, authentication, indexes beyond owner constraints, and lock SQL.
+- Physical tables or entity mappings beyond `owner_accounts`, repository ports/adapters, bootstrap behavior, authentication, indexes beyond owner constraints, and lock SQL.
 - All RelayForge business behavior, persistence, HTTP API, security, and worker implementation; runtime markers currently contain no role behavior.
 - Docker, CI, frontend, observability, performance testing, or cloud infrastructure.
 
@@ -131,17 +132,18 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-09 | Phase 1 runtime mode | Added strict required `relayforge.runtime=api|worker` binding, mutually exclusive conditional composition markers, and architecture rules preventing reverse runtime dependencies or runtime access to business internals. Focused runtime tests passed 9/9; the final full JDK 25 suite passed 16/16 with seven architecture rules. Packaged-JAR smoke tests proved missing mode and noncanonical `API` exit 1, while exact `api` and `worker` exit 0. Independent review found two P1 gaps in lenient enum/condition semantics and real component-scan evidence; corrections resolved both. A final review found one P1 over-broad runtime package selector; anchoring it to `com.gialong.relayforge.runtime..` resolved the false-fail risk, and final re-review returned `READY` with no P0/P1. `git diff --check` passed. |
 | 2026-08-09 | Phase 1 PostgreSQL foundation | Added Spring JDBC/Hikari, PostgreSQL, Spring Boot Flyway, Flyway PostgreSQL support, and Testcontainers. The first focused run exposed that `flyway-core` alone does not activate Spring Boot 4.1's modular Flyway auto-configuration; replacing it with `spring-boot-starter-flyway` fixed the missing bean. A real `postgres:17.10-alpine` container then applied technical V1, returned a pooled UTC connection, and contained no business tables. Independent review found one P1 reliance on PostgreSQL's default search path; explicit Flyway `public` default-schema and Hikari `public` search-path configuration plus a `current_schema()` assertion resolved it. Re-review returned `READY`; the focused database tests passed 2/2 and the final full JDK 25 suite passed 18/18. |
 | 2026-08-09 | Phase 1 owner accounts migration | Added Flyway V2 for the first business table and behavioral PostgreSQL tests for schema history, valid defaults, canonical login rules, uniqueness/no hash overwrite, required application UUID, hash storage shape, and nonnegative version. Independent review found three P1 gaps: default `btrim` missed non-space whitespace, regex ranges were collation-sensitive, and application-owned UUID had no evidence. `C` collation, an explicit whitespace-free encoded-hash constraint, and metadata plus omitted-ID tests resolved them; re-review returned `READY`. Focused tests passed 14/14 and the final JDK 25 suite passed 30/30. Final `git diff --check` passed. |
+| 2026-08-09 | Phase 1 owner JPA mapping | Added Spring Boot Data JPA, Flyway-owned/Hibernate-validated schema configuration, disabled Open EntityManager in View, and mapped only `owner_accounts` in `identity.persistence`. Tests prove assigned UUID plus boxed version lifecycle, PostgreSQL-sourced `Instant` timestamps, first-level identity, detach/reload, dirty checking with one version increment, and stale detached merge rejection with winner retention. The first focused run correctly exposed that direct `EntityManager` raises JPA `OptimisticLockException`, not Spring's repository-translated exception; the assertion was corrected. Focused tests passed 17/17 and the full JDK 25 suite passed 33/33. Independent review returned `READY` with no P0/P1. Final `git diff --check` passed. |
 
 ## Next recommended slice
 
-Add the first bounded persistence mapping as the next Phase 1 slice:
+Implement the bounded owner-bootstrap use case as the next Phase 1 slice:
 
-- introduce Spring Data JPA support and map only `owner_accounts` inside the `identity` module;
-- preserve application-generated UUID, `Instant` timestamps, and `@Version` semantics;
-- prove insert/load and optimistic-version behavior against PostgreSQL;
-- keep bootstrap, authentication, HTTP, security configuration, and every other business table out of the slice.
+- introduce identity-owned repository and password-hashing ports only where the use case needs them;
+- canonicalize/validate bootstrap login before persistence and BCrypt-hash plaintext outside the database transaction;
+- make concurrent bootstrap of one login converge without overwriting the winner's hash, using PostgreSQL conflict semantics;
+- keep login authentication, sessions, HTTP, project data, and every other table out of the slice.
 
-Do not add owner-account use cases, project/endpoint/delivery tables, Docker Compose, cloud infrastructure, or security wiring in that slice.
+Do not add dashboard login, project/endpoint/delivery tables, Docker Compose, cloud infrastructure, or session/security-filter wiring in that slice.
 
 ## Deferred until evidence justifies them
 
@@ -179,3 +181,4 @@ Do not add owner-account use cases, project/endpoint/delivery tables, Docker Com
 - Implemented and reviewed strict API/worker runtime selection, correcting lenient enum/condition disagreement and proving real component-scan mutual exclusion.
 - Established and Docker-verified the PostgreSQL 17/Flyway/Testcontainers foundation without creating a business table.
 - Created and PostgreSQL-verified the first business table, `owner_accounts`, without adding persistence or authentication application code.
+- Mapped `owner_accounts` with Hibernate/JPA and verified persistence-context plus optimistic-lock semantics without introducing a repository or use case prematurely.

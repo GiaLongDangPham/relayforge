@@ -4,67 +4,69 @@ Status: Completed
 
 ## Goal
 
-Create the first RelayForge business-table migration for `owner_accounts` and prove its database-owned invariants against real PostgreSQL.
+Map only `owner_accounts` through JPA inside the `identity` module and prove persistence-context plus optimistic-version behavior against PostgreSQL.
 
 ## Learning outcome
 
-Understand which invariants belong in PostgreSQL constraints and defaults, which remain application responsibilities, and why a migration test should exercise failing writes rather than only inspect table metadata.
+Understand assigned identifiers, entity lifecycle states, first-level identity, dirty checking, flush timing, database-sourced timestamps, and how `@Version` prevents a detached stale state from overwriting a newer committed revision.
 
 ## Scope
 
-- Add only Flyway V2 for `public.owner_accounts`.
-- Require application-supplied UUID identifiers.
-- Enforce canonical lowercase ASCII login names, bounded storage, and global uniqueness.
-- Require a bounded, nonblank, whitespace-free password-hash value without coupling the database to one hash format.
-- Default optimistic version to zero and reject negative versions.
-- Default lifecycle timestamps from PostgreSQL time.
-- Update migration tests for the new schema version and expected table set.
+- Add Spring Boot Data JPA support without changing Flyway ownership of DDL.
+- Map only `public.owner_accounts` in an `identity` internal persistence package.
+- Use application-assigned UUID and boxed `Long` optimistic version.
+- Map PostgreSQL `timestamptz` to Java `Instant` and source lifecycle timestamps from the database.
+- Validate the Flyway-managed schema at application startup.
+- Prove persist/load, persistence-context identity, dirty checking/version increment, and stale detached merge rejection.
 
 ## Decisions and trade-offs
 
-- Accept login names matching `^[a-z0-9][a-z0-9._-]*$` under PostgreSQL's `C` collation. The database rejects noncanonical input instead of silently trimming or lowercasing it, and the ASCII meaning does not vary with deployment collation.
-- Do not enforce a BCrypt prefix or cost in SQL. The security layer owns hash generation and verification, while the table requires the whitespace-free shape common to encoded hashes and supports later algorithm/cost changes.
-- Do not generate UUIDs in PostgreSQL. The accepted model requires application-generated UUIDv4 and avoids a database extension.
-- Use PostgreSQL defaults for `version`, `created_at`, and `updated_at`, but leave timestamp advancement on mutation to the future owner update use case.
-- Test behavior through real inserts and constraint violations. Metadata assertions alone would not prove PostgreSQL actually rejects invalid state.
+- Use `EntityManager` directly in this slice. A repository would hide whether JPA calls `persist` or `merge` before the entity-state rules are understood.
+- Expect JPA's `OptimisticLockException` at this direct `EntityManager` boundary; Spring's translated optimistic-lock exception belongs to a later repository adapter boundary.
+- Keep Flyway as the only schema creator and configure Hibernate `ddl-auto=validate`; Hibernate may reject a mismatched mapping but may not mutate the schema.
+- Use boxed `Long version`, initially null in a new Java object and seeded by Hibernate on persist. This remains compatible with Spring Data's future new-entity detection for assigned UUIDs.
+- Use Hibernate's database-sourced creation/update timestamp annotations. This is a deliberate provider-specific mapping because standard JPA does not express PostgreSQL-time generation.
+- Disable Open EntityManager in View. Lazy database access must not leak into future controllers or view rendering.
+- Do not implement equality/hash-code policy until an entity relationship or collection requires one; persistence-context identity is tested explicitly instead.
 
 ## Out of scope
 
-- JPA entities, repositories, bootstrap services, Spring Security, password hashing, login endpoints, sessions, or seed configuration.
-- Optimistic update SQL and concurrent bootstrap behavior.
-- Projects, API keys, endpoints, events, deliveries, attempts, or indexes beyond constraints created for this table.
+- Spring Data repository interfaces/adapters, repository ports, bootstrap seeding, BCrypt, authentication, sessions, or HTTP.
+- Login normalization/validation messages, password rotation use case, retry policy after optimistic conflict, or concurrent threads.
+- Projects or any additional database migration.
 
 ## Test evidence
 
-- Flyway reaches V2 in `public` and the only business table is `owner_accounts`.
-- A minimal valid row receives version zero and PostgreSQL timestamps.
-- Duplicate canonical login is rejected and does not replace the existing password hash.
-- Uppercase, whitespace, disallowed alphabet, empty, and overlength logins are rejected.
-- Null/blank/whitespace-containing/overlength password hashes and negative versions are rejected.
-- Omitting `id` is rejected and the column has no database default.
+- Hibernate validates the existing V2 schema and starts against PostgreSQL 17.10.
+- Persist assigns version zero and PostgreSQL timestamps; a repeated find in one persistence context returns the same managed instance.
+- Clearing the persistence context and finding again reconstructs the stored entity with `Instant` timestamps.
+- Dirty checking updates a changed hash and increments version exactly once without an explicit update call.
+- Merging a detached stale revision fails with an optimistic-lock exception and does not overwrite the winning value.
+- Runtime and architecture tests remain green.
 
 ## Definition of done
 
-- Focused PostgreSQL migration tests and the full JDK 25 Maven suite pass with Docker.
+- Focused JPA/PostgreSQL tests and the full JDK 25 Maven suite pass with Docker.
 - Independent review has no unresolved P0/P1.
-- Project memory records verified behavior and the next bounded slice.
-- No application persistence or authentication behavior enters this slice.
+- Project memory records verified behavior, limitations, and the next bounded slice.
+- No repository, identity use case, security, HTTP, or unrelated table enters this slice.
 
 ## Actual verification
 
-- Flyway applied V1 then V2 to a clean `public` schema on `postgres:17.10-alpine`.
-- Focused JDK 25 PostgreSQL tests passed 14/14 after the final corrections.
-- The final full Maven suite passed 30/30: fourteen database invocations, nine runtime tests, and seven architecture rules.
-- Independent review found three P1 gaps: ordinary-space-only trimming, collation-dependent ASCII ranges, and missing evidence for application-owned UUIDs.
-- `C` collation, a whitespace-free encoded-hash constraint, and metadata plus omitted-ID tests resolved all findings; re-review returned `READY` with no remaining P0/P1.
+- Spring Boot selected Hibernate ORM 7.4.1 and Flyway completed V1/V2 before Hibernate schema validation.
+- The first focused run passed 16 behaviors and failed only the expected exception-type assertion: direct `EntityManager` produced JPA `OptimisticLockException`, while the test expected Spring's repository-level translation.
+- After aligning the assertion with the actual boundary, focused PostgreSQL/JPA tests passed 17/17.
+- The final full JDK 25 Maven suite passed 33/33: seventeen database/JPA invocations, nine runtime/application tests, and seven architecture rules.
+- Independent review returned `READY` with no P0/P1; it confirmed entity encapsulation, assigned UUID/boxed version semantics, DB-sourced timestamps, Flyway ownership, transaction detachment, dirty checking, and stale-winner protection.
 - Final `git diff --check` passed after the progress documentation update.
 
 ## Remaining scope
 
-- The database cannot prove a stored value is BCrypt or that plaintext never reached the persistence call; bootstrap/security tests must prove those responsibilities later.
-- Bootstrap idempotency, concurrent seed behavior, optimistic update SQL, and `updated_at` advancement are not implemented.
-- No JPA mapping, repository, identity use case, authentication, session, or owner HTTP endpoint exists.
+- The tests use sequential committed transactions and a detached stale entity; they prove JPA optimistic-version semantics but are not a concurrent-thread bootstrap test.
+- No repository or exception-translation adapter exists, so the direct boundary intentionally exposes JPA `OptimisticLockException`.
+- Login canonicalization, BCrypt, bootstrap idempotency, retry/conflict handling, authentication, session, and HTTP behavior remain unimplemented.
+- The existing non-failing Mockito/Byte Buddy future dynamic-agent warning remains inherited from the test stack.
 
 ## Next task
 
-Map only `owner_accounts` through JPA inside the `identity` module and prove insert/load plus optimistic-version behavior against PostgreSQL. Keep bootstrap and authentication out of that slice.
+Implement the owner-bootstrap use case with the smallest identity-owned repository/password-hash ports and prove race-safe idempotency by canonical login. Keep authentication, sessions, HTTP, and every other table out of that slice.

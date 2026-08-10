@@ -1,7 +1,11 @@
 package com.gialong.relayforge.database;
 
 import com.gialong.relayforge.RelayForgeApplication;
+import com.gialong.relayforge.identity.persistence.OwnerAccountEntity;
 import com.zaxxer.hikari.HikariDataSource;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.OptimisticLockException;
+import jakarta.persistence.PersistenceContext;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -11,6 +15,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -21,6 +27,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -48,6 +55,12 @@ class PostgreSqlFoundationTests {
 
     @Autowired
     private Flyway flyway;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Test
     void providesValidPooledPostgreSqlConnectionInUtc() throws SQLException {
@@ -165,6 +178,92 @@ class PostgreSqlFoundationTests {
         assertInvalidOwner("negative_version_owner", "$2a$12$valid-looking-test-hash", -1L);
     }
 
+    @Test
+    void persistsAndReloadsOwnerThroughOnePersistenceContext() {
+        UUID ownerId = UUID.randomUUID();
+
+        OwnerAccountEntity reloaded = inTransaction(() -> {
+            OwnerAccountEntity owner = OwnerAccountEntity.create(
+                    ownerId,
+                    "jpa_owner",
+                    "$2a$12$jpa-mapping-test-hash"
+            );
+            assertThat(owner.version()).isNull();
+
+            entityManager.persist(owner);
+            assertThat(entityManager.contains(owner)).isTrue();
+            assertThat(entityManager.find(OwnerAccountEntity.class, ownerId)).isSameAs(owner);
+
+            entityManager.flush();
+            assertThat(owner.version()).isZero();
+            assertThat(owner.createdAt()).isNotNull();
+            assertThat(owner.updatedAt()).isEqualTo(owner.createdAt());
+
+            entityManager.clear();
+            assertThat(entityManager.contains(owner)).isFalse();
+            return entityManager.find(OwnerAccountEntity.class, ownerId);
+        });
+
+        assertThat(reloaded.id()).isEqualTo(ownerId);
+        assertThat(reloaded.loginName()).isEqualTo("jpa_owner");
+        assertThat(reloaded.passwordHash()).isEqualTo("$2a$12$jpa-mapping-test-hash");
+        assertThat(reloaded.version()).isZero();
+        assertThat(reloaded.createdAt()).isNotNull();
+        assertThat(reloaded.updatedAt()).isNotNull();
+    }
+
+    @Test
+    void dirtyCheckingUpdatesStateAndIncrementsVersionOnce() {
+        UUID ownerId = persistJpaOwner("dirty_check_owner", "$2a$12$before-dirty-check");
+        OwnerAccountEntity beforeUpdate = inTransaction(
+                () -> entityManager.find(OwnerAccountEntity.class, ownerId)
+        );
+
+        OwnerAccountEntity afterUpdate = inTransaction(() -> {
+            OwnerAccountEntity managed = entityManager.find(OwnerAccountEntity.class, ownerId);
+            managed.changePasswordHash("$2a$12$after-dirty-check");
+            entityManager.flush();
+            return managed;
+        });
+
+        assertThat(afterUpdate.version()).isEqualTo(1L);
+        assertThat(afterUpdate.updatedAt()).isAfterOrEqualTo(beforeUpdate.updatedAt());
+
+        OwnerAccountEntity stored = inTransaction(
+                () -> entityManager.find(OwnerAccountEntity.class, ownerId)
+        );
+        assertThat(stored.passwordHash()).isEqualTo("$2a$12$after-dirty-check");
+        assertThat(stored.version()).isEqualTo(1L);
+    }
+
+    @Test
+    void staleDetachedRevisionCannotOverwriteWinningUpdate() {
+        UUID ownerId = persistJpaOwner("optimistic_owner", "$2a$12$initial-version");
+        OwnerAccountEntity stale = inTransaction(
+                () -> entityManager.find(OwnerAccountEntity.class, ownerId)
+        );
+
+        inTransaction(() -> {
+            OwnerAccountEntity winner = entityManager.find(OwnerAccountEntity.class, ownerId);
+            winner.changePasswordHash("$2a$12$winning-version");
+            entityManager.flush();
+            return null;
+        });
+
+        stale.changePasswordHash("$2a$12$stale-version");
+        assertThatThrownBy(() -> inTransaction(() -> {
+            entityManager.merge(stale);
+            entityManager.flush();
+            return null;
+        })).isInstanceOf(OptimisticLockException.class);
+
+        OwnerAccountEntity stored = inTransaction(
+                () -> entityManager.find(OwnerAccountEntity.class, ownerId)
+        );
+        assertThat(stored.passwordHash()).isEqualTo("$2a$12$winning-version");
+        assertThat(stored.version()).isEqualTo(1L);
+    }
+
     private void insertOwner(String loginName, String passwordHash) {
         jdbcTemplate.update(
                 "insert into owner_accounts (id, login_name, password_hash) values (?, ?, ?)",
@@ -182,6 +281,19 @@ class PostgreSqlFoundationTests {
                 passwordHash,
                 version
         )).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    private UUID persistJpaOwner(String loginName, String passwordHash) {
+        UUID ownerId = UUID.randomUUID();
+        inTransaction(() -> {
+            entityManager.persist(OwnerAccountEntity.create(ownerId, loginName, passwordHash));
+            return null;
+        });
+        return ownerId;
+    }
+
+    private <T> T inTransaction(Supplier<T> work) {
+        return new TransactionTemplate(transactionManager).execute(status -> work.get());
     }
 
 }
