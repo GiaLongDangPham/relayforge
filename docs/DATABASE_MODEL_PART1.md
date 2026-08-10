@@ -1,7 +1,7 @@
 # RelayForge Database Model Part 1: Identity, Project, and Endpoint Configuration
 
 Status: Phase 0 baseline
-Last updated: 2026-08-09
+Last updated: 2026-08-10
 
 ## 1. Purpose and boundary
 
@@ -93,9 +93,11 @@ Email is not stored in v1 because registration, email verification, and password
 
 ### 4.3 Physical implementation status
 
-Flyway V2 now creates `public.owner_accounts` with an application-supplied UUID primary key, globally unique `login_name`, nonnegative version defaulting to zero, and PostgreSQL-owned lifecycle timestamp defaults. The login constraint uses the exact `^[a-z0-9][a-z0-9._-]*$` policy under `C` collation so its ASCII meaning does not change with deployment collation. Encoded password hashes must be bounded, nonempty, and contain no ASCII whitespace; BCrypt generation, cost validation, plaintext exclusion, bootstrap idempotency, and optimistic update behavior remain application responsibilities and require later evidence.
+Flyway V2 creates `public.owner_accounts` with an application-supplied UUID primary key, globally unique `login_name`, nonnegative version defaulting to zero, and PostgreSQL-owned lifecycle timestamp defaults. The login constraint uses the exact `^[a-z0-9][a-z0-9._-]*$` policy under `C` collation so its ASCII meaning does not change with deployment collation. Encoded password hashes must be bounded, nonempty, and contain no ASCII whitespace.
 
-The Phase 1 JPA mapping now keeps `OwnerAccountEntity` internal to `identity.persistence`. Hibernate validates rather than creates the Flyway schema, maps assigned UUID and boxed `Long @Version`, maps `timestamptz` to `Instant`, and asks PostgreSQL to generate creation/update timestamps. Integration evidence covers persistence-context identity, detach/reload, dirty checking, one version increment, and rejection of a stale detached merge. Repository and bootstrap transaction behavior remain deliberately absent.
+The Phase 1 JPA mapping keeps `OwnerAccountEntity` internal to `identity.persistence`. Hibernate validates rather than creates the Flyway schema, maps assigned UUID and boxed `Long @Version`, maps `timestamptz` to `Instant`, and asks PostgreSQL to generate creation/update timestamps. Integration evidence covers persistence-context identity, detach/reload, dirty checking, one version increment, and rejection of a stale detached merge.
+
+The owner-bootstrap use case now canonicalizes and validates the login, computes a BCrypt cost-12 hash before opening a short `READ COMMITTED` transaction, and uses `INSERT ... ON CONFLICT (login_name) DO NOTHING RETURNING id` followed by a separate read for the losing path. This preserves the first committed hash and lets concurrent callers converge on one owner without continuing a PostgreSQL transaction after a unique-constraint error. PostgreSQL integration evidence now covers first creation, repeated and case-variant idempotency, concurrent convergence, and winner-hash preservation. A startup configuration adapter and login authentication remain outside this implemented boundary.
 
 ## 5. `projects`
 
