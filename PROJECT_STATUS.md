@@ -14,9 +14,9 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 1 - Foundation.
-- Current slice: JPA-backed owner credential verification completed and independently reviewed.
+- Current slice: API-only Spring Security owner-authentication adapter completed and independently reviewed.
 - Repository state: Git repository on `main`; RelayForge backend foundation exists under `backend/` and the React/Vite skeleton remains under `frontend/`.
-- Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Spring Security Crypto, Lombok 1.18.46 as a compile-time processor, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. `owner_accounts` is the only business table and mapped entity; identity supports opt-in bootstrap and generic owner credential verification without HTTP/session wiring.
+- Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Spring Security Core/Crypto, Lombok 1.18.46 as a compile-time processor, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. `owner_accounts` is the only business table and mapped entity; identity supports opt-in bootstrap, generic credential verification, and an API-only authentication provider without HTTP/session wiring.
 - Local environment note: the default terminal Java is JDK 21 while this project requires JDK 25; Maven verification currently selects `C:\Program Files\Java\jdk-25` explicitly.
 
 ## Approved decisions
@@ -110,10 +110,11 @@ This file is the durable source of truth for project scope and progress. Update 
 - Added the identity owner-bootstrap contract, application-owned transaction, BCrypt cost-12 adapter, and PostgreSQL conflict-safe store with repeated and concurrent idempotency evidence.
 - Added an opt-in API-only owner-bootstrap startup adapter, safe outcome logging, first-start/restart PostgreSQL evidence, and an enforceable selective Lombok policy.
 - Added JPA/JPQL owner credential lookup, short read-only transaction ownership, BCrypt verification outside the transaction, dummy work for missing users, and a hash-free generic public result.
+- Added an API-only Spring Security authentication provider in `runtime.security` that delegates to the identity verifier, uses its hash-free `VerifiedOwner` result directly as the principal, and maps invalid verification to generic bad credentials without a filter chain or session behavior.
 
 ## Not completed
 
-- Physical tables or entity mappings beyond `owner_accounts`, Spring Security authentication/session adapters, indexes beyond owner constraints, and lock SQL.
+- Physical tables or entity mappings beyond `owner_accounts`, Spring Security filter-chain/session adapters, indexes beyond owner constraints, and lock SQL.
 - Project, endpoint, delivery, HTTP API, session/security-filter, and worker behavior; runtime markers currently contain no role behavior.
 - Docker, CI, frontend, observability, performance testing, or cloud infrastructure.
 
@@ -140,17 +141,15 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-10 | Phase 1 owner bootstrap use case | Added a secret-free public result, identity application ports, BCrypt cost 12 before an explicit `READ COMMITTED` transaction, and a PostgreSQL JDBC `ON CONFLICT DO NOTHING RETURNING` adapter that joins the caller transaction. Focused tests passed 5/5 and prove transaction placement, temporary-copy clearing, first/repeated bootstrap, case convergence, no hash overwrite, invalid input, and four-way concurrent convergence. A first full run exposed missing test-only JDBC/transaction collaborators in persistence-free runtime composition tests; adding `@MockitoBean` collaborators corrected only those test contexts. A later sandboxed run could not access Docker's named pipe; rerunning outside the sandbox produced a final JDK 25 `BUILD SUCCESS` with 38/38 tests. Independent review returned `READY` with no P0/P1. |
 | 2026-08-10 | Phase 1 owner bootstrap startup adapter | Added an opt-in `ApplicationRunner` under API runtime composition, requiring login/password only when enabled and logging only outcome plus owner ID. Unit/composition tests prove disabled-by-default behavior, worker exclusion even when the flag is true, required-property failure without secret echo, invocation, and temporary-array clearing. A real PostgreSQL test starts the application twice with different configured passwords and proves `CREATED`, then `EXISTING`, one row, original-hash preservation, and absence of both seeded secrets and login from captured logs. Added Lombok 1.18.46 as an explicit JDK 25 annotation processor plus repository guardrails; compilation emits Lombok's non-failing terminally-deprecated `Unsafe` warning. Focused startup tests passed 6/6; the full JDK 25 suite passed 44/44. Independent review returned `READY` with no P0/P1. |
 | 2026-08-10 | Phase 1 owner credential verification | Added a hash-free `Optional<VerifiedOwner>` public contract, shared canonical-login policy, application-owned read-only transaction, JPA/JPQL credential projection, and BCrypt verifier with an in-memory dummy cost-12 hash for absent users. Unit evidence proves the credential read occurs inside the transaction, BCrypt runs afterward, the defensive password copy is cleared, and unknown/malformed inputs still receive dummy verification. PostgreSQL evidence proves valid canonicalized verification, generic empty results for wrong/unknown/malformed credentials, and no hash/version mutation or representative secret logging. The internal credential object is an explicit final class so its default string form cannot render the hash. Focused hardened-state tests passed 6/6; the final JDK 25 suite passed 51/51. Independent review returned `READY` with no P0/P1. |
+| 2026-08-10 | Phase 1 owner authentication provider | Added only Spring Security Core plus an API-mode `AuthenticationProvider` in `runtime.security` that delegates username/password authentication to the identity verifier. A successful result uses the existing hash-free `VerifiedOwner` as its principal, with null credentials and no authorities; every empty verifier result becomes generic `BadCredentialsException`. The adapter clears its owned password copy and is absent from worker composition. The final focused JDK 25 run passed 12/12: 3 provider tests, API/worker composition tests, and 7 architecture rules; no full suite was run under the focused-test policy. Independent review first found an identity/runtime-composition P1, which was corrected by moving the adapter out of identity; final re-review returned `READY` with no P0/P1. A subsequent 3/3 focused refactor test and review removed the duplicate principal type. |
 
 ## Next recommended slice
 
-Implement a bounded Spring Security owner-authentication adapter as the next Phase 1 slice:
+Define and implement the first bounded API security-configuration slice:
 
-- translate Spring Security username/password input into `identity.api.OwnerCredentialVerifier` without exposing the internal hash;
-- return a principal containing only owner ID and canonical login on success;
-- map every empty verification result to one generic bad-credentials failure and clear any adapter-owned password copy;
-- keep filter-chain, session, CSRF, HTTP, rate-limit, project, and migration behavior out of the slice.
-
-Do not add dashboard login, project/endpoint/delivery tables, Docker Compose, cloud infrastructure, or session/security-filter wiring in that slice.
+- decide the minimal deny-by-default filter-chain boundary and its API-mode composition;
+- preserve the existing provider as the only credential decision point;
+- defer sessions, Spring Session JDBC, cookies, CSRF endpoint wiring, dashboard login routes, and authorization rules until separately scoped.
 
 ## Deferred until evidence justifies them
 
@@ -169,6 +168,7 @@ Do not add dashboard login, project/endpoint/delivery tables, Docker Compose, cl
 - Implemented and reviewed the first identity application use case: race-safe, idempotent owner bootstrap with BCrypt work outside the database transaction and PostgreSQL conflict semantics inside it.
 - Made owner bootstrap an explicit API-runtime startup option, verified idempotent restart and representative log redaction, and adopted an enforceable selective Lombok policy.
 - Implemented and reviewed JPA-backed owner credential verification with short transactions, dummy BCrypt work, and generic invalid outcomes.
+- Added an API-only Spring Security owner authentication provider without activating HTTP security or session behavior.
 
 ### 2026-08-09
 

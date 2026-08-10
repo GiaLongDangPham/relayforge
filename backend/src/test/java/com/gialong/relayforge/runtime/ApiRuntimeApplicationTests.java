@@ -1,6 +1,7 @@
 package com.gialong.relayforge.runtime;
 
 import com.gialong.relayforge.RelayForgeApplication;
+import com.gialong.relayforge.runtime.security.OwnerAuthenticationProvider;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,7 @@ class ApiRuntimeApplicationTests {
         assertThat(applicationContext.getBeansOfType(ApiRuntimeConfiguration.class)).hasSize(1);
         assertThat(applicationContext.getBeansOfType(WorkerRuntimeConfiguration.class)).isEmpty();
         assertThat(applicationContext.getBeansOfType(OwnerBootstrapStartupRunner.class)).isEmpty();
+        assertThat(applicationContext.getBeansOfType(OwnerAuthenticationProvider.class)).hasSize(1);
     }
 
 }
