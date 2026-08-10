@@ -14,9 +14,9 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 1 - Foundation.
-- Current slice: race-safe owner-bootstrap use case completed and independently reviewed.
+- Current slice: controlled API-only owner-bootstrap startup adapter and selective Lombok policy completed and independently reviewed.
 - Repository state: Git repository on `main`; RelayForge backend foundation exists under `backend/` and the React/Vite skeleton remains under `frontend/`.
-- Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Spring Security Crypto, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. `owner_accounts` is the only business table and mapped entity; the bounded owner-bootstrap contract is the first RelayForge application use case.
+- Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Spring Security Crypto, Lombok 1.18.46 as a compile-time processor, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. `owner_accounts` is the only business table and mapped entity; an opt-in API startup adapter can invoke the bounded owner-bootstrap use case.
 - Local environment note: the default terminal Java is JDK 21 while this project requires JDK 25; Maven verification currently selects `C:\Program Files\Java\jdk-25` explicitly.
 
 ## Approved decisions
@@ -73,6 +73,7 @@ This file is the durable source of truth for project scope and progress. Update 
 | Configuration lifecycle | No owner/project/endpoint hard deletion in v1; revoke API keys and disable endpoints | Prevents configuration actions from accidentally cascading into future delivery history or nonterminal work. |
 | Boundary enforcement | Use capability packages plus ArchUnit architecture tests when the module skeleton is implemented | Shared-process boundaries need executable enforcement rather than naming convention alone. |
 | Java/build identity | Base package `com.gialong.relayforge`, Maven coordinates `com.gialong:relayforge-backend`, and application name `relayforge-backend` | Gives the portfolio product one consistent namespace while retaining personal ownership. |
+| Lombok policy | Use Lombok only for mechanical boilerplate; reject `@Data` and `@SneakyThrows`, review generated setters/string/equality methods, and retain records or explicit code where behavior matters | Reduces noise without hiding entity identity, secrets, validation, transactions, or concurrency semantics. |
 | Resource bounds | 64 KiB event payload, 8 KiB response preview, 30-day terminal-history retention | Prevents unbounded persistence while keeping Portfolio v1 manageable. |
 | Hardening timebox | Maximum 16 hours inside the 80-96 hour Portfolio v1 target | Bounds CI, cloud, load, JFR, and documentation work so correctness remains first. |
 
@@ -107,10 +108,11 @@ This file is the durable source of truth for project scope and progress. Update 
 - Added Flyway V2 for `public.owner_accounts` and real PostgreSQL evidence for canonical login, exact uniqueness/no-overwrite, application-owned UUIDs, password-hash storage shape, version defaults, and database timestamps.
 - Added the internal identity JPA mapping and PostgreSQL evidence for assigned UUIDs, boxed optimistic version, first-level persistence-context identity, detach/reload, dirty checking, database-sourced timestamps, and stale-merge rejection.
 - Added the identity owner-bootstrap contract, application-owned transaction, BCrypt cost-12 adapter, and PostgreSQL conflict-safe store with repeated and concurrent idempotency evidence.
+- Added an opt-in API-only owner-bootstrap startup adapter, safe outcome logging, first-start/restart PostgreSQL evidence, and an enforceable selective Lombok policy.
 
 ## Not completed
 
-- Physical tables or entity mappings beyond `owner_accounts`, the startup bootstrap adapter, authentication, indexes beyond owner constraints, and lock SQL.
+- Physical tables or entity mappings beyond `owner_accounts`, owner authentication, indexes beyond owner constraints, and lock SQL.
 - Project, endpoint, delivery, HTTP API, session/security-filter, and worker behavior; runtime markers currently contain no role behavior.
 - Docker, CI, frontend, observability, performance testing, or cloud infrastructure.
 
@@ -135,15 +137,16 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-09 | Phase 1 owner accounts migration | Added Flyway V2 for the first business table and behavioral PostgreSQL tests for schema history, valid defaults, canonical login rules, uniqueness/no hash overwrite, required application UUID, hash storage shape, and nonnegative version. Independent review found three P1 gaps: default `btrim` missed non-space whitespace, regex ranges were collation-sensitive, and application-owned UUID had no evidence. `C` collation, an explicit whitespace-free encoded-hash constraint, and metadata plus omitted-ID tests resolved them; re-review returned `READY`. Focused tests passed 14/14 and the final JDK 25 suite passed 30/30. Final `git diff --check` passed. |
 | 2026-08-09 | Phase 1 owner JPA mapping | Added Spring Boot Data JPA, Flyway-owned/Hibernate-validated schema configuration, disabled Open EntityManager in View, and mapped only `owner_accounts` in `identity.persistence`. Tests prove assigned UUID plus boxed version lifecycle, PostgreSQL-sourced `Instant` timestamps, first-level identity, detach/reload, dirty checking with one version increment, and stale detached merge rejection with winner retention. The first focused run correctly exposed that direct `EntityManager` raises JPA `OptimisticLockException`, not Spring's repository-translated exception; the assertion was corrected. Focused tests passed 17/17 and the full JDK 25 suite passed 33/33. Independent review returned `READY` with no P0/P1. Final `git diff --check` passed. |
 | 2026-08-10 | Phase 1 owner bootstrap use case | Added a secret-free public result, identity application ports, BCrypt cost 12 before an explicit `READ COMMITTED` transaction, and a PostgreSQL JDBC `ON CONFLICT DO NOTHING RETURNING` adapter that joins the caller transaction. Focused tests passed 5/5 and prove transaction placement, temporary-copy clearing, first/repeated bootstrap, case convergence, no hash overwrite, invalid input, and four-way concurrent convergence. A first full run exposed missing test-only JDBC/transaction collaborators in persistence-free runtime composition tests; adding `@MockitoBean` collaborators corrected only those test contexts. A later sandboxed run could not access Docker's named pipe; rerunning outside the sandbox produced a final JDK 25 `BUILD SUCCESS` with 38/38 tests. Independent review returned `READY` with no P0/P1. |
+| 2026-08-10 | Phase 1 owner bootstrap startup adapter | Added an opt-in `ApplicationRunner` under API runtime composition, requiring login/password only when enabled and logging only outcome plus owner ID. Unit/composition tests prove disabled-by-default behavior, worker exclusion even when the flag is true, required-property failure without secret echo, invocation, and temporary-array clearing. A real PostgreSQL test starts the application twice with different configured passwords and proves `CREATED`, then `EXISTING`, one row, original-hash preservation, and absence of both seeded secrets and login from captured logs. Added Lombok 1.18.46 as an explicit JDK 25 annotation processor plus repository guardrails; compilation emits Lombok's non-failing terminally-deprecated `Unsafe` warning. Focused startup tests passed 6/6; the full JDK 25 suite passed 44/44. Independent review returned `READY` with no P0/P1. |
 
 ## Next recommended slice
 
-Implement a controlled owner-bootstrap startup adapter as the next Phase 1 slice:
+Implement a bounded owner credential lookup and password-verification use case as the next Phase 1 slice:
 
-- invoke the existing bootstrap use case only when explicitly enabled in `api` runtime mode;
-- bind the bootstrap login and secret without printing the secret in logs, exceptions, or status output;
-- prove disabled startup, successful first startup, idempotent restart, and absence from worker runtime;
-- keep login authentication, sessions, HTTP, project data, and every other table out of the slice.
+- use JPA/Hibernate for an ordinary canonical-login credential read, demonstrating where ORM is preferred over race-sensitive JDBC SQL;
+- keep the stored password hash inside identity persistence/application boundaries and verify the presented password through an owned BCrypt port;
+- make valid, invalid-password, and unknown-login outcomes explicit without leaking account existence or secret material;
+- keep Spring Security filters, sessions, HTTP, project data, and every other table out of the slice.
 
 Do not add dashboard login, project/endpoint/delivery tables, Docker Compose, cloud infrastructure, or session/security-filter wiring in that slice.
 
@@ -162,6 +165,7 @@ Do not add dashboard login, project/endpoint/delivery tables, Docker Compose, cl
 ### 2026-08-10
 
 - Implemented and reviewed the first identity application use case: race-safe, idempotent owner bootstrap with BCrypt work outside the database transaction and PostgreSQL conflict semantics inside it.
+- Made owner bootstrap an explicit API-runtime startup option, verified idempotent restart and representative log redaction, and adopted an enforceable selective Lombok policy.
 
 ### 2026-08-09
 

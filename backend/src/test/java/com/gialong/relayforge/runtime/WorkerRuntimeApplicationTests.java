@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         classes = RelayForgeApplication.class,
         properties = {
                 "relayforge.runtime=worker",
+                "relayforge.bootstrap.owner.enabled=true",
                 "spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
         },
         webEnvironment = SpringBootTest.WebEnvironment.NONE
@@ -38,6 +39,7 @@ class WorkerRuntimeApplicationTests {
         assertThat(runtimeProperties.runtime()).isEqualTo(RuntimeMode.WORKER);
         assertThat(applicationContext.getBeansOfType(ApiRuntimeConfiguration.class)).isEmpty();
         assertThat(applicationContext.getBeansOfType(WorkerRuntimeConfiguration.class)).hasSize(1);
+        assertThat(applicationContext.getBeansOfType(OwnerBootstrapStartupRunner.class)).isEmpty();
     }
 
 }

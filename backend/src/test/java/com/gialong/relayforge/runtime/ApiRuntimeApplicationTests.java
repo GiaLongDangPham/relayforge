@@ -38,6 +38,7 @@ class ApiRuntimeApplicationTests {
         assertThat(runtimeProperties.runtime()).isEqualTo(RuntimeMode.API);
         assertThat(applicationContext.getBeansOfType(ApiRuntimeConfiguration.class)).hasSize(1);
         assertThat(applicationContext.getBeansOfType(WorkerRuntimeConfiguration.class)).isEmpty();
+        assertThat(applicationContext.getBeansOfType(OwnerBootstrapStartupRunner.class)).isEmpty();
     }
 
 }
