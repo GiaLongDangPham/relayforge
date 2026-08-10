@@ -1,6 +1,7 @@
 package com.gialong.relayforge.identity.application;
 
 import com.gialong.relayforge.identity.api.OwnerCredentialVerifier;
+import com.gialong.relayforge.identity.api.OwnerLoginNames;
 import com.gialong.relayforge.identity.api.VerifiedOwner;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -30,7 +31,7 @@ final class OwnerCredentialVerificationService implements OwnerCredentialVerifie
 
     @Override
     public Optional<VerifiedOwner> verify(String loginName, char[] plaintextPassword) {
-        Optional<String> canonicalLogin = OwnerLoginCanonicalizer.canonicalize(loginName);
+        Optional<String> canonicalLogin = OwnerLoginNames.canonicalize(loginName);
         Optional<OwnerCredentialRecord> storedCredential = canonicalLogin.flatMap(login ->
                 Objects.requireNonNull(
                         readTransaction.execute(status -> credentialStore.findByCanonicalLogin(login)),

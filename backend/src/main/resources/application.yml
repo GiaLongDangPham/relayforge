@@ -6,6 +6,9 @@ spring:
       connection-init-sql: SET search_path TO public; SET TIME ZONE 'UTC'
   flyway:
     default-schema: public
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
   jpa:
     open-in-view: false
     hibernate:
@@ -14,3 +17,9 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+
+relayforge:
+  security:
+    dashboard-origin: ${RELAYFORGE_DASHBOARD_ORIGIN:http://localhost:5173}
+    secure-cookie: ${RELAYFORGE_SECURE_COOKIES:false}
+    production: ${RELAYFORGE_PRODUCTION:false}

@@ -3,6 +3,7 @@ package com.gialong.relayforge.identity.application;
 import com.gialong.relayforge.identity.api.OwnerBootstrap;
 import com.gialong.relayforge.identity.api.OwnerBootstrapOutcome;
 import com.gialong.relayforge.identity.api.OwnerBootstrapResult;
+import com.gialong.relayforge.identity.api.OwnerLoginNames;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -32,7 +33,7 @@ final class OwnerBootstrapService implements OwnerBootstrap {
 
     @Override
     public OwnerBootstrapResult bootstrap(String loginName, char[] plaintextPassword) {
-        String canonicalLogin = OwnerLoginCanonicalizer.requireCanonical(loginName);
+        String canonicalLogin = OwnerLoginNames.requireCanonical(loginName);
         validatePassword(plaintextPassword);
 
         char[] passwordCopy = Arrays.copyOf(plaintextPassword, plaintextPassword.length);

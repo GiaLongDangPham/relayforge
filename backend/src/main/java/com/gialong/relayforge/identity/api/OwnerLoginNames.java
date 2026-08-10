@@ -1,18 +1,18 @@
-package com.gialong.relayforge.identity.application;
+package com.gialong.relayforge.identity.api;
 
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-final class OwnerLoginCanonicalizer {
+public final class OwnerLoginNames {
 
     private static final int MAX_LOGIN_LENGTH = 100;
     private static final Pattern CANONICAL_LOGIN = Pattern.compile("[a-z0-9][a-z0-9._-]*");
 
-    private OwnerLoginCanonicalizer() {
+    private OwnerLoginNames() {
     }
 
-    static String requireCanonical(String loginName) {
+    public static String requireCanonical(String loginName) {
         if (loginName == null) {
             throw new IllegalArgumentException("loginName must not be null");
         }
@@ -21,7 +21,7 @@ final class OwnerLoginCanonicalizer {
         );
     }
 
-    static Optional<String> canonicalize(String loginName) {
+    public static Optional<String> canonicalize(String loginName) {
         if (loginName == null) {
             return Optional.empty();
         }

@@ -3,6 +3,7 @@ package com.gialong.relayforge.runtime;
 import com.gialong.relayforge.RelayForgeApplication;
 import com.gialong.relayforge.runtime.security.OwnerAuthenticationProvider;
 import jakarta.persistence.EntityManager;
+import org.mockito.Answers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,6 +11,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import javax.sql.DataSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -19,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "relayforge.runtime=api",
                 "spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
         },
-        webEnvironment = SpringBootTest.WebEnvironment.NONE
+        webEnvironment = SpringBootTest.WebEnvironment.MOCK
 )
 class ApiRuntimeApplicationTests {
 
@@ -28,6 +31,9 @@ class ApiRuntimeApplicationTests {
 
     @MockitoBean
     private JdbcTemplate jdbcTemplate;
+
+    @MockitoBean(answers = Answers.RETURNS_DEEP_STUBS)
+    private DataSource dataSource;
 
     @MockitoBean
     private PlatformTransactionManager transactionManager;

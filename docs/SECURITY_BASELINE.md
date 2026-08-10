@@ -42,7 +42,9 @@ Spring Session infrastructure tables are technical persistence owned by runtime/
 
 Phase 1 credential verification now returns the same empty application outcome for an unknown login and a wrong password. Canonical unknown logins still perform the database lookup, and absent/malformed users still execute one BCrypt comparison against an in-memory dummy cost-12 hash. This mitigates the dominant missing-BCrypt timing difference but does not claim perfectly constant-time end-to-end authentication. Password verification occurs after the short credential-read transaction closes.
 
-Phase 1 also composes an API-mode-only `AuthenticationProvider` in the runtime security adapter. It delegates username/password verification to the identity public contract; on success it creates a principal containing only owner ID and canonical login, and an empty identity result becomes one generic bad-credentials failure. The provider does not configure a filter chain, sessions, cookies, CSRF, or HTTP login behavior; those remain separate slices.
+Phase 1 composes the `AuthenticationProvider` and browser-authentication adapter only in API mode. The provider delegates username/password verification to the identity public contract; on success it uses the hash-free owner ID and canonical login as the principal, and an empty identity result becomes one generic bad-credentials failure. The API filter chain is deny-by-default for `/api/v1/**`, permits only the four accepted authentication routes at this stage, explicitly saves the server-side security context after login, and disables framework form/basic login behavior.
+
+The packaged launcher switches a worker to a non-web application context after Spring prepares configuration and before it creates the context. This matters because the shared artifact contains servlet, Spring Security, and Spring Session dependencies: worker mode must not fall back to Boot's default web security/session behavior merely because those libraries are present.
 
 
 ### 2.3 Session cookie and lifecycle
