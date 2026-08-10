@@ -1,6 +1,7 @@
 package com.gialong.relayforge.runtime;
 
 import com.gialong.relayforge.RelayForgeApplication;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,6 +31,9 @@ class WorkerRuntimeApplicationTests {
 
     @MockitoBean
     private PlatformTransactionManager transactionManager;
+
+    @MockitoBean
+    private EntityManager entityManager;
 
     @Autowired
     private RelayForgeRuntimeProperties runtimeProperties;

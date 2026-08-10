@@ -9,16 +9,11 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Arrays;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Service
 final class OwnerBootstrapService implements OwnerBootstrap {
-
-    private static final int MAX_LOGIN_LENGTH = 100;
-    private static final Pattern CANONICAL_LOGIN = Pattern.compile("[a-z0-9][a-z0-9._-]*");
 
     private final OwnerPasswordHasher passwordHasher;
     private final OwnerBootstrapStore ownerStore;
@@ -37,7 +32,7 @@ final class OwnerBootstrapService implements OwnerBootstrap {
 
     @Override
     public OwnerBootstrapResult bootstrap(String loginName, char[] plaintextPassword) {
-        String canonicalLogin = canonicalize(loginName);
+        String canonicalLogin = OwnerLoginCanonicalizer.requireCanonical(loginName);
         validatePassword(plaintextPassword);
 
         char[] passwordCopy = Arrays.copyOf(plaintextPassword, plaintextPassword.length);
@@ -62,18 +57,6 @@ final class OwnerBootstrapService implements OwnerBootstrap {
                 ? OwnerBootstrapOutcome.CREATED
                 : OwnerBootstrapOutcome.EXISTING;
         return new OwnerBootstrapResult(stored.ownerId(), canonicalLogin, outcome);
-    }
-
-    private static String canonicalize(String loginName) {
-        if (loginName == null) {
-            throw new IllegalArgumentException("loginName must not be null");
-        }
-
-        String canonical = loginName.strip().toLowerCase(Locale.ROOT);
-        if (canonical.length() > MAX_LOGIN_LENGTH || !CANONICAL_LOGIN.matcher(canonical).matches()) {
-            throw new IllegalArgumentException("loginName must use the canonical owner login format");
-        }
-        return canonical;
     }
 
     private static void validatePassword(char[] plaintextPassword) {

@@ -4,76 +4,81 @@ Status: Completed
 
 ## Goal
 
-Add a controlled, disabled-by-default startup adapter that invokes the existing owner-bootstrap use case only in API runtime mode without exposing the bootstrap password.
+Add an identity-owned credential-verification use case that reads owner credentials through JPA, verifies BCrypt outside the database transaction, and returns one indistinguishable invalid result for unknown login and wrong password.
 
 ## Learning outcome
 
-Understand mode-specific Spring composition, startup hooks as inbound adapters, fail-fast configuration, the limits of secret erasure in Java, and how selective Lombok use can remove mechanical code without hiding security or transaction behavior.
+Understand when ORM is the clearer persistence tool, how to keep CPU-heavy password verification outside a connection-holding transaction, why unknown users still receive dummy password work, and how public contracts avoid leaking hashes or account existence.
 
 ## Scope
 
-- Add an API-mode-only startup runner behind `relayforge.bootstrap.owner.enabled=true`.
-- Read the configured login and password only when the runner executes.
-- Convert the configured password to a temporary `char[]`, invoke `identity.api.OwnerBootstrap`, and clear the array in `finally`.
-- Log only the bootstrap outcome and owner ID.
-- Add Lombok as a compile-time annotation processor compatible with JDK 25 and use it for constructor/logger boilerplate.
-- Add an enforceable Lombok policy: reject `@Data` and `@SneakyThrows`; warn on generated setters, `toString`, and equality methods that require review.
-- Prove opt-in composition, API-only behavior, invocation, temporary-array clearing, and representative log redaction.
+- Add one identity public verifier contract returning either a verified owner identity or an empty invalid result.
+- Reuse one canonical-login policy for bootstrap and verification.
+- Add an identity-owned credential-read port and an internal record containing ID, canonical login, and password hash.
+- Implement the read adapter with JPA/JPQL projection, not `JdbcTemplate`.
+- Keep one short read-only application-owned transaction around only the credential query.
+- Add an identity-owned password-verification port and BCrypt adapter.
+- For unknown canonical login or malformed login, perform dummy BCrypt work before returning invalid.
+- Copy the caller password for verification and clear only the internal copy in `finally`.
+- Prove valid credentials, wrong password, unknown/malformed login, transaction placement, JPA lookup, dummy work, and absence of secret/hash in the public result.
 
 ## Decisions and trade-offs
 
-- Missing `enabled` means disabled. Enabling bootstrap without login or password fails startup rather than silently starting without the requested owner.
-- The runner is an inbound runtime adapter and may depend only on the identity public contract, not its service, entity, or repository.
-- Spring configuration values originate as immutable strings. Clearing the temporary `char[]` reduces accidental retention but cannot erase the original environment/property value or internal JVM allocations.
-- Login is not a password, but this startup log does not need it; outcome and owner ID are sufficient operational evidence.
-- Lombok is for mechanical boilerplate only. Java records remain preferred for simple immutable results, while transaction boundaries, validation, domain mutations, and concurrency SQL stay explicit.
+- `Optional<VerifiedOwner>` is the complete public outcome: empty does not explain whether login lookup or password matching failed.
+- Canonical unknown logins still query PostgreSQL; malformed logins skip the query but still perform dummy BCrypt work. This mitigates the dominant timing difference but does not claim perfectly constant-time end-to-end authentication.
+- The password verifier receives an optional stored hash and always executes one BCrypt match, using an in-memory dummy cost-12 hash when the owner is absent.
+- The dummy hash is generated once when the verifier adapter is constructed. This adds one BCrypt operation at process startup but avoids persisting or hard-coding a reusable encoded value.
+- JPA returns a detached application projection rather than exposing `OwnerAccountEntity` or keeping a persistence context open during BCrypt.
+- The caller remains responsible for clearing its input `char[]`; the use case clears its own defensive copy.
 
 ## Out of scope
 
-- Dashboard authentication, password verification or rotation, Spring Security filters, sessions, CSRF, and HTTP endpoints.
-- Cloud secret manager integration, property encryption, Actuator environment sanitization, or Docker configuration.
-- Project data, another migration, or changes to the race-safe bootstrap transaction.
-- Retrofitting every existing class with Lombok.
+- Spring Security `AuthenticationProvider`, filter chain, session rotation/persistence, CSRF, login rate limiting, HTTP endpoints, and error mapping.
+- Password rotation, hash-cost upgrade-on-login, account lockout, audit events, or authentication metrics.
+- Project data, another migration, or changes to bootstrap behavior.
 
 ## Test evidence required
 
-- Disabled API configuration creates no startup runner.
-- Enabled API configuration creates exactly one startup runner.
-- Worker mode cannot create the runner even if the bootstrap flag is true.
-- The runner invokes `OwnerBootstrap` with the configured values, clears its temporary password array, and logs no seeded password marker.
-- Missing required credentials fail without echoing a configured secret.
+- Valid mixed-case/padded login plus correct password returns owner ID and canonical login.
+- Wrong password and unknown/malformed login return the same empty public outcome.
+- Unknown and malformed logins still invoke the password verifier without a stored hash.
+- Credential query runs inside a read-only transaction; BCrypt runs after it closes.
+- The caller array remains unchanged while the internal copy is cleared.
+- PostgreSQL integration proves the JPA projection reads the stored owner without changing its hash/version.
 - Focused tests and the full JDK 25 Maven suite pass.
 
 ## Definition of done
 
 - Independent review has no unresolved P0/P1.
-- Project memory records the verified startup behavior, Lombok policy, limitations, and next bounded slice.
-- No authentication/session/HTTP behavior or unrelated persistence enters the slice.
+- Project memory records verified ORM/security behavior, limitations, and the next bounded slice.
+- No session/filter/HTTP behavior or unrelated persistence enters the slice.
 
 ## Actual verification
 
-- Focused composition and runner tests passed 7/7 before the database startup test was added.
-- Focused startup tests passed 6/6, including a real `postgres:17.10-alpine` application start and restart.
-- The first start produced `CREATED`; restart with a different configured password produced `EXISTING`, retained one row, and preserved the original BCrypt hash.
-- Captured logs contained safe outcome/owner ID fields but neither configured password marker nor the supplied login.
-- Missing login and missing password each fail with the missing property key and without echoing a configured secret.
-- The full JDK 25 Maven suite passed 44/44 with zero failures, errors, or skips.
-- Independent read-only review returned `READY` with no P0/P1 findings.
+- Focused application/security/runtime tests initially passed 6/6.
+- PostgreSQL/JPA integration tests passed 2/2 against `postgres:17.10-alpine`.
+- The first full JDK 25 suite passed 50/50 before the hash-rendering hardening.
+- After hardening the internal credential projection against hash-bearing `toString`, focused application plus integration tests passed 6/6.
+- Independent read-only review of the hardened state returned `READY` with no P0/P1 findings.
+- The final hardened-state JDK 25 suite passed 51/51 with zero failures, errors, or skips.
 - `git diff --check` passed.
+
+## Verified behavior
+
+- Correct mixed-case/padded credentials return only owner ID and canonical login.
+- Wrong password, unknown canonical login, malformed login, and null password all produce the same empty public outcome.
+- Canonical unknown login performs the JPA query; absent/malformed credentials still execute the password-verifier dummy path.
+- JPQL projects only ID, login, and hash into an internal explicit class; neither its default string form nor the public result renders the hash.
+- The JPA read joins an application-owned read-only transaction; BCrypt runs after that transaction commits and releases its connection.
+- Verification neither changes the stored hash nor increments the optimistic version.
+- The caller's password array is unchanged; the service's defensive copy is cleared.
 
 ## Remaining and limitations
 
-- Spring `Environment` retains configuration values as immutable strings; clearing the runner's temporary `char[]` cannot erase that original value or every internal allocation.
-- Supply the three enabled bootstrap values through environment/ignored configuration; do not commit the password or pass it as a visible command-line argument.
-- Lombok 1.18.46 supports JDK 25 and is compile-time only, but javac currently emits its non-failing terminally-deprecated `sun.misc.Unsafe` warning.
-- Dashboard authentication, password verification, sessions, HTTP, rotation, cloud secret management, and Actuator sanitization remain unimplemented.
-
-## Runtime configuration
-
-- `RELAYFORGE_BOOTSTRAP_OWNER_ENABLED=true`
-- `RELAYFORGE_BOOTSTRAP_OWNER_LOGIN_NAME=<canonicalizable-login>`
-- `RELAYFORGE_BOOTSTRAP_OWNER_PASSWORD=<secret>`
+- Dummy BCrypt removes the large missing-hash cost difference but does not make database lookup plus password verification perfectly constant-time.
+- The application contract is not yet connected to Spring Security, sessions, HTTP error mapping, CSRF, or login rate limiting.
+- Hash corruption or an unsupported stored encoding is not treated as ordinary invalid credentials; operational handling remains for a later security adapter slice.
 
 ## Next recommended slice
 
-Add an identity-owned credential lookup and password-verification use case using JPA for the canonical-login read, BCrypt verification behind a port, indistinguishable invalid-credential results, and no Spring Security/session/HTTP wiring yet.
+Add a Spring Security authentication adapter that calls `OwnerCredentialVerifier`, returns a principal with owner ID/canonical login, maps empty verification to generic bad credentials, and adds no filter-chain/session/HTTP behavior yet.

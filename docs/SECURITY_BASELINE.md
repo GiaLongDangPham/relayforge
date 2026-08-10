@@ -1,7 +1,7 @@
 # RelayForge Portfolio v1 Security Baseline
 
 Status: Phase 0 baseline
-Last updated: 2026-08-09
+Last updated: 2026-08-10
 
 ## 1. Purpose and threat boundary
 
@@ -39,6 +39,8 @@ Spring Session infrastructure tables are technical persistence owned by runtime/
 - Plaintext password exists only during bootstrap input or login verification and is never logged or persisted.
 - Bootstrap seed does not overwrite an existing hash silently.
 - BCrypt cost is benchmarked on the target container before deployment; change it if login verification is trivially cheap or creates unacceptable CPU/latency.
+
+Phase 1 credential verification now returns the same empty application outcome for an unknown login and a wrong password. Canonical unknown logins still perform the database lookup, and absent/malformed users still execute one BCrypt comparison against an in-memory dummy cost-12 hash. This mitigates the dominant missing-BCrypt timing difference but does not claim perfectly constant-time end-to-end authentication. Password verification occurs after the short credential-read transaction closes.
 
 ### 2.3 Session cookie and lifecycle
 
