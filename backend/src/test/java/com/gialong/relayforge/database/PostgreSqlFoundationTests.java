@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Testcontainers
 @SpringBootTest(
         classes = RelayForgeApplication.class,
-        properties = "relayforge.runtime=api",
+        properties = "relayforge.runtime=worker",
         webEnvironment = SpringBootTest.WebEnvironment.NONE
 )
 class PostgreSqlFoundationTests {
@@ -88,22 +88,27 @@ class PostgreSqlFoundationTests {
         var currentMigration = flyway.info().current();
 
         assertThat(currentMigration).isNotNull();
-        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("2");
-        assertThat(currentMigration.getDescription()).isEqualTo("create owner accounts");
+        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("4");
+        assertThat(currentMigration.getDescription()).isEqualTo("create projects");
 
         Integer successfulMigrations = jdbcTemplate.queryForObject(
                 "select count(*) from flyway_schema_history where success",
                 Integer.class
         );
-        List<String> businessTables = jdbcTemplate.queryForList(
+        List<String> tables = jdbcTemplate.queryForList(
                 "select table_name from information_schema.tables "
                         + "where table_schema = 'public' and table_name <> 'flyway_schema_history' "
                         + "order by table_name",
                 String.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(2);
-        assertThat(businessTables).containsExactly("owner_accounts");
+        assertThat(successfulMigrations).isEqualTo(4);
+        assertThat(tables).containsExactly(
+                "owner_accounts",
+                "projects",
+                "spring_session",
+                "spring_session_attributes"
+        );
     }
 
     @Test
@@ -176,6 +181,37 @@ class PostgreSqlFoundationTests {
         assertInvalidOwner("embedded_space_hash_owner", "encoded hash", 0L);
         assertInvalidOwner("long_hash_owner", "x".repeat(256), 0L);
         assertInvalidOwner("negative_version_owner", "$2a$12$valid-looking-test-hash", -1L);
+    }
+
+    @Test
+    void enforcesProjectOwnershipNameVersionAndOwnerListIndex() {
+        UUID ownerId = UUID.randomUUID();
+        insertOwner(ownerId, "project_owner", "$2a$12$valid-looking-test-hash");
+
+        Map<String, Object> inserted = jdbcTemplate.queryForMap(
+                "insert into projects (id, owner_id, name) values (?, ?, ?) "
+                        + "returning version, created_at, updated_at",
+                UUID.randomUUID(),
+                ownerId,
+                "Payments"
+        );
+
+        assertThat(inserted.get("version")).isEqualTo(0L);
+        assertThat(inserted.get("created_at")).isNotNull();
+        assertThat(inserted.get("updated_at")).isEqualTo(inserted.get("created_at"));
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into projects (id, owner_id, name) values (?, ?, ?)",
+                UUID.randomUUID(), UUID.randomUUID(), "Missing owner"
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into projects (id, owner_id, name, version) values (?, ?, ?, ?)",
+                UUID.randomUUID(), ownerId, "\tInvalid project", -1L
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbcTemplate.queryForList(
+                "select indexname from pg_indexes where schemaname = 'public' and tablename = 'projects' "
+                        + "and indexname = 'ix_projects_owner_created_at_id'",
+                String.class
+        )).containsExactly("ix_projects_owner_created_at_id");
     }
 
     @Test
@@ -265,9 +301,13 @@ class PostgreSqlFoundationTests {
     }
 
     private void insertOwner(String loginName, String passwordHash) {
+        insertOwner(UUID.randomUUID(), loginName, passwordHash);
+    }
+
+    private void insertOwner(UUID ownerId, String loginName, String passwordHash) {
         jdbcTemplate.update(
                 "insert into owner_accounts (id, login_name, password_hash) values (?, ?, ?)",
-                UUID.randomUUID(),
+                ownerId,
                 loginName,
                 passwordHash
         );

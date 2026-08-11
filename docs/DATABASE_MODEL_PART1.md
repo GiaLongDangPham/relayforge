@@ -99,7 +99,7 @@ The Phase 1 JPA mapping keeps `OwnerAccountEntity` internal to `identity.persist
 
 The owner-bootstrap use case canonicalizes and validates the login, computes a BCrypt cost-12 hash before opening a short `READ COMMITTED` transaction, and uses `INSERT ... ON CONFLICT (login_name) DO NOTHING RETURNING id` followed by a separate read for the losing path. This preserves the first committed hash and lets concurrent callers converge on one owner without continuing a PostgreSQL transaction after a unique-constraint error. PostgreSQL integration evidence covers first creation, repeated and case-variant idempotency, concurrent convergence, winner-hash preservation, and an API-only opt-in startup followed by an idempotent restart.
 
-Credential verification now uses a JPQL constructor projection to read only owner ID, canonical login, and password hash inside a short read-only transaction. The detached internal projection has no field-rendering `toString`; BCrypt verification runs after the transaction closes, and the public result exposes only verified ID/login or an empty invalid outcome. Full Spring Security authentication and sessions remain outside this implemented boundary.
+Credential verification now uses a JPQL constructor projection to read only owner ID, canonical login, and password hash inside a short read-only transaction. The detached internal projection has no field-rendering `toString`; BCrypt verification runs after the transaction closes, and the public result exposes only verified ID/login or an empty invalid outcome. Browser authentication and sessions are API-runtime adapters outside this identity persistence boundary.
 
 ## 5. `projects`
 
@@ -121,6 +121,12 @@ Credential verification now uses a JPQL constructor projection to read only owne
 - A foreign key proves that the owner exists; it does not prove that the current requester is that owner.
 - Owner-facing queries and mutations must scope by both authenticated owner identity and project identity, preventing IDOR even when a valid project UUID is guessed.
 - Concurrent renames use the project version and allow one winner; stale versions return a conflict rather than overwriting silently.
+
+### 5.3 Physical implementation status
+
+Flyway V4 creates `public.projects` with an application-supplied UUID primary key, restrictive `owner_id` foreign key, nonblank trimmed name constraint, nonnegative version defaulting to zero, and PostgreSQL-owned timestamps. The owner-facing index is `(owner_id, created_at DESC, id DESC)`.
+
+The local `ProjectEntity` stays internal to `project.persistence` and stores `owner_id` as an opaque UUID rather than an identity association. Direct JPQL projections and mutations always scope the owner UUID; a database foreign key is not treated as an authorization check. Its keyset query orders by database creation time then UUID, and the public cursor binds that position to its owner. Integration evidence covers owner isolation, cursor progression, rename version increment, and stale conflict.
 
 ## 6. `project_api_keys`
 
@@ -275,8 +281,8 @@ The Phase 1 persistence foundation now fixes these physical conventions without 
 - Physical implementation of the Part 2 event, delivery, attempt, replay, diagnostic, token, lease, and due-time model.
 - Claim/recovery SQL, indexes, lock modes, and isolation evidence.
 - Production migration ownership and compatibility validation during rollout.
-- JPA mappings, repository contracts, fetch plans, and pagination.
-- Spring Session JDBC infrastructure migration and security adapter mappings.
+- JPA mappings, repository contracts, fetch plans, and pagination beyond the implemented owner/project baseline.
+- Additional security-adapter mappings beyond the implemented browser session boundary.
 - Cloud endpoint-secret key provider and rotation operations.
 - Audit events beyond bounded lifecycle timestamps.
 
