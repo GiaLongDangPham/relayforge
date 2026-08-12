@@ -138,6 +138,39 @@ class ProjectHttpIntegrationTests {
             HttpResponse<String> revokedAgain = postJson(firstOwner, revokeUri, "{}", firstCsrf);
             assertThat(revokedAgain.statusCode()).isEqualTo(200);
             assertThat(JSON.readTree(revokedAgain.body()).get("revokedAt").asString()).isEqualTo(revokedAt);
+
+            URI endpointsUri = baseUri.resolve("/api/v1/projects/" + projectId + "/endpoints");
+            String endpointRequest = "{\"name\":\"Billing Receiver\",\"destinationUrl\":\"http://localhost:8080/receiver\","
+                    + "\"eventTypes\":[\"invoice.paid\",\"invoice.failed\"],\"enabled\":true}";
+            assertThat(postJson(firstOwner, endpointsUri, endpointRequest, null).statusCode()).isEqualTo(403);
+            HttpResponse<String> createdEndpoint = postJson(firstOwner, endpointsUri, endpointRequest, firstCsrf);
+            assertThat(createdEndpoint.statusCode()).isEqualTo(201);
+            JsonNode endpoint = JSON.readTree(createdEndpoint.body());
+            String endpointId = endpoint.get("id").asString();
+            assertThat(endpoint.get("signingSecret").asString()).startsWith("whsec_");
+
+            JsonNode listedEndpoints = JSON.readTree(get(firstOwner, endpointsUri).body());
+            assertThat(listedEndpoints.get("items").size()).isEqualTo(1);
+            assertThat(listedEndpoints.toString()).doesNotContain("signingSecret", "signingSecretCiphertext");
+            assertThat(get(secondOwner, URI.create(endpointsUri + "?cursor=not-a-valid-cursor")).statusCode()).isEqualTo(404);
+
+            URI endpointUri = baseUri.resolve("/api/v1/projects/" + projectId + "/endpoints/" + endpointId);
+            HttpResponse<String> replacedEndpoint = putJson(
+                    firstOwner,
+                    endpointUri,
+                    "{\"name\":\"Updated Receiver\",\"destinationUrl\":\"https://receiver.example/updated\","
+                            + "\"eventTypes\":[\"invoice.paid\"],\"version\":0}",
+                    firstCsrf
+            );
+            assertThat(replacedEndpoint.statusCode()).isEqualTo(200);
+            assertThat(JSON.readTree(replacedEndpoint.body()).get("version").asLong()).isEqualTo(1);
+            URI disableUri = baseUri.resolve(
+                    "/api/v1/projects/" + projectId + "/endpoints/" + endpointId + "/disable"
+            );
+            HttpResponse<String> disabled = postJson(firstOwner, disableUri, "{\"version\":1}", firstCsrf);
+            assertThat(disabled.statusCode()).isEqualTo(200);
+            assertThat(JSON.readTree(disabled.body()).get("version").asLong()).isEqualTo(2);
+            assertThat(postJson(firstOwner, disableUri, "{\"version\":0}", firstCsrf).statusCode()).isEqualTo(200);
             assertThat(secondCsrf).isNotBlank();
         }
     }
@@ -177,6 +210,10 @@ class ProjectHttpIntegrationTests {
 
     private HttpResponse<String> patchJson(HttpClient client, URI uri, String body, String csrfToken) throws Exception {
         return sendJson(client, uri, "PATCH", body, csrfToken);
+    }
+
+    private HttpResponse<String> putJson(HttpClient client, URI uri, String body, String csrfToken) throws Exception {
+        return sendJson(client, uri, "PUT", body, csrfToken);
     }
 
     private HttpResponse<String> sendJson(HttpClient client, URI uri, String method, String body, String csrfToken)

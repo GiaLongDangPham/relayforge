@@ -88,8 +88,8 @@ class PostgreSqlFoundationTests {
         var currentMigration = flyway.info().current();
 
         assertThat(currentMigration).isNotNull();
-        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("5");
-        assertThat(currentMigration.getDescription()).isEqualTo("create project api keys");
+        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("6");
+        assertThat(currentMigration.getDescription()).isEqualTo("create webhook endpoints");
 
         Integer successfulMigrations = jdbcTemplate.queryForObject(
                 "select count(*) from flyway_schema_history where success",
@@ -102,13 +102,15 @@ class PostgreSqlFoundationTests {
                 String.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(5);
+        assertThat(successfulMigrations).isEqualTo(6);
         assertThat(tables).containsExactly(
+                "endpoint_subscriptions",
                 "owner_accounts",
                 "project_api_keys",
                 "projects",
                 "spring_session",
-                "spring_session_attributes"
+                "spring_session_attributes",
+                "webhook_endpoints"
         );
     }
 
@@ -250,6 +252,57 @@ class PostgreSqlFoundationTests {
                         + "and indexname = 'ix_project_api_keys_project_created_at_id'",
                 String.class
         )).containsExactly("ix_project_api_keys_project_created_at_id");
+    }
+
+    @Test
+    void enforcesWebhookEndpointAndExactSubscriptionConstraints() {
+        UUID ownerId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        UUID endpointId = UUID.randomUUID();
+        insertOwner(ownerId, "endpoint_owner", "$2a$12$valid-looking-test-hash");
+        jdbcTemplate.update(
+                "insert into projects (id, owner_id, name) values (?, ?, ?)",
+                projectId, ownerId, "Payments"
+        );
+        byte[] ciphertext = new byte[]{1, 2, 3};
+        Map<String, Object> inserted = jdbcTemplate.queryForMap(
+                "insert into webhook_endpoints (id, project_id, name, destination_url, enabled, "
+                        + "signing_secret_ciphertext, encryption_key_reference) "
+                        + "values (?, ?, ?, ?, ?, ?, ?) returning version, created_at, updated_at",
+                endpointId,
+                projectId,
+                "Billing receiver",
+                "https://receiver.example/webhooks",
+                true,
+                ciphertext,
+                "test-key-v1"
+        );
+        assertThat(inserted.get("version")).isEqualTo(0L);
+        assertThat(inserted.get("created_at")).isNotNull();
+        assertThat(inserted.get("updated_at")).isEqualTo(inserted.get("created_at"));
+        jdbcTemplate.update(
+                "insert into endpoint_subscriptions (endpoint_id, event_type) values (?, ?)",
+                endpointId, "invoice.paid"
+        );
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into endpoint_subscriptions (endpoint_id, event_type) values (?, ?)",
+                endpointId, "invoice.paid"
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into webhook_endpoints (id, project_id, name, destination_url, enabled, "
+                        + "signing_secret_ciphertext, encryption_key_reference) values (?, ?, ?, ?, ?, ?, ?)",
+                UUID.randomUUID(), UUID.randomUUID(), "Missing project", "https://receiver.example", true, ciphertext, "test-key-v1"
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbcTemplate.queryForList(
+                "select indexname from pg_indexes where schemaname = 'public' and tablename = 'webhook_endpoints' "
+                        + "and indexname = 'ix_webhook_endpoints_project_created_at_id'",
+                String.class
+        )).containsExactly("ix_webhook_endpoints_project_created_at_id");
+        assertThat(jdbcTemplate.queryForList(
+                "select indexname from pg_indexes where schemaname = 'public' and tablename = 'endpoint_subscriptions' "
+                        + "and indexname = 'ix_endpoint_subscriptions_event_type_endpoint_id'",
+                String.class
+        )).containsExactly("ix_endpoint_subscriptions_event_type_endpoint_id");
     }
 
     @Test

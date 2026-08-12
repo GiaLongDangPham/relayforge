@@ -25,3 +25,9 @@ relayforge:
     secure-cookie: false
     production: false
     api-key-pepper: test-only-publisher-api-key-pepper-not-a-production-secret
+  endpoint:
+    allow-local-http: true
+  endpoint-secret:
+    # Base64URL of exactly 32 test-only bytes; never deploy this value.
+    encryption-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    key-reference: test-local-aes-gcm-v1

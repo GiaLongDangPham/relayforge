@@ -213,6 +213,12 @@ API-key secrets can be verified from a digest, but endpoint signing secrets must
 - That “at least one” rule is an aggregate invariant rather than a simple row check. The endpoint application service replaces subscriptions and increments the endpoint version in one transaction.
 - Concurrent endpoint configuration/subscription changes match one expected endpoint version, so one complete aggregate update wins rather than interleaving row changes.
 
+### 8.3 Physical implementation status
+
+Flyway V6 creates `public.webhook_endpoints` and `public.endpoint_subscriptions`. It uses application-supplied UUIDs, restrictive project/endpoint foreign keys, `C`-collated trimmed/nonblank bounded text, a fixed nonempty encrypted envelope, nonnegative version defaulting to zero, PostgreSQL timestamps, and the composite subscription primary key. The owner-list index is `(project_id, created_at DESC, id DESC)`; `(event_type, endpoint_id)` prepares the exact-event routing access path without asserting a future `EXPLAIN ANALYZE` result.
+
+The endpoint application service validates complete replacement subscriptions before its transaction, encrypts generated signing material before its create transaction, and performs owner/project authorization through the public project contract. The JPA adapter persists creation normally; for replacement it first conditionally updates the versioned endpoint root, then replaces every subscription in that same transaction, so a subscription-only change is still concurrency-fenced. The local/test cipher is AES-256-GCM with a required externally configured 32-byte key and project/endpoint UUID authenticated data; production key custody and rotation remain deployment concerns.
+
 ## 9. Transaction boundaries
 
 | Workflow | Required atomic behavior |

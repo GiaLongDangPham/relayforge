@@ -87,7 +87,7 @@ class ApiRuntimeConfiguration {
     CorsConfigurationSource corsConfigurationSource(RelayForgeSecurityProperties properties) {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(properties.dashboardOrigin()));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Content-Type", "X-CSRF-TOKEN"));
         configuration.setAllowCredentials(true);
 
@@ -163,6 +163,10 @@ class ApiRuntimeConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/projects").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/api-keys").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/api-keys/*/revoke").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/endpoints").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/endpoints/*/enable").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/endpoints/*/disable").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/projects/*/endpoints/*").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/projects/**").authenticated()
                         .requestMatchers(HttpMethod.OPTIONS, "/api/v1/**").permitAll()
                         .anyRequest().denyAll()

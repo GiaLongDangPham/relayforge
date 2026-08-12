@@ -1,0 +1,198 @@
+package com.gialong.relayforge.endpoint.persistence;
+
+import com.gialong.relayforge.endpoint.api.WebhookEndpointDetails;
+import com.gialong.relayforge.endpoint.api.WebhookEndpointVersionConflictException;
+import com.gialong.relayforge.endpoint.application.EncryptedEndpointSecret;
+import com.gialong.relayforge.endpoint.application.EndpointCursor;
+import com.gialong.relayforge.endpoint.application.EndpointStore;
+import jakarta.persistence.EntityManager;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+@RequiredArgsConstructor
+public class JpaEndpointStore implements EndpointStore {
+
+    private final EntityManager entityManager;
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public WebhookEndpointDetails create(
+            UUID endpointId,
+            UUID projectId,
+            String normalizedName,
+            String validatedDestinationUrl,
+            List<String> normalizedEventTypes,
+            boolean enabled,
+            EncryptedEndpointSecret encryptedSecret
+    ) {
+        WebhookEndpointEntity endpoint = WebhookEndpointEntity.create(
+                endpointId,
+                projectId,
+                normalizedName,
+                validatedDestinationUrl,
+                enabled,
+                encryptedSecret.ciphertext(),
+                encryptedSecret.keyReference()
+        );
+        entityManager.persist(endpoint);
+        normalizedEventTypes.forEach(eventType -> entityManager.persist(
+                EndpointSubscriptionEntity.create(endpointId, eventType)
+        ));
+        entityManager.flush();
+        return detailsOf(endpoint, normalizedEventTypes);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Optional<WebhookEndpointDetails> findByProject(UUID projectId, UUID endpointId) {
+        return endpointByProject(projectId, endpointId).map(endpoint -> detailsOf(endpoint, eventTypesFor(List.of(endpoint.id())).get(endpoint.id())));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public List<WebhookEndpointDetails> listByProject(UUID projectId, EndpointCursor cursor, int fetchLimit) {
+        String query = "from WebhookEndpoint endpoint where endpoint.projectId = :projectId ";
+        if (cursor != null) {
+            query += "and (endpoint.createdAt < :createdAt "
+                    + "or (endpoint.createdAt = :createdAt and endpoint.id < :endpointId)) ";
+        }
+        query += "order by endpoint.createdAt desc, endpoint.id desc";
+        var typedQuery = entityManager.createQuery(query, WebhookEndpointEntity.class)
+                .setParameter("projectId", projectId)
+                .setMaxResults(fetchLimit);
+        if (cursor != null) {
+            typedQuery.setParameter("createdAt", cursor.createdAt());
+            typedQuery.setParameter("endpointId", cursor.endpointId());
+        }
+        List<WebhookEndpointEntity> endpoints = typedQuery.getResultList();
+        Map<UUID, List<String>> eventTypesByEndpoint = eventTypesFor(endpoints.stream().map(WebhookEndpointEntity::id).toList());
+        return endpoints.stream()
+                .map(endpoint -> detailsOf(endpoint, eventTypesByEndpoint.get(endpoint.id())))
+                .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<WebhookEndpointDetails> replaceConfiguration(
+            UUID projectId,
+            UUID endpointId,
+            String normalizedName,
+            String validatedDestinationUrl,
+            List<String> normalizedEventTypes,
+            long expectedVersion
+    ) {
+        // Subscription rows are not a JPA association, so fence the complete aggregate replacement on its versioned root.
+        int changed = entityManager.createNativeQuery(
+                        "update public.webhook_endpoints set name = :name, destination_url = :destinationUrl, "
+                                + "version = version + 1, updated_at = CURRENT_TIMESTAMP "
+                                + "where id = :endpointId and project_id = :projectId and version = :expectedVersion"
+                )
+                .setParameter("name", normalizedName)
+                .setParameter("destinationUrl", validatedDestinationUrl)
+                .setParameter("endpointId", endpointId)
+                .setParameter("projectId", projectId)
+                .setParameter("expectedVersion", expectedVersion)
+                .executeUpdate();
+        entityManager.clear();
+        if (changed == 0) {
+            if (endpointByProject(projectId, endpointId).isEmpty()) {
+                return Optional.empty();
+            }
+            throw new WebhookEndpointVersionConflictException();
+        }
+
+        entityManager.createQuery("delete from EndpointSubscription subscription where subscription.endpointId = :endpointId")
+                .setParameter("endpointId", endpointId)
+                .executeUpdate();
+        normalizedEventTypes.forEach(eventType -> entityManager.persist(
+                EndpointSubscriptionEntity.create(endpointId, eventType)
+        ));
+        entityManager.flush();
+        entityManager.clear();
+        return findByProject(projectId, endpointId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<WebhookEndpointDetails> setEnabled(
+            UUID projectId,
+            UUID endpointId,
+            boolean enabled,
+            long expectedVersion
+    ) {
+        Optional<WebhookEndpointDetails> current = findByProject(projectId, endpointId);
+        if (current.isEmpty() || current.orElseThrow().enabled() == enabled) {
+            return current;
+        }
+
+        int changed = entityManager.createNativeQuery(
+                        "update public.webhook_endpoints set enabled = :enabled, version = version + 1, "
+                                + "updated_at = CURRENT_TIMESTAMP "
+                                + "where id = :endpointId and project_id = :projectId and version = :expectedVersion "
+                                + "and enabled <> :enabled"
+                )
+                .setParameter("enabled", enabled)
+                .setParameter("endpointId", endpointId)
+                .setParameter("projectId", projectId)
+                .setParameter("expectedVersion", expectedVersion)
+                .executeUpdate();
+        entityManager.clear();
+        Optional<WebhookEndpointDetails> after = findByProject(projectId, endpointId);
+        if (changed == 0 && after.isPresent() && after.orElseThrow().enabled() != enabled) {
+            throw new WebhookEndpointVersionConflictException();
+        }
+        return after;
+    }
+
+    private Optional<WebhookEndpointEntity> endpointByProject(UUID projectId, UUID endpointId) {
+        return entityManager.createQuery(
+                        "from WebhookEndpoint endpoint where endpoint.projectId = :projectId and endpoint.id = :endpointId",
+                        WebhookEndpointEntity.class
+                )
+                .setParameter("projectId", projectId)
+                .setParameter("endpointId", endpointId)
+                .getResultStream()
+                .findFirst();
+    }
+
+    private Map<UUID, List<String>> eventTypesFor(Collection<UUID> endpointIds) {
+        if (endpointIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, List<String>> eventTypes = new LinkedHashMap<>();
+        endpointIds.forEach(endpointId -> eventTypes.put(endpointId, new java.util.ArrayList<>()));
+        entityManager.createQuery(
+                        "from EndpointSubscription subscription where subscription.endpointId in :endpointIds "
+                                + "order by subscription.endpointId, subscription.eventType",
+                        EndpointSubscriptionEntity.class
+                )
+                .setParameter("endpointIds", endpointIds)
+                .getResultList()
+                .forEach(subscription -> eventTypes.get(subscription.endpointId()).add(subscription.eventType()));
+        return eventTypes;
+    }
+
+    private static WebhookEndpointDetails detailsOf(WebhookEndpointEntity endpoint, List<String> eventTypes) {
+        return new WebhookEndpointDetails(
+                endpoint.id(),
+                endpoint.projectId(),
+                endpoint.name(),
+                endpoint.destinationUrl(),
+                eventTypes,
+                endpoint.enabled(),
+                endpoint.version(),
+                endpoint.createdAt(),
+                endpoint.updatedAt()
+        );
+    }
+}

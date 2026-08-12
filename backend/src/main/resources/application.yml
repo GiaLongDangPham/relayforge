@@ -24,3 +24,8 @@ relayforge:
     secure-cookie: ${RELAYFORGE_SECURE_COOKIES:false}
     production: ${RELAYFORGE_PRODUCTION:false}
     api-key-pepper: ${RELAYFORGE_API_KEY_PEPPER}
+  endpoint:
+    allow-local-http: ${RELAYFORGE_ENDPOINT_ALLOW_LOCAL_HTTP:false}
+  endpoint-secret:
+    encryption-key: ${RELAYFORGE_ENDPOINT_ENCRYPTION_KEY}
+    key-reference: ${RELAYFORGE_ENDPOINT_ENCRYPTION_KEY_REFERENCE:local-aes-gcm-v1}
