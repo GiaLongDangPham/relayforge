@@ -20,7 +20,8 @@ spring:
 
 relayforge:
   security:
-    dashboard-origin: ${RELAYFORGE_DASHBOARD_ORIGIN:http://localhost:5173}
-    secure-cookie: ${RELAYFORGE_SECURE_COOKIES:false}
-    production: ${RELAYFORGE_PRODUCTION:false}
-    api-key-pepper: ${RELAYFORGE_API_KEY_PEPPER}
+    # This deterministic value is test-only, not a deployable publisher-secret configuration.
+    dashboard-origin: http://localhost:5173
+    secure-cookie: false
+    production: false
+    api-key-pepper: test-only-publisher-api-key-pepper-not-a-production-secret

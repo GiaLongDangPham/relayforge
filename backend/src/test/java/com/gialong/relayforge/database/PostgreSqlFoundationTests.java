@@ -88,8 +88,8 @@ class PostgreSqlFoundationTests {
         var currentMigration = flyway.info().current();
 
         assertThat(currentMigration).isNotNull();
-        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("4");
-        assertThat(currentMigration.getDescription()).isEqualTo("create projects");
+        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("5");
+        assertThat(currentMigration.getDescription()).isEqualTo("create project api keys");
 
         Integer successfulMigrations = jdbcTemplate.queryForObject(
                 "select count(*) from flyway_schema_history where success",
@@ -102,9 +102,10 @@ class PostgreSqlFoundationTests {
                 String.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(4);
+        assertThat(successfulMigrations).isEqualTo(5);
         assertThat(tables).containsExactly(
                 "owner_accounts",
+                "project_api_keys",
                 "projects",
                 "spring_session",
                 "spring_session_attributes"
@@ -212,6 +213,43 @@ class PostgreSqlFoundationTests {
                         + "and indexname = 'ix_projects_owner_created_at_id'",
                 String.class
         )).containsExactly("ix_projects_owner_created_at_id");
+    }
+
+    @Test
+    void enforcesProjectApiKeyOwnershipSecretShapeAndListIndex() {
+        UUID ownerId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        insertOwner(ownerId, "api_key_owner", "$2a$12$valid-looking-test-hash");
+        jdbcTemplate.update(
+                "insert into projects (id, owner_id, name) values (?, ?, ?)",
+                projectId, ownerId, "Payments"
+        );
+        byte[] digest = new byte[32];
+        digest[0] = 1;
+
+        Map<String, Object> inserted = jdbcTemplate.queryForMap(
+                "insert into project_api_keys (id, project_id, display_name, key_hint, secret_digest) "
+                        + "values (?, ?, ?, ?, ?) returning created_at, revoked_at",
+                UUID.randomUUID(), projectId, "Checkout Publisher", "rf_live_api_key_hint", digest
+        );
+
+        assertThat(inserted.get("created_at")).isNotNull();
+        assertThat(inserted.get("revoked_at")).isNull();
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into project_api_keys (id, project_id, display_name, key_hint, secret_digest) "
+                        + "values (?, ?, ?, ?, ?)",
+                UUID.randomUUID(), UUID.randomUUID(), "Missing project", "rf_live_missing_proj", digest
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into project_api_keys (id, project_id, display_name, key_hint, secret_digest) "
+                        + "values (?, ?, ?, ?, ?)",
+                UUID.randomUUID(), projectId, " Invalid", "rf_live_bad_display", new byte[31]
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbcTemplate.queryForList(
+                "select indexname from pg_indexes where schemaname = 'public' and tablename = 'project_api_keys' "
+                        + "and indexname = 'ix_project_api_keys_project_created_at_id'",
+                String.class
+        )).containsExactly("ix_project_api_keys_project_created_at_id");
     }
 
     @Test

@@ -107,6 +107,37 @@ class ProjectHttpIntegrationTests {
             );
             assertThat(staleRename.statusCode()).isEqualTo(409);
             assertThat(staleRename.body()).contains("OPTIMISTIC_LOCK_CONFLICT");
+
+            URI apiKeysUri = baseUri.resolve("/api/v1/projects/" + projectId + "/api-keys");
+            assertThat(postJson(firstOwner, apiKeysUri, "{\"displayName\":\"Checkout Publisher\"}", null).statusCode())
+                    .isEqualTo(403);
+            HttpResponse<String> createdApiKey = postJson(
+                    firstOwner,
+                    apiKeysUri,
+                    "{\"displayName\":\"Checkout Publisher\"}",
+                    firstCsrf
+            );
+            assertThat(createdApiKey.statusCode()).isEqualTo(201);
+            JsonNode createdKey = JSON.readTree(createdApiKey.body());
+            String apiKeyId = createdKey.get("id").asString();
+            assertThat(createdKey.get("rawKey").asString()).startsWith("rf_live_");
+            assertThat(createdKey.has("secretDigest")).isFalse();
+
+            JsonNode listedKeys = JSON.readTree(get(firstOwner, apiKeysUri).body());
+            assertThat(listedKeys.get("items").size()).isEqualTo(1);
+            assertThat(listedKeys.toString()).doesNotContain("rawKey", "secretDigest");
+            HttpResponse<String> crossOwnerKeys = get(secondOwner, apiKeysUri);
+            assertThat(crossOwnerKeys.statusCode()).isEqualTo(404);
+            assertThat(crossOwnerKeys.body()).contains("RESOURCE_NOT_FOUND");
+            assertThat(get(secondOwner, URI.create(apiKeysUri + "?cursor=not-a-valid-cursor")).statusCode()).isEqualTo(404);
+
+            URI revokeUri = baseUri.resolve("/api/v1/projects/" + projectId + "/api-keys/" + apiKeyId + "/revoke");
+            HttpResponse<String> revoked = postJson(firstOwner, revokeUri, "{}", firstCsrf);
+            assertThat(revoked.statusCode()).isEqualTo(200);
+            String revokedAt = JSON.readTree(revoked.body()).get("revokedAt").asString();
+            HttpResponse<String> revokedAgain = postJson(firstOwner, revokeUri, "{}", firstCsrf);
+            assertThat(revokedAgain.statusCode()).isEqualTo(200);
+            assertThat(JSON.readTree(revokedAgain.body()).get("revokedAt").asString()).isEqualTo(revokedAt);
             assertThat(secondCsrf).isNotBlank();
         }
     }

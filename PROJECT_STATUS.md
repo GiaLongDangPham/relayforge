@@ -1,6 +1,6 @@
 # RelayForge Project Status
 
-Last updated: 2026-08-10
+Last updated: 2026-08-11
 
 This file is the durable source of truth for project scope and progress. Update it after every completed slice.
 
@@ -14,9 +14,9 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 1 - Foundation.
-- Current slice: Group 2 project capability, owner-scoped HTTP access, cursor pagination, and optimistic rename completed.
+- Current slice: Group 3 publisher API-key lifecycle, owner HTTP management, and publisher verification completed.
 - Repository state: Git repository on `main`; RelayForge backend foundation exists under `backend/` and the React/Vite skeleton remains under `frontend/`.
-- Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Spring Security with JDBC Spring Session, Lombok 1.18.46 as a compile-time processor, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. V2 creates `owner_accounts`, V3 adds technical Spring Session tables, and V4 creates `projects`. Identity supports opt-in bootstrap and generic credential verification; API mode has completed browser authentication plus owner-scoped project REST access.
+- Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Spring Security with JDBC Spring Session, Lombok 1.18.46 as a compile-time processor, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. V2 creates `owner_accounts`, V3 adds technical Spring Session tables, V4 creates `projects`, and V5 creates `project_api_keys`. Identity supports opt-in bootstrap and generic credential verification; API mode has completed browser authentication plus owner-scoped project and API-key REST access.
 - Local environment note: the default terminal Java is JDK 21 while this project requires JDK 25; Maven verification currently selects `C:\Program Files\Java\jdk-25` explicitly.
 
 ## Approved decisions
@@ -113,11 +113,12 @@ This file is the durable source of truth for project scope and progress. Update 
 - Added an API-only Spring Security authentication provider in `runtime.security` that delegates to the identity verifier, uses its hash-free `VerifiedOwner` result directly as the principal, and maps invalid verification to generic bad credentials.
 - Completed owner browser authentication: API-only deny-by-default security, CSRF/login/me/logout JSON adapters, PostgreSQL-backed session lifecycle, credentialed CORS allowlisting, bounded local login failure limiting, and a production worker launcher that is explicitly non-web.
 - Completed Group 2 project capability: V4 `projects` persistence with restrictive owner foreign key and owner-list index; local JPA/JPQL create, owner-scoped read/list, keyset cursor pagination, and optimistic rename; API-only create/list/get/rename routes that reuse owner session and CSRF protections. Cross-owner project IDs return 404 and stale rename versions return 409.
+- Completed Group 3 publisher API keys: V5 `project_api_keys`, one-time 32-byte API-key creation with required peppered HMAC digest storage, owner-scoped list/revoke with bound cursor and monotonic database-time revocation, and API-only owner REST routes. A public verifier validates one UUID-selected record with a fixed-length digest comparison and returns only project/key identity; it awaits the future publisher event route.
 
 ## Not completed
 
-- Physical tables or entity mappings beyond `owner_accounts`, `projects`, and technical Spring Session tables; lock SQL remains unimplemented.
-- Publisher API-key, endpoint, and delivery HTTP API; worker delivery behavior; worker runtime contains no delivery behavior yet.
+- Physical tables or entity mappings beyond `owner_accounts`, `projects`, `project_api_keys`, and technical Spring Session tables; lock SQL remains unimplemented.
+- Publisher event, endpoint, and delivery HTTP API; worker delivery behavior; worker runtime contains no delivery behavior yet.
 - Docker, CI, frontend, observability, performance testing, or cloud infrastructure.
 
 ## Verification log
@@ -146,10 +147,11 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-10 | Phase 1 owner authentication provider | Added only Spring Security Core plus an API-mode `AuthenticationProvider` in `runtime.security` that delegates username/password authentication to the identity verifier. A successful result uses the existing hash-free `VerifiedOwner` as its principal, with null credentials and no authorities; every empty verifier result becomes generic `BadCredentialsException`. The adapter clears its owned password copy and is absent from worker composition. The final focused JDK 25 run passed 12/12: 3 provider tests, API/worker composition tests, and 7 architecture rules; no full suite was run under the focused-test policy. Independent review first found an identity/runtime-composition P1, which was corrected by moving the adapter out of identity; final re-review returned `READY` with no P0/P1. A subsequent 3/3 focused refactor test and review removed the duplicate principal type. |
 | 2026-08-10 | Phase 1 owner browser authentication | Added API-only deny-by-default security for `/api/v1/**`, JSON CSRF/login/me/logout adapters, V3 JDBC Spring Session tables and `RF_SESSION` lifecycle, CSRF, security headers, configured credentialed CORS, and a bounded local failed-login limiter. Real PostgreSQL browser evidence passed for CORS, CSRF, session rotation, restart persistence, logout, and generic rate limiting. Review found a P1: shared web dependencies let worker default to a servlet launch. The correction makes the packaged launcher select `WebApplicationType.NONE` from the prepared `relayforge.runtime` property; real PostgreSQL worker evidence proves no web server, controller, security filter chain, Spring Session repository, or session filter. Final re-review returned `READY`. Narrow JDK 25 verification passed 14 tests in total: browser integration (1), worker integration (1), API composition (1), limiter (1), provider (3), and architecture rules (7); no full suite was run. |
 | 2026-08-10 | Phase 1 Group 2 projects | Added V4 `projects`, the local JPA aggregate and direct JPQL adapter, public project catalog, owner-scoped create/read/list/rename use cases, opaque owner-bound keyset cursor, and API-only REST adapters. A first database test run correctly exposed that an API-mode non-web test attempted to instantiate servlet security; the database-only test now runs in worker mode, while HTTP behavior is tested in a servlet context. A second verification exposed ArchUnit's `..project..` package matcher treating `runtime.project` as a business module; the adapter package is now `runtime.projects`, avoiding the false classification without changing business dependencies. JDK 25 PostgreSQL evidence passed 21/21 (`PostgreSqlFoundationTests` 18, `ProjectCatalogIntegrationTests` 3), and focused Group 2 verification passed 13/13: catalog service (2), architecture (7), API composition (1), worker composition (1), browser authentication (1), project HTTP flow (1). Independent review returned `READY` with no P0/P1; it re-ran non-container checks 10/10 but could not access Docker. `git diff --check` passed; no full suite was run. |
+| 2026-08-11 | Phase 1 Group 3 publisher API keys | Added V5 `project_api_keys`, token generation as `rf_live_<uuid>.<32-byte-base64url-secret>`, required environment pepper plus HMAC-SHA-256 digest storage, one-record verifier with fixed-length comparison, owner-scoped create/list/revoke, and API-only CSRF-protected management routes. Raw key material exists only in the successful create response; revoke is monotonic and repeated revoke returns the original timestamp. The first Testcontainers attempt exposed a test-resource overlay that dropped Hikari's UTC initialization; restoring the inherited test baseline corrected only configuration. JDK 25 focused regression passed 36/36: material (2), foundation (19), project catalog (3), API-key catalog (1), project/API-key HTTP (1), owner browser (1), API/worker composition (2), and architecture (7). Independent review returned `READY` with no P0/P1 and reran non-container checks 10/10. `git diff --check` passed; no full suite was run. |
 
 ## Next recommended slice
 
-Begin Group 3 with publisher API-key creation and one-time secret return. First confirm the selector/token format, peppered-digest boundary, and monotonic revocation contract; keep endpoint configuration, delivery workflow, and worker scheduling out of that slice.
+Begin endpoint configuration with its own bounded scope: endpoint creation must atomically persist the current URL, immutable generated signing material, and at least one exact event-type subscription. Keep event publication, routing, and worker scheduling out of that slice.
 
 ## Deferred until evidence justifies them
 

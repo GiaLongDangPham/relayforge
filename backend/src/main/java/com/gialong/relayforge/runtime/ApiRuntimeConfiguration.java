@@ -161,6 +161,8 @@ class ApiRuntimeConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/v1/projects", "/api/v1/projects/**")
                         .authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/projects").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/api-keys").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/api-keys/*/revoke").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/projects/**").authenticated()
                         .requestMatchers(HttpMethod.OPTIONS, "/api/v1/**").permitAll()
                         .anyRequest().denyAll()

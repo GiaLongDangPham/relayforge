@@ -153,6 +153,12 @@ The local `ProjectEntity` stays internal to `project.persistence` and stores `ow
 - If database commit succeeds but the creation response containing the raw key is lost, the raw key cannot be reconstructed. The owner revokes the orphaned credential and creates another one.
 - `last_used_at` is intentionally absent because updating it on every publish would add write contention without a v1 acceptance requirement.
 
+### 6.3 Physical implementation status
+
+Flyway V5 creates `public.project_api_keys` with an application-supplied UUID primary key, restrictive `project_id` foreign key, nonblank trimmed display name, globally unique 24-character-or-shorter hint, globally unique fixed 32-byte digest, PostgreSQL creation timestamp, and nullable irreversible revocation timestamp. The owner-facing keyset index is `(project_id, created_at DESC, id DESC)`.
+
+The internal `ProjectApiKeyEntity` stores the digest only. `project` generates the UUID selector and random 32-byte secret before its short create transaction, HMACs the secret with the required environment-supplied pepper, and returns raw material only through the create result. Owner queries join the owned project in the persistence adapter; revoke uses a conditional PostgreSQL-time update and then reloads safe metadata. Publisher verification parses the selector, reads one candidate, compares same-size digests with `MessageDigest.isEqual`, and exposes only a verified project/key identity. It is not yet an HTTP bearer filter because no publisher event endpoint has been implemented.
+
 ## 7. `webhook_endpoints`
 
 ### 7.1 Columns
