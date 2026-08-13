@@ -2,6 +2,8 @@ package com.gialong.relayforge.runtime;
 
 import com.gialong.relayforge.identity.api.OwnerBootstrap;
 import com.gialong.relayforge.identity.api.OwnerCredentialVerifier;
+import com.gialong.relayforge.project.api.PublisherApiKeyVerifier;
+import com.gialong.relayforge.runtime.publisher.PublisherApiKeyAuthenticationFilter;
 import com.gialong.relayforge.runtime.security.OwnerAuthenticationProvider;
 import com.gialong.relayforge.runtime.security.OwnerLoginFailureLimiter;
 import com.gialong.relayforge.runtime.security.RelayForgeSecurityProperties;
@@ -27,6 +29,7 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.session.jdbc.config.annotation.web.http.EnableJdbcHttpSession;
 import org.springframework.session.web.http.CookieSerializer;
@@ -112,13 +115,22 @@ class ApiRuntimeConfiguration {
     }
 
     @Bean
+    PublisherApiKeyAuthenticationFilter publisherApiKeyAuthenticationFilter(
+            PublisherApiKeyVerifier publisherApiKeyVerifier,
+            SecurityProblemWriter securityProblemWriter
+    ) {
+        return new PublisherApiKeyAuthenticationFilter(publisherApiKeyVerifier, securityProblemWriter);
+    }
+
+    @Bean
     SecurityFilterChain apiSecurityFilterChain(
             HttpSecurity http,
             AuthenticationManager ownerAuthenticationManager,
             SecurityContextRepository securityContextRepository,
             CsrfTokenRepository csrfTokenRepository,
             CorsConfigurationSource corsConfigurationSource,
-            SecurityProblemWriter securityProblemWriter
+            SecurityProblemWriter securityProblemWriter,
+            PublisherApiKeyAuthenticationFilter publisherApiKeyAuthenticationFilter
     ) throws Exception {
         AccessDeniedHandler accessDeniedHandler = (request, response, exception) -> {
             if (exception instanceof CsrfException) {
@@ -151,7 +163,10 @@ class ApiRuntimeConfiguration {
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                         .sessionFixation(sessionFixation -> sessionFixation.changeSessionId())
                 )
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository))
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfTokenRepository)
+                        .ignoringRequestMatchers(PublisherApiKeyAuthenticationFilter.publishRequestMatcher())
+                )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeHttpRequests(authorization -> authorization
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf").permitAll()
@@ -167,6 +182,7 @@ class ApiRuntimeConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/endpoints/*/enable").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/endpoints/*/disable").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/v1/projects/*/endpoints/*").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/events").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/projects/**").authenticated()
                         .requestMatchers(HttpMethod.OPTIONS, "/api/v1/**").permitAll()
                         .anyRequest().denyAll()
@@ -193,6 +209,7 @@ class ApiRuntimeConfiguration {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
                 .requestCache(AbstractHttpConfigurer::disable)
+                .addFilterBefore(publisherApiKeyAuthenticationFilter, AuthorizationFilter.class)
                 .build();
     }
 

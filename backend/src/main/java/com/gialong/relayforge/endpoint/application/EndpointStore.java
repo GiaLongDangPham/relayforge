@@ -1,6 +1,7 @@
 package com.gialong.relayforge.endpoint.application;
 
 import com.gialong.relayforge.endpoint.api.WebhookEndpointDetails;
+import com.gialong.relayforge.endpoint.api.RoutingEndpoint;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +25,8 @@ public interface EndpointStore {
     Optional<WebhookEndpointDetails> findByProject(UUID projectId, UUID endpointId);
 
     List<WebhookEndpointDetails> listByProject(UUID projectId, EndpointCursor cursor, int fetchLimit);
+
+    List<RoutingEndpoint> findEnabledForExactEventType(UUID projectId, String eventType);
 
     Optional<WebhookEndpointDetails> replaceConfiguration(
             UUID projectId,

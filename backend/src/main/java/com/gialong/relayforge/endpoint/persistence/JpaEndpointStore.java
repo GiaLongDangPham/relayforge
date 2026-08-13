@@ -2,6 +2,7 @@ package com.gialong.relayforge.endpoint.persistence;
 
 import com.gialong.relayforge.endpoint.api.WebhookEndpointDetails;
 import com.gialong.relayforge.endpoint.api.WebhookEndpointVersionConflictException;
+import com.gialong.relayforge.endpoint.api.RoutingEndpoint;
 import com.gialong.relayforge.endpoint.application.EncryptedEndpointSecret;
 import com.gialong.relayforge.endpoint.application.EndpointCursor;
 import com.gialong.relayforge.endpoint.application.EndpointStore;
@@ -79,6 +80,24 @@ public class JpaEndpointStore implements EndpointStore {
         return endpoints.stream()
                 .map(endpoint -> detailsOf(endpoint, eventTypesByEndpoint.get(endpoint.id())))
                 .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public List<RoutingEndpoint> findEnabledForExactEventType(UUID projectId, String eventType) {
+        return entityManager.createQuery(
+                        "select new com.gialong.relayforge.endpoint.api.RoutingEndpoint(endpoint.id) "
+                                + "from WebhookEndpoint endpoint, EndpointSubscription subscription "
+                                + "where endpoint.id = subscription.endpointId "
+                                + "and endpoint.projectId = :projectId "
+                                + "and endpoint.enabled = true "
+                                + "and subscription.eventType = :eventType "
+                                + "order by endpoint.id",
+                        RoutingEndpoint.class
+                )
+                .setParameter("projectId", projectId)
+                .setParameter("eventType", eventType)
+                .getResultList();
     }
 
     @Override

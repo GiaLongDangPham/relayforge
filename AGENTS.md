@@ -23,6 +23,7 @@ When reviewing user-written code, first identify what works, explain mistakes an
 - Do not silently change architecture, invariants, module boundaries, runtime behavior, or an accepted ADR. Surface the impact and request a decision when a change is material.
 - Do not add dependencies, infrastructure, or a new service/store without a documented need, compatible source-of-truth guidance, and explicit user approval when it expands scope.
 - Avoid unrelated cleanup, formatting, renames, and refactors. A change may touch many files when one cohesive outcome requires it, but it must not add unrelated behavior.
+- Do not introduce deprecated APIs in new or materially changed code. Migrate an existing deprecated use only when its active slice already touches that path or when a separately scoped cleanup task is approved.
 - Do not replace a sound persistence approach merely to demonstrate another abstraction. Introduce Spring Data repositories, direct JPA, or JDBC/native SQL when the active use case makes that choice useful; defer migrations between them unless they solve a concrete problem.
 - A production method with zero current callers is not automatically dead code when it supports a clearly anticipated near-term use case. Keep it only when its intent is understood and bounded; do not add speculative APIs without such a use case.
 - Treat pre-existing or untracked changes as user-owned. Do not overwrite, stage, or reformat them unless asked.

@@ -88,8 +88,8 @@ class PostgreSqlFoundationTests {
         var currentMigration = flyway.info().current();
 
         assertThat(currentMigration).isNotNull();
-        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("6");
-        assertThat(currentMigration.getDescription()).isEqualTo("create webhook endpoints");
+        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("7");
+        assertThat(currentMigration.getDescription()).isEqualTo("create events and deliveries");
 
         Integer successfulMigrations = jdbcTemplate.queryForObject(
                 "select count(*) from flyway_schema_history where success",
@@ -102,9 +102,11 @@ class PostgreSqlFoundationTests {
                 String.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(6);
+        assertThat(successfulMigrations).isEqualTo(7);
         assertThat(tables).containsExactly(
+                "deliveries",
                 "endpoint_subscriptions",
+                "events",
                 "owner_accounts",
                 "project_api_keys",
                 "projects",
@@ -303,6 +305,68 @@ class PostgreSqlFoundationTests {
                         + "and indexname = 'ix_endpoint_subscriptions_event_type_endpoint_id'",
                 String.class
         )).containsExactly("ix_endpoint_subscriptions_event_type_endpoint_id");
+    }
+
+    @Test
+    void enforcesEventIdempotencyAndProjectConsistentPendingDeliveries() {
+        UUID ownerId = UUID.randomUUID();
+        UUID firstProjectId = UUID.randomUUID();
+        UUID secondProjectId = UUID.randomUUID();
+        UUID endpointId = UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+        byte[] fingerprint = new byte[32];
+        byte[] ciphertext = new byte[]{1};
+        insertOwner(ownerId, "delivery_owner", "$2a$12$valid-looking-test-hash");
+        jdbcTemplate.update("insert into projects (id, owner_id, name) values (?, ?, ?)", firstProjectId, ownerId, "Payments");
+        jdbcTemplate.update("insert into projects (id, owner_id, name) values (?, ?, ?)", secondProjectId, ownerId, "Operations");
+        jdbcTemplate.update(
+                "insert into webhook_endpoints (id, project_id, name, destination_url, enabled, "
+                        + "signing_secret_ciphertext, encryption_key_reference) values (?, ?, ?, ?, ?, ?, ?)",
+                endpointId, firstProjectId, "Receiver", "https://receiver.example/events", true, ciphertext, "test-key-v1"
+        );
+        Map<String, Object> event = jdbcTemplate.queryForMap(
+                "insert into events (id, project_id, event_type, payload, idempotency_key, fingerprint_version, "
+                        + "command_fingerprint) values (?, ?, ?, ?::jsonb, ?, ?, ?) returning accepted_at",
+                eventId, firstProjectId, "invoice.paid", "{\"invoiceId\":\"inv-1\"}", "payment-1", 1, fingerprint
+        );
+        assertThat(event.get("accepted_at")).isNotNull();
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into events (id, project_id, event_type, payload, idempotency_key, fingerprint_version, "
+                        + "command_fingerprint) values (?, ?, ?, ?::jsonb, ?, ?, ?)",
+                UUID.randomUUID(), firstProjectId, "invoice.paid", "{}", "payment-1", 1, fingerprint
+        )).isInstanceOf(DataIntegrityViolationException.class);
+
+        UUID deliveryId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into deliveries (id, project_id, event_id, endpoint_id, state, due_at, attempt_count) "
+                        + "values (?, ?, ?, ?, 'PENDING', current_timestamp, 0)",
+                deliveryId, firstProjectId, eventId, endpointId
+        );
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into deliveries (id, project_id, event_id, endpoint_id, state, due_at, attempt_count) "
+                        + "values (?, ?, ?, ?, 'PENDING', current_timestamp, 0)",
+                UUID.randomUUID(), firstProjectId, eventId, endpointId
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into deliveries (id, project_id, event_id, endpoint_id, state, due_at, attempt_count) "
+                        + "values (?, ?, ?, ?, 'PENDING', current_timestamp, 0)",
+                UUID.randomUUID(), secondProjectId, eventId, endpointId
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into deliveries (id, project_id, event_id, endpoint_id, state, due_at, attempt_count) "
+                        + "values (?, ?, ?, ?, 'PENDING', null, 0)",
+                UUID.randomUUID(), firstProjectId, eventId, endpointId
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbcTemplate.queryForList(
+                "select indexname from pg_indexes where schemaname = 'public' and tablename = 'events' "
+                        + "and indexname = 'ix_events_project_accepted_at_id'",
+                String.class
+        )).containsExactly("ix_events_project_accepted_at_id");
+        assertThat(jdbcTemplate.queryForList(
+                "select indexname from pg_indexes where schemaname = 'public' and tablename = 'deliveries' "
+                        + "and indexname = 'ix_deliveries_pending_due_at_id'",
+                String.class
+        )).containsExactly("ix_deliveries_pending_due_at_id");
     }
 
     @Test

@@ -2,28 +2,31 @@
 
 Status: Complete
 
-## Completed outcome
+## Goal
 
-Group 4 implemented owner-managed webhook endpoint configuration: V6 creates the endpoint and exact-subscription tables; the endpoint module owns encrypted one-time signing material, configuration lifecycle, and owner-safe metadata; API mode exposes the CSRF-protected owner routes; worker mode remains non-web.
+Complete Group 5: publisher event acceptance, publish idempotency, immutable event persistence, and atomic initial routing to `PENDING` deliveries.
 
-## Decisions applied
+## Decisions
 
-- Endpoint creation accepts an explicit enabled state so an owner can safely preconfigure a disabled receiver.
-- Production accepts HTTPS only. Development local HTTP requires the explicit `RELAYFORGE_ENDPOINT_ALLOW_LOCAL_HTTP=true` flag and a literal loopback host.
-- A 32-byte `whsec_` secret is returned only on creation and is stored as AES-256-GCM ciphertext using project/endpoint identifiers as authenticated additional data.
-- A complete configuration replacement first conditionally increments the endpoint version, then replaces subscriptions in the same transaction. This fences subscription-only races as well as URL/name changes.
-- Enable/disable is idempotent: a repeat desired state returns current metadata without consuming another version; an actual stale state transition returns 409.
+- Delivery persistence uses PostgreSQL-specific JDBC where JSONB and `INSERT ... ON CONFLICT DO NOTHING RETURNING` make the idempotency decision explicit and transaction-safe.
+- Event fingerprint v1 hashes a canonical JSON value plus the exact normalized event type. A repeated key still compares persisted event type and JSON semantics as the correctness fallback.
+- The delivery application use case owns one `READ COMMITTED` transaction. Endpoint routing joins it through a narrow endpoint public query; event and every original delivery commit or roll back together.
+- Publisher HTTP authentication is Bearer API-key only. It ignores dashboard sessions and CSRF, returns generic 401 for absent/invalid/revoked keys, and returns 403 when a valid key names a different project path.
+- V7 implements only `events` and original `deliveries`; attempt, claim/lease, retry, replay, and history tables are deferred until their workflows begin.
 
-## Evidence
+## Out of scope
 
-- JDK 25 focused Docker/Testcontainers regression passed 42/42, including V1-V6 Flyway migration, real owner HTTP/CSRF behavior, worker non-web composition, encrypted-secret AAD checks, and concurrent subscription replacement with one winner and one conflict.
-- Independent review found and then verified the fix for subscription-only optimistic-lock fencing. Final verdict: `READY`, no P0/P1 findings.
-- `git diff --check` passed.
+Worker polling/claiming, endpoint enable checks for claims, signing-secret decryption, outbound HTTP/HMAC, attempts, retry/recovery, replay, owner history endpoints, retention, cloud, and frontend work.
 
-## Deliberately not implemented
+## Evidence required
 
-Publisher event acceptance, idempotency keys, event routing, delivery records, worker claims, outbound HTTP/HMAC dispatch, retries, replay, KMS/cloud key custody, and frontend work.
+- Concurrent equivalent publishes converge to one event and complete original delivery set; same key/different content conflicts without mutation.
+- Only enabled endpoints with an exact matching subscription route; endpoint changes after acceptance do not rewrite prior deliveries; zero-route events persist.
+- PostgreSQL rejects cross-project delivery relationships and invalid pending-state rows.
+- HTTP rejects bad/revoked publisher keys, wrong path project, oversized body, and idempotency conflict; it accepts valid publish without a session or CSRF token.
 
-## Next recommended outcome
+## Verification evidence
 
-Start one bounded `delivery` slice: publisher event acceptance with API-key authentication, request idempotency, and atomic initial routing to matching enabled endpoints. Do not add worker/HTTP dispatch yet.
+- 2026-08-12: JDK 25 focused regression passed 35/35: fingerprint (1), publisher filter (2), API composition (1), module boundaries (7), PostgreSQL foundation (21), publish transaction/concurrency (2), and real publisher HTTP (1). Docker Server 29.6.2 ran PostgreSQL 17.10 containers.
+- The first container startup exposed a real Spring proxy failure: the `@Transactional` endpoint-routing service was `final`, so CGLIB could not proxy it. Removing only `final` restored the required proxy and the complete regression passed.
+- Independent review cleared strict JSON-field, Problem Details code, replay-schema, and final transactional-proxy checks with no P0/P1 findings. `git diff --check` passed.
