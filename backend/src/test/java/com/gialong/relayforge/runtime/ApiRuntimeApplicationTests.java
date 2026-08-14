@@ -1,6 +1,7 @@
 package com.gialong.relayforge.runtime;
 
 import com.gialong.relayforge.RelayForgeApplication;
+import com.gialong.relayforge.delivery.api.OutboundWebhookDispatcher;
 import com.gialong.relayforge.runtime.security.OwnerAuthenticationProvider;
 import jakarta.persistence.EntityManager;
 import org.mockito.Answers;
@@ -49,6 +50,7 @@ class ApiRuntimeApplicationTests {
         assertThat(runtimeProperties.runtime()).isEqualTo(RuntimeMode.API);
         assertThat(applicationContext.getBeansOfType(ApiRuntimeConfiguration.class)).hasSize(1);
         assertThat(applicationContext.getBeansOfType(WorkerRuntimeConfiguration.class)).isEmpty();
+        assertThat(applicationContext.getBeansOfType(OutboundWebhookDispatcher.class)).isEmpty();
         assertThat(applicationContext.getBeansOfType(OwnerBootstrapStartupRunner.class)).isEmpty();
         assertThat(applicationContext.getBeansOfType(OwnerAuthenticationProvider.class)).hasSize(1);
     }

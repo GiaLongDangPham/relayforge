@@ -1,6 +1,7 @@
 package com.gialong.relayforge.runtime;
 
 import com.gialong.relayforge.RelayForgeApplication;
+import com.gialong.relayforge.delivery.api.OutboundWebhookDispatcher;
 import com.gialong.relayforge.runtime.security.OwnerAuthenticationProvider;
 import com.gialong.relayforge.runtime.worker.WorkerClaimCoordinator;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,7 @@ class WorkerRuntimeApplicationTests {
             assertThat(context.getBeansOfType(ApiRuntimeConfiguration.class)).isEmpty();
             assertThat(context.getBeansOfType(WorkerRuntimeConfiguration.class)).hasSize(1);
             assertThat(context.getBeansOfType(WorkerClaimCoordinator.class)).hasSize(1);
+            assertThat(context.getBeansOfType(OutboundWebhookDispatcher.class)).hasSize(1);
             assertThat(context.getBeansOfType(OwnerBootstrapStartupRunner.class)).isEmpty();
             assertThat(context.getBeansOfType(OwnerAuthenticationProvider.class)).isEmpty();
             assertThat(context.getBeansOfType(SecurityFilterChain.class)).isEmpty();
