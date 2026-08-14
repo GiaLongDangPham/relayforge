@@ -10,35 +10,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RuntimeModeTests {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withUserConfiguration(
-                    RuntimeModeConfiguration.class,
-                    ApiRuntimeConfiguration.class,
-                    WorkerRuntimeConfiguration.class
-            );
+            .withUserConfiguration(RuntimeModeConfiguration.class);
 
     @Test
-    void apiModeActivatesOnlyApiComposition() {
+    void apiModeBindsTheCanonicalApiRuntime() {
         contextRunner
                 .withPropertyValues("relayforge.runtime=api")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(RelayForgeRuntimeProperties.class);
-                    assertThat(context).hasSingleBean(ApiRuntimeConfiguration.class);
-                    assertThat(context).doesNotHaveBean(WorkerRuntimeConfiguration.class);
                     assertThat(context.getBean(RelayForgeRuntimeProperties.class).runtime())
                             .isEqualTo(RuntimeMode.API);
                 });
     }
 
     @Test
-    void workerModeActivatesOnlyWorkerComposition() {
+    void workerModeBindsTheCanonicalWorkerRuntime() {
         contextRunner
                 .withPropertyValues("relayforge.runtime=worker")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(RelayForgeRuntimeProperties.class);
-                    assertThat(context).doesNotHaveBean(ApiRuntimeConfiguration.class);
-                    assertThat(context).hasSingleBean(WorkerRuntimeConfiguration.class);
                     assertThat(context.getBean(RelayForgeRuntimeProperties.class).runtime())
                             .isEqualTo(RuntimeMode.WORKER);
                 });

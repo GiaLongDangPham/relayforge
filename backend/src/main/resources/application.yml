@@ -29,3 +29,9 @@ relayforge:
   endpoint-secret:
     encryption-key: ${RELAYFORGE_ENDPOINT_ENCRYPTION_KEY}
     key-reference: ${RELAYFORGE_ENDPOINT_ENCRYPTION_KEY_REFERENCE:local-aes-gcm-v1}
+  worker:
+    max-in-flight-claims: 8
+    initial-claim-lease: 15s
+    polling-interval: 500ms
+    polling-jitter: 100ms
+    recovery-interval: 5s

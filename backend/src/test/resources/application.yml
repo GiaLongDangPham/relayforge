@@ -31,3 +31,9 @@ relayforge:
     # Base64URL of exactly 32 test-only bytes; never deploy this value.
     encryption-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
     key-reference: test-local-aes-gcm-v1
+  worker:
+    max-in-flight-claims: 8
+    initial-claim-lease: 15s
+    polling-interval: 500ms
+    polling-jitter: 100ms
+    recovery-interval: 5s

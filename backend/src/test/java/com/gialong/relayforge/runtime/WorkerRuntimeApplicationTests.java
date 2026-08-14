@@ -2,6 +2,7 @@ package com.gialong.relayforge.runtime;
 
 import com.gialong.relayforge.RelayForgeApplication;
 import com.gialong.relayforge.runtime.security.OwnerAuthenticationProvider;
+import com.gialong.relayforge.runtime.worker.WorkerClaimCoordinator;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
@@ -46,6 +47,7 @@ class WorkerRuntimeApplicationTests {
             assertThat(context.getBean(RelayForgeRuntimeProperties.class).runtime()).isEqualTo(RuntimeMode.WORKER);
             assertThat(context.getBeansOfType(ApiRuntimeConfiguration.class)).isEmpty();
             assertThat(context.getBeansOfType(WorkerRuntimeConfiguration.class)).hasSize(1);
+            assertThat(context.getBeansOfType(WorkerClaimCoordinator.class)).hasSize(1);
             assertThat(context.getBeansOfType(OwnerBootstrapStartupRunner.class)).isEmpty();
             assertThat(context.getBeansOfType(OwnerAuthenticationProvider.class)).isEmpty();
             assertThat(context.getBeansOfType(SecurityFilterChain.class)).isEmpty();

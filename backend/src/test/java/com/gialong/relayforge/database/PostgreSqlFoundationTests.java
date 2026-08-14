@@ -88,8 +88,8 @@ class PostgreSqlFoundationTests {
         var currentMigration = flyway.info().current();
 
         assertThat(currentMigration).isNotNull();
-        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("7");
-        assertThat(currentMigration.getDescription()).isEqualTo("create events and deliveries");
+        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("8");
+        assertThat(currentMigration.getDescription()).isEqualTo("add delivery claim indexes");
 
         Integer successfulMigrations = jdbcTemplate.queryForObject(
                 "select count(*) from flyway_schema_history where success",
@@ -102,7 +102,7 @@ class PostgreSqlFoundationTests {
                 String.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(7);
+        assertThat(successfulMigrations).isEqualTo(8);
         assertThat(tables).containsExactly(
                 "deliveries",
                 "endpoint_subscriptions",
@@ -367,6 +367,15 @@ class PostgreSqlFoundationTests {
                         + "and indexname = 'ix_deliveries_pending_due_at_id'",
                 String.class
         )).containsExactly("ix_deliveries_pending_due_at_id");
+        assertThat(jdbcTemplate.queryForList(
+                "select indexname from pg_indexes where schemaname = 'public' and tablename = 'deliveries' "
+                        + "and indexname in ('ix_deliveries_pending_endpoint_due_at_id', "
+                        + "'ix_deliveries_claimed_lease_expires_at_id') order by indexname",
+                String.class
+        )).containsExactly(
+                "ix_deliveries_claimed_lease_expires_at_id",
+                "ix_deliveries_pending_endpoint_due_at_id"
+        );
     }
 
     @Test

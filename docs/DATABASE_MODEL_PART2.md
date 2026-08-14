@@ -288,6 +288,8 @@ Migrations and later `EXPLAIN ANALYZE` evidence must support:
 
 Exact indexes remain a migration decision. Each proposed index must map to an observed query and be verified with representative distributions, including many paused endpoints and mixed terminal/history rows.
 
+Group 6 adds the initial physical claim support in V8: a partial pending `(endpoint_id, due_at, id)` index for enabled-endpoint-filtered claim selection and a partial claimed `(lease_expires_at, id)` index for expired pre-attempt recovery. These support the current query shapes but are not performance claims; `EXPLAIN ANALYZE` with representative backlog distributions remains required.
+
 ## 11. Required future test evidence
 
 PostgreSQL Testcontainers tests must eventually prove:
@@ -313,7 +315,7 @@ PostgreSQL Testcontainers tests must eventually prove:
 ## 12. Decisions deferred to implementation slices
 
 - Production migration ownership and compatibility validation during rollout. Flyway, a PostgreSQL 17 minimum, the pinned `17.10-alpine` integration-test image, and the `public` schema are already fixed by the Phase 1 persistence foundation.
-- Exact constraints, SQL, indexes, lock modes, isolation levels, and cleanup statements.
+- Attempt-start/finalization/recovery-after-attempt constraints, SQL, indexes, lock modes, isolation levels, and cleanup statements. Group 6 has chosen the initial pre-attempt claim/recovery SQL and indexes.
 - JPA entity boundaries, repository ports, projections, and fetch plans.
 - JSON canonicalization implementation and fingerprint version format.
 - Destination-fingerprint version encoding.

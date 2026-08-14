@@ -17,7 +17,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Repository
 @RequiredArgsConstructor
@@ -98,6 +100,37 @@ public class JpaEndpointStore implements EndpointStore {
                 .setParameter("projectId", projectId)
                 .setParameter("eventType", eventType)
                 .getResultList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public List<UUID> findEnabledEndpointIdsForClaim() {
+        return entityManager.createQuery(
+                        "select endpoint.id from WebhookEndpoint endpoint where endpoint.enabled = true order by endpoint.id",
+                        UUID.class
+                )
+                .getResultList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Set<UUID> lockAndFindEnabledForClaim(Collection<UUID> endpointIds) {
+        if (endpointIds.isEmpty()) {
+            return Set.of();
+        }
+        List<UUID> ids = List.copyOf(endpointIds);
+        String placeholders = java.util.stream.IntStream.range(0, ids.size())
+                .mapToObj(index -> ":endpoint" + index)
+                .collect(Collectors.joining(", "));
+        var query = entityManager.createNativeQuery(
+                "select id from public.webhook_endpoints where enabled = true and id in (" + placeholders + ") for update"
+        );
+        for (int index = 0; index < ids.size(); index++) {
+            query.setParameter("endpoint" + index, ids.get(index));
+        }
+        Set<UUID> enabledIds = new java.util.LinkedHashSet<>();
+        query.getResultList().forEach(value -> enabledIds.add(UUID.class.cast(value)));
+        return Set.copyOf(enabledIds);
     }
 
     @Override

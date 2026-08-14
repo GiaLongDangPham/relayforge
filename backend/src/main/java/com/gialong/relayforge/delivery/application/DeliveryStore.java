@@ -1,5 +1,9 @@
 package com.gialong.relayforge.delivery.application;
 
+import com.gialong.relayforge.delivery.api.ClaimedDelivery;
+
+import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,4 +22,10 @@ public interface DeliveryStore {
     void insertOriginalDeliveries(UUID projectId, UUID eventId, List<PendingDelivery> deliveries);
 
     int countOriginalDeliveries(UUID eventId);
+
+    List<ClaimCandidate> lockDuePendingForEnabledEndpoints(Collection<UUID> enabledEndpointIds, int capacity);
+
+    ClaimedDelivery claim(ClaimCandidate candidate, UUID claimToken, Duration initialLease);
+
+    int recoverExpiredPreAttemptClaims(int capacity);
 }

@@ -171,15 +171,15 @@ Transaction boundaries belong to module application use cases, not controllers, 
 | Replay exhausted delivery | `delivery` | One transaction resolves replay idempotency and creates one linked delivery with a fresh budget. |
 | Compose dashboard read response | API adapter using module query contracts | No cross-module mutation transaction; the adapter may compose immutable query results. |
 
-Three cross-module reads are deliberately allowed inside `delivery` transactions:
+Three cross-module read capabilities are deliberately allowed inside `delivery` transactions:
 
 1. publish reads an `endpoint` routing snapshot;
-2. claim checks endpoint enabled state for a batch of locked candidate deliveries;
+2. claim reads an enabled-endpoint snapshot to exclude paused backlog, then rechecks and row-locks its selected candidate endpoints in one batch;
 3. attempt start reads an `endpoint` configuration snapshot.
 
-Those endpoint contracts must join the caller's existing local transaction, perform database work only, and never open `REQUIRES_NEW` transactions or make network calls. The claim flow distinguishes locking a candidate from claiming it: a candidate becomes `CLAIMED` only after the batch eligibility result says its endpoint is enabled. The eventual locking strategy must also prevent a concurrent disable from committing between that check and the claim commit, and must prevent a large paused backlog from starving enabled due work.
+Those endpoint contracts must join the caller's existing local transaction, perform database work only, and never open `REQUIRES_NEW` transactions or make network calls. The first claim snapshot is a fairness aid, not the correctness boundary: candidate delivery SQL excludes disabled endpoints so paused rows cannot occupy claim capacity. The final endpoint recheck row-locks only candidate endpoints. A candidate becomes `CLAIMED` only after that recheck says its endpoint is enabled; a concurrent disable either commits first and excludes it, or waits until claim commit.
 
-Exact isolation levels, lock modes, SQL composition, indexes, and constraints are deferred to database design, but they must preserve these rules and the delivery invariants without exposing an endpoint repository to `delivery`.
+Group 6 uses `READ COMMITTED`, `FOR UPDATE SKIP LOCKED` for bounded due delivery candidates, a final endpoint `FOR UPDATE` recheck, and partial pending/claimed claim indexes. Attempt-start, finalization, and post-attempt recovery SQL remain deferred. No delivery code imports an endpoint repository.
 
 ## 8. Ports and adapters inside a module
 

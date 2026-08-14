@@ -4,29 +4,29 @@ Status: Complete
 
 ## Goal
 
-Complete Group 5: publisher event acceptance, publish idempotency, immutable event persistence, and atomic initial routing to `PENDING` deliveries.
+Complete Group 6: PostgreSQL-backed worker claim, pre-attempt lease recovery, and local permit-admission foundation.
 
 ## Decisions
 
-- Delivery persistence uses PostgreSQL-specific JDBC where JSONB and `INSERT ... ON CONFLICT DO NOTHING RETURNING` make the idempotency decision explicit and transaction-safe.
-- Event fingerprint v1 hashes a canonical JSON value plus the exact normalized event type. A repeated key still compares persisted event type and JSON semantics as the correctness fallback.
-- The delivery application use case owns one `READ COMMITTED` transaction. Endpoint routing joins it through a narrow endpoint public query; event and every original delivery commit or roll back together.
-- Publisher HTTP authentication is Bearer API-key only. It ignores dashboard sessions and CSRF, returns generic 401 for absent/invalid/revoked keys, and returns 403 when a valid key names a different project path.
-- V7 implements only `events` and original `deliveries`; attempt, claim/lease, retry, replay, and history tables are deferred until their workflows begin.
+- A short `READ COMMITTED` transaction takes an enabled-endpoint snapshot, locks due `PENDING` deliveries with `SKIP LOCKED`, then locks and rechecks only candidate endpoints before changing eligible rows to `CLAIMED`.
+- The endpoint recheck uses a PostgreSQL row lock. A concurrent disable either commits before the recheck and excludes the delivery, or waits until the claim commits; it cannot commit between eligibility and claim.
+- Claim capacity is bounded by permits reserved before the database transaction. A returned claim retains one bound permit until its future handling task explicitly completes; no background loop starts before Group 7 can start attempts safely.
+- A pre-attempt expired claim returns to `PENDING` using PostgreSQL time and clears its current token/lease without consuming attempt budget.
 
 ## Out of scope
 
-Worker polling/claiming, endpoint enable checks for claims, signing-secret decryption, outbound HTTP/HMAC, attempts, retry/recovery, replay, owner history endpoints, retention, cloud, and frontend work.
+Attempt-start records, endpoint URL/secret snapshots, outbound HTTP/HMAC/SSRF, attempt completion, retry scheduling, post-attempt `UNKNOWN` recovery, replay, history endpoints, retention, cloud, and frontend work.
 
 ## Evidence required
 
-- Concurrent equivalent publishes converge to one event and complete original delivery set; same key/different content conflicts without mutation.
-- Only enabled endpoints with an exact matching subscription route; endpoint changes after acceptance do not rewrite prior deliveries; zero-route events persist.
-- PostgreSQL rejects cross-project delivery relationships and invalid pending-state rows.
-- HTTP rejects bad/revoked publisher keys, wrong path project, oversized body, and idempotency conflict; it accepts valid publish without a session or CSRF token.
+- Concurrent workers create at most one active claim per delivery, with distinct current tokens and PostgreSQL-time lease values.
+- Disabled endpoints remain `PENDING`; an arbitrarily ordered paused backlog cannot prevent the static enabled due set from filling requested claim capacity.
+- A concurrent endpoint disable cannot commit between the final eligibility recheck and a successful claim commit.
+- Expired pre-attempt claims return to `PENDING` with no consumed attempt; recovery cannot clear a newer claim.
+- Worker permit admission never claims more deliveries than reserved permits, releases unused permits after a short claim, and leaves the worker non-web with no polling loop until attempt start exists.
 
 ## Verification evidence
 
-- 2026-08-12: JDK 25 focused regression passed 35/35: fingerprint (1), publisher filter (2), API composition (1), module boundaries (7), PostgreSQL foundation (21), publish transaction/concurrency (2), and real publisher HTTP (1). Docker Server 29.6.2 ran PostgreSQL 17.10 containers.
-- The first container startup exposed a real Spring proxy failure: the `@Transactional` endpoint-routing service was `final`, so CGLIB could not proxy it. Removing only `final` restored the required proxy and the complete regression passed.
-- Independent review cleared strict JSON-field, Problem Details code, replay-schema, and final transactional-proxy checks with no P0/P1 findings. `git diff --check` passed.
+- 2026-08-13: JDK 25 focused Docker/Testcontainers regression passed 46/46: permit admission (3), runtime binding (7), API/worker composition (2), module boundaries (7), PostgreSQL foundation (21), claim integration (3), publish integration (2), and real publisher HTTP (1).
+- PostgreSQL 17.10 applied V1-V8. Tests prove paused rows cannot consume a static enabled claim batch, concurrent workers produce one active claim, a final endpoint row lock blocks concurrent disablement, and expired pre-attempt claims return to `PENDING` without budget consumption.
+- `git diff --check` passed. No full suite was run under the focused-test policy.

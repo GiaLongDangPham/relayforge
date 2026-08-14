@@ -167,7 +167,7 @@ Exact SQL and indexes are deferred to the database-design slice.
 
 ### Step 1 - Claim in a short transaction
 
-The worker selects eligible work without waiting on rows already claimed by another worker. For every successful claim it:
+The worker first obtains a current enabled-endpoint snapshot so paused backlog is excluded from candidate selection. It then locks due `PENDING` work without waiting on rows already claimed by another worker, rechecks and row-locks the selected candidate endpoints, and for every successful claim:
 
 1. changes the delivery from `PENDING` to `CLAIMED`;
 2. generates a new claim token;
@@ -175,6 +175,8 @@ The worker selects eligible work without waiting on rows already claimed by anot
 4. commits immediately.
 
 No outbound network call occurs in this transaction.
+
+The initial endpoint snapshot only keeps paused rows from consuming a bounded claim batch. The final row-locked recheck is the correctness boundary: a concurrent disable either becomes visible before recheck and leaves the delivery `PENDING`, or waits until the claim commits.
 
 ### Step 2 - Revalidate before starting an attempt
 
