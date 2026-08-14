@@ -4,29 +4,29 @@ Status: Complete
 
 ## Goal
 
-Complete Group 6: PostgreSQL-backed worker claim, pre-attempt lease recovery, and local permit-admission foundation.
+Complete Group 7: durable attempt start and an in-memory dispatch instruction boundary.
 
 ## Decisions
 
-- A short `READ COMMITTED` transaction takes an enabled-endpoint snapshot, locks due `PENDING` deliveries with `SKIP LOCKED`, then locks and rechecks only candidate endpoints before changing eligible rows to `CLAIMED`.
-- The endpoint recheck uses a PostgreSQL row lock. A concurrent disable either commits before the recheck and excludes the delivery, or waits until the claim commits; it cannot commit between eligibility and claim.
-- Claim capacity is bounded by permits reserved before the database transaction. A returned claim retains one bound permit until its future handling task explicitly completes; no background loop starts before Group 7 can start attempts safely.
-- A pre-attempt expired claim returns to `PENDING` using PostgreSQL time and clears its current token/lease without consuming attempt budget.
+- Group 7 will add the durable `STARTED` attempt boundary: a transaction conditionally validates the claimed delivery, current token, PostgreSQL-time lease, enabled endpoint, and remaining budget; it creates the next attempt, increments the count, and replaces the initial lease with the attempt-execution lease.
+- Attempt-start locks the endpoint configuration through its public contract. A concurrent disable or URL update linearizes before or after the snapshot; no attempt may start from an uncommitted/mixed configuration.
+- The resulting in-memory dispatch instruction retains the exact URL snapshot and opaque encrypted signing material, but never a public raw signing secret. Group 8 will decrypt only when it signs/sends HTTP.
+- No worker scheduler starts in this group: a loop must not create `STARTED` attempts until outbound dispatch and finalization exist.
 
 ## Out of scope
 
-Attempt-start records, endpoint URL/secret snapshots, outbound HTTP/HMAC/SSRF, attempt completion, retry scheduling, post-attempt `UNKNOWN` recovery, replay, history endpoints, retention, cloud, and frontend work.
+Outbound HTTP/HMAC/SSRF, worker polling/scheduling, attempt completion, retry scheduling, post-attempt `UNKNOWN` recovery, replay, history endpoints, retention, cloud, and frontend work.
 
 ## Evidence required
 
-- Concurrent workers create at most one active claim per delivery, with distinct current tokens and PostgreSQL-time lease values.
-- Disabled endpoints remain `PENDING`; an arbitrarily ordered paused backlog cannot prevent the static enabled due set from filling requested claim capacity.
-- A concurrent endpoint disable cannot commit between the final eligibility recheck and a successful claim commit.
-- Expired pre-attempt claims return to `PENDING` with no consumed attempt; recovery cannot clear a newer claim.
-- Worker permit admission never claims more deliveries than reserved permits, releases unused permits after a short claim, and leaves the worker non-web with no polling loop until attempt start exists.
+- PostgreSQL V9 enforces at most five numbered attempts, one unfinished `STARTED` attempt per delivery, immutable started/terminal shape, and a restrictive delivery relationship.
+- A valid current claim atomically creates attempt number `attempt_count + 1`, snapshots the enabled endpoint URL/signing material, increments the count, and applies the PostgreSQL-time 20-second attempt lease.
+- Expired/stale claims create no attempt; a disabled endpoint conditionally returns a valid current claim to `PENDING` with no budget use.
+- Concurrent attempt starts for one claim create exactly one `STARTED` attempt and one durable count increment.
+- No plaintext endpoint signing secret, raw payload, or exact destination URL can appear in dispatch-instruction diagnostics.
 
 ## Verification evidence
 
-- 2026-08-13: JDK 25 focused Docker/Testcontainers regression passed 46/46: permit admission (3), runtime binding (7), API/worker composition (2), module boundaries (7), PostgreSQL foundation (21), claim integration (3), publish integration (2), and real publisher HTTP (1).
-- PostgreSQL 17.10 applied V1-V8. Tests prove paused rows cannot consume a static enabled claim batch, concurrent workers produce one active claim, a final endpoint row lock blocks concurrent disablement, and expired pre-attempt claims return to `PENDING` without budget consumption.
-- `git diff --check` passed. No full suite was run under the focused-test policy.
+- 2026-08-14: final JDK 25 focused Docker/Testcontainers regression passed 49/49: attempt start (3), claim (3), PostgreSQL foundation (21), permit admission (3), runtime binding/composition (9), module boundaries (7), publish integration (2), and publisher HTTP (1).
+- V1-V9 applied against PostgreSQL 17.10. Tests prove the persisted `STARTED` shape and one-started-attempt constraint, valid start/URL fingerprint/20-second PostgreSQL-time lease, expired claim rejection, disabled-endpoint release without budget use, pre-attempt recovery ignoring started work, and concurrent start convergence on one attempt.
+- `git diff --check` passed. No deprecated API pattern was introduced in Group 7 production paths, and no full suite was run under the focused-test policy.

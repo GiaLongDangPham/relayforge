@@ -6,7 +6,9 @@ import com.gialong.relayforge.endpoint.api.RoutingEndpoint;
 import com.gialong.relayforge.endpoint.application.EncryptedEndpointSecret;
 import com.gialong.relayforge.endpoint.application.EndpointCursor;
 import com.gialong.relayforge.endpoint.application.EndpointStore;
+import com.gialong.relayforge.endpoint.application.LockedEndpointAttemptConfiguration;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
@@ -131,6 +133,30 @@ public class JpaEndpointStore implements EndpointStore {
         Set<UUID> enabledIds = new java.util.LinkedHashSet<>();
         query.getResultList().forEach(value -> enabledIds.add(UUID.class.cast(value)));
         return Set.copyOf(enabledIds);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<LockedEndpointAttemptConfiguration> lockForAttempt(UUID projectId, UUID endpointId) {
+        return entityManager.createQuery(
+                        "from WebhookEndpoint endpoint where endpoint.projectId = :projectId and endpoint.id = :endpointId",
+                        WebhookEndpointEntity.class
+                )
+                .setParameter("projectId", projectId)
+                .setParameter("endpointId", endpointId)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultStream()
+                .findFirst()
+                .map(endpoint -> new LockedEndpointAttemptConfiguration(
+                        endpoint.projectId(),
+                        endpoint.id(),
+                        endpoint.destinationUrl(),
+                        endpoint.enabled(),
+                        new EncryptedEndpointSecret(
+                                endpoint.encryptionKeyReference(),
+                                endpoint.signingSecretCiphertext()
+                        )
+                ));
     }
 
     @Override

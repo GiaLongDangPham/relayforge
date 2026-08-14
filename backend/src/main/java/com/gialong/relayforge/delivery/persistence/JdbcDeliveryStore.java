@@ -2,8 +2,10 @@ package com.gialong.relayforge.delivery.persistence;
 
 import com.gialong.relayforge.delivery.application.DeliveryStore;
 import com.gialong.relayforge.delivery.application.ClaimCandidate;
+import com.gialong.relayforge.delivery.application.AttemptStartCandidate;
 import com.gialong.relayforge.delivery.application.NewEvent;
 import com.gialong.relayforge.delivery.application.PendingDelivery;
+import com.gialong.relayforge.delivery.application.StartedAttempt;
 import com.gialong.relayforge.delivery.application.StoredEvent;
 import com.gialong.relayforge.delivery.api.ClaimedDelivery;
 import lombok.RequiredArgsConstructor;
@@ -160,6 +162,8 @@ public class JdbcDeliveryStore implements DeliveryStore {
                 "with expired as ("
                         + "select id, claim_token from public.deliveries "
                         + "where state = 'CLAIMED' and lease_expires_at <= CURRENT_TIMESTAMP "
+                        + "and not exists (select 1 from public.delivery_attempts attempt "
+                        + "where attempt.delivery_id = deliveries.id and attempt.status = 'STARTED') "
                         + "order by lease_expires_at, id limit ? for update skip locked"
                         + ") "
                         + "update public.deliveries delivery set state = 'PENDING', due_at = CURRENT_TIMESTAMP, "
@@ -169,6 +173,102 @@ public class JdbcDeliveryStore implements DeliveryStore {
                 (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
                 capacity
         ).size();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<AttemptStartCandidate> lockCurrentClaimForAttemptStart(ClaimedDelivery claim) {
+        return jdbcTemplate.query(
+                        "select delivery.id as delivery_id, delivery.project_id, delivery.endpoint_id, "
+                                + "delivery.claim_token, delivery.attempt_count, event.id as event_id, "
+                                + "event.event_type, event.accepted_at, event.payload::text as payload_json "
+                                + "from public.deliveries delivery "
+                                + "join public.events event on event.id = delivery.event_id "
+                                + "and event.project_id = delivery.project_id "
+                                + "where delivery.id = ? and delivery.project_id = ? and delivery.endpoint_id = ? "
+                                + "and delivery.state = 'CLAIMED' and delivery.claim_token = ? "
+                                + "and delivery.lease_expires_at > CURRENT_TIMESTAMP and delivery.attempt_count < 5 "
+                                + "and not exists (select 1 from public.delivery_attempts attempt "
+                                + "where attempt.delivery_id = delivery.id and attempt.status = 'STARTED') "
+                                + "for update of delivery",
+                        this::mapAttemptStartCandidate,
+                        claim.deliveryId(),
+                        claim.projectId(),
+                        claim.endpointId(),
+                        claim.claimToken()
+                )
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean releaseClaimBeforeAttempt(AttemptStartCandidate candidate) {
+        return jdbcTemplate.update(
+                "update public.deliveries set state = 'PENDING', due_at = CURRENT_TIMESTAMP, claim_token = null, "
+                        + "lease_expires_at = null, updated_at = CURRENT_TIMESTAMP "
+                        + "where id = ? and project_id = ? and endpoint_id = ? and state = 'CLAIMED' "
+                        + "and claim_token = ? and lease_expires_at > CURRENT_TIMESTAMP "
+                        + "and attempt_count = ?",
+                candidate.deliveryId(),
+                candidate.projectId(),
+                candidate.endpointId(),
+                candidate.claimToken(),
+                candidate.attemptCount()
+        ) == 1;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<StartedAttempt> startAttempt(
+            AttemptStartCandidate candidate,
+            UUID attemptId,
+            short destinationFingerprintVersion,
+            byte[] destinationFingerprint,
+            Duration attemptExecutionLease
+    ) {
+        List<StartedDelivery> startedDeliveries = jdbcTemplate.query(
+                "update public.deliveries set attempt_count = attempt_count + 1, "
+                        + "lease_expires_at = CURRENT_TIMESTAMP + (? * interval '1 millisecond'), "
+                        + "updated_at = CURRENT_TIMESTAMP "
+                        + "where id = ? and project_id = ? and endpoint_id = ? and state = 'CLAIMED' "
+                        + "and claim_token = ? and lease_expires_at > CURRENT_TIMESTAMP and attempt_count = ? "
+                        + "and not exists (select 1 from public.delivery_attempts attempt "
+                        + "where attempt.delivery_id = deliveries.id and attempt.status = 'STARTED') "
+                        + "returning attempt_count, lease_expires_at",
+                this::mapStartedDelivery,
+                attemptExecutionLease.toMillis(),
+                candidate.deliveryId(),
+                candidate.projectId(),
+                candidate.endpointId(),
+                candidate.claimToken(),
+                candidate.attemptCount()
+        );
+        if (startedDeliveries.isEmpty()) {
+            return Optional.empty();
+        }
+
+        StartedDelivery startedDelivery = startedDeliveries.getFirst();
+        return jdbcTemplate.query(
+                        "insert into public.delivery_attempts (id, delivery_id, attempt_number, claim_token, status, "
+                                + "destination_fingerprint_version, destination_fingerprint, started_at, response_truncated) "
+                                + "values (?, ?, ?, ?, 'STARTED', ?, ?, CURRENT_TIMESTAMP, false) "
+                                + "returning started_at",
+                        (resultSet, rowNumber) -> new StartedAttempt(
+                                attemptId,
+                                startedDelivery.attemptNumber(),
+                                resultSet.getObject("started_at", OffsetDateTime.class).toInstant(),
+                                startedDelivery.leaseExpiresAt()
+                        ),
+                        attemptId,
+                        candidate.deliveryId(),
+                        startedDelivery.attemptNumber(),
+                        candidate.claimToken(),
+                        destinationFingerprintVersion,
+                        destinationFingerprint
+                )
+                .stream()
+                .findFirst();
     }
 
     private String payloadJson(JsonNode payload) {
@@ -204,5 +304,29 @@ public class JdbcDeliveryStore implements DeliveryStore {
                 resultSet.getObject("claim_token", UUID.class),
                 resultSet.getObject("lease_expires_at", OffsetDateTime.class).toInstant()
         );
+    }
+
+    private AttemptStartCandidate mapAttemptStartCandidate(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new AttemptStartCandidate(
+                resultSet.getObject("delivery_id", UUID.class),
+                resultSet.getObject("project_id", UUID.class),
+                resultSet.getObject("endpoint_id", UUID.class),
+                resultSet.getObject("event_id", UUID.class),
+                resultSet.getObject("claim_token", UUID.class),
+                resultSet.getInt("attempt_count"),
+                resultSet.getString("event_type"),
+                resultSet.getObject("accepted_at", OffsetDateTime.class).toInstant(),
+                resultSet.getString("payload_json").getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private StartedDelivery mapStartedDelivery(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new StartedDelivery(
+                resultSet.getInt("attempt_count"),
+                resultSet.getObject("lease_expires_at", OffsetDateTime.class).toInstant()
+        );
+    }
+
+    private record StartedDelivery(int attemptNumber, java.time.Instant leaseExpiresAt) {
     }
 }

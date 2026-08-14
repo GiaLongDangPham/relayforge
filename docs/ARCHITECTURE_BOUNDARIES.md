@@ -179,7 +179,7 @@ Three cross-module read capabilities are deliberately allowed inside `delivery` 
 
 Those endpoint contracts must join the caller's existing local transaction, perform database work only, and never open `REQUIRES_NEW` transactions or make network calls. The first claim snapshot is a fairness aid, not the correctness boundary: candidate delivery SQL excludes disabled endpoints so paused rows cannot occupy claim capacity. The final endpoint recheck row-locks only candidate endpoints. A candidate becomes `CLAIMED` only after that recheck says its endpoint is enabled; a concurrent disable either commits first and excludes it, or waits until claim commit.
 
-Group 6 uses `READ COMMITTED`, `FOR UPDATE SKIP LOCKED` for bounded due delivery candidates, a final endpoint `FOR UPDATE` recheck, and partial pending/claimed claim indexes. Attempt-start, finalization, and post-attempt recovery SQL remain deferred. No delivery code imports an endpoint repository.
+Group 6 uses `READ COMMITTED`, `FOR UPDATE SKIP LOCKED` for bounded due delivery candidates, a final endpoint `FOR UPDATE` recheck, and partial pending/claimed claim indexes. Group 7 uses a `READ COMMITTED` transaction that row-locks the current claimed delivery, row-locks the endpoint configuration through its public snapshot contract, conditionally verifies that no `STARTED` attempt exists at the mutation boundary, writes `STARTED`, and extends the lease. V9 independently enforces one `STARTED` attempt per delivery. The snapshot carries URL plus opaque encrypted signing material; only the later outbound adapter may request its transient plaintext. Finalization and post-attempt recovery SQL remain deferred. No delivery code imports an endpoint repository.
 
 ## 8. Ports and adapters inside a module
 

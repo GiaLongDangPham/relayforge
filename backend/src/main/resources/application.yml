@@ -32,6 +32,7 @@ relayforge:
   worker:
     max-in-flight-claims: 8
     initial-claim-lease: 15s
+    attempt-execution-lease: 20s
     polling-interval: 500ms
     polling-jitter: 100ms
     recovery-interval: 5s

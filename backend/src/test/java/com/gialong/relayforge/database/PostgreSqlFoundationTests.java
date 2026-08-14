@@ -88,8 +88,8 @@ class PostgreSqlFoundationTests {
         var currentMigration = flyway.info().current();
 
         assertThat(currentMigration).isNotNull();
-        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("8");
-        assertThat(currentMigration.getDescription()).isEqualTo("add delivery claim indexes");
+        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("9");
+        assertThat(currentMigration.getDescription()).isEqualTo("create delivery attempts");
 
         Integer successfulMigrations = jdbcTemplate.queryForObject(
                 "select count(*) from flyway_schema_history where success",
@@ -102,9 +102,10 @@ class PostgreSqlFoundationTests {
                 String.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(8);
+        assertThat(successfulMigrations).isEqualTo(9);
         assertThat(tables).containsExactly(
                 "deliveries",
+                "delivery_attempts",
                 "endpoint_subscriptions",
                 "events",
                 "owner_accounts",
@@ -357,6 +358,30 @@ class PostgreSqlFoundationTests {
                         + "values (?, ?, ?, ?, 'PENDING', null, 0)",
                 UUID.randomUUID(), firstProjectId, eventId, endpointId
         )).isInstanceOf(DataIntegrityViolationException.class);
+        UUID claimToken = UUID.randomUUID();
+        jdbcTemplate.update(
+                "update deliveries set state = 'CLAIMED', due_at = null, claim_token = ?, "
+                        + "lease_expires_at = CURRENT_TIMESTAMP + interval '20 seconds' where id = ?",
+                claimToken,
+                deliveryId
+        );
+        byte[] destinationFingerprint = new byte[32];
+        jdbcTemplate.update(
+                "insert into delivery_attempts (id, delivery_id, attempt_number, claim_token, status, "
+                        + "destination_fingerprint_version, destination_fingerprint) values (?, ?, ?, ?, 'STARTED', ?, ?)",
+                UUID.randomUUID(), deliveryId, 1, claimToken, 1, destinationFingerprint
+        );
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into delivery_attempts (id, delivery_id, attempt_number, claim_token, status, "
+                        + "destination_fingerprint_version, destination_fingerprint) values (?, ?, ?, ?, 'STARTED', ?, ?)",
+                UUID.randomUUID(), deliveryId, 2, UUID.randomUUID(), 1, destinationFingerprint
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into delivery_attempts (id, delivery_id, attempt_number, claim_token, status, "
+                        + "destination_fingerprint_version, destination_fingerprint, finished_at) "
+                        + "values (?, ?, ?, ?, 'SUCCEEDED', ?, ?, CURRENT_TIMESTAMP)",
+                UUID.randomUUID(), deliveryId, 6, UUID.randomUUID(), 1, destinationFingerprint
+        )).isInstanceOf(DataIntegrityViolationException.class);
         assertThat(jdbcTemplate.queryForList(
                 "select indexname from pg_indexes where schemaname = 'public' and tablename = 'events' "
                         + "and indexname = 'ix_events_project_accepted_at_id'",
@@ -376,6 +401,11 @@ class PostgreSqlFoundationTests {
                 "ix_deliveries_claimed_lease_expires_at_id",
                 "ix_deliveries_pending_endpoint_due_at_id"
         );
+        assertThat(jdbcTemplate.queryForList(
+                "select indexname from pg_indexes where schemaname = 'public' and tablename = 'delivery_attempts' "
+                        + "and indexname = 'uq_delivery_attempts_one_started_per_delivery'",
+                String.class
+        )).containsExactly("uq_delivery_attempts_one_started_per_delivery");
     }
 
     @Test

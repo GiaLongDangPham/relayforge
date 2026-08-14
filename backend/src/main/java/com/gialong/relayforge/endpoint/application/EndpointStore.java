@@ -34,6 +34,8 @@ public interface EndpointStore {
 
     Set<UUID> lockAndFindEnabledForClaim(Collection<UUID> endpointIds);
 
+    Optional<LockedEndpointAttemptConfiguration> lockForAttempt(UUID projectId, UUID endpointId);
+
     Optional<WebhookEndpointDetails> replaceConfiguration(
             UUID projectId,
             UUID endpointId,

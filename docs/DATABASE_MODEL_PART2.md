@@ -290,6 +290,8 @@ Exact indexes remain a migration decision. Each proposed index must map to an ob
 
 Group 6 adds the initial physical claim support in V8: a partial pending `(endpoint_id, due_at, id)` index for enabled-endpoint-filtered claim selection and a partial claimed `(lease_expires_at, id)` index for expired pre-attempt recovery. These support the current query shapes but are not performance claims; `EXPLAIN ANALYZE` with representative backlog distributions remains required.
 
+Group 7 adds V9 `delivery_attempts`: restrictive delivery ownership, unique `(delivery_id, attempt_number)`, a partial unique `STARTED`-per-delivery index, attempt-number/fingerprint/status checks, and the strict `STARTED` result-field shape. Its attempt-start transaction locks the current claim and endpoint snapshot, then conditionally rechecks state/token/PostgreSQL-time lease/budget and absence of `STARTED` before incrementing the count and inserting the record. The destination fingerprint is version `1`: SHA-256 over UTF-8 `relayforge.destination.v1` followed by one NUL byte and the exact stored URL UTF-8 bytes. This is durable audit evidence only; the exact URL and encrypted signing material are in-memory dispatch data and are never persisted in the attempt row.
+
 ## 11. Required future test evidence
 
 PostgreSQL Testcontainers tests must eventually prove:
@@ -315,10 +317,9 @@ PostgreSQL Testcontainers tests must eventually prove:
 ## 12. Decisions deferred to implementation slices
 
 - Production migration ownership and compatibility validation during rollout. Flyway, a PostgreSQL 17 minimum, the pinned `17.10-alpine` integration-test image, and the `public` schema are already fixed by the Phase 1 persistence foundation.
-- Attempt-start/finalization/recovery-after-attempt constraints, SQL, indexes, lock modes, isolation levels, and cleanup statements. Group 6 has chosen the initial pre-attempt claim/recovery SQL and indexes.
+- Finalization/recovery-after-attempt constraints, SQL, indexes, lock modes, isolation levels, and cleanup statements. Groups 6-7 have chosen the initial claim/recovery and attempt-start SQL, locks, indexes, and attempt fingerprint encoding.
 - JPA entity boundaries, repository ports, projections, and fetch plans.
 - JSON canonicalization implementation and fingerprint version format.
-- Destination-fingerprint version encoding.
 - Response-preview encoding and UI redaction.
 - Cursor token encoding and signing.
 - Retention cleanup schedule and operational safeguards.

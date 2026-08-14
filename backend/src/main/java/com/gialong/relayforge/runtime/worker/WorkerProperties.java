@@ -13,6 +13,7 @@ import java.util.Objects;
 public record WorkerProperties(
         @DefaultValue("8") int maxInFlightClaims,
         @DefaultValue("15s") Duration initialClaimLease,
+        @DefaultValue("20s") Duration attemptExecutionLease,
         @DefaultValue("500ms") Duration pollingInterval,
         @DefaultValue("100ms") Duration pollingJitter,
         @DefaultValue("5s") Duration recoveryInterval
@@ -23,6 +24,7 @@ public record WorkerProperties(
             throw new IllegalArgumentException("relayforge.worker.max-in-flight-claims must be positive");
         }
         initialClaimLease = positive(initialClaimLease, "initial-claim-lease");
+        attemptExecutionLease = positive(attemptExecutionLease, "attempt-execution-lease");
         pollingInterval = positive(pollingInterval, "polling-interval");
         recoveryInterval = positive(recoveryInterval, "recovery-interval");
         pollingJitter = Objects.requireNonNull(pollingJitter, "polling-jitter must not be null");
@@ -34,6 +36,9 @@ public record WorkerProperties(
         }
         if (recoveryInterval.compareTo(initialClaimLease) >= 0) {
             throw new IllegalArgumentException("relayforge.worker.recovery-interval must be shorter than initial-claim-lease");
+        }
+        if (recoveryInterval.compareTo(attemptExecutionLease) >= 0) {
+            throw new IllegalArgumentException("relayforge.worker.recovery-interval must be shorter than attempt-execution-lease");
         }
     }
 

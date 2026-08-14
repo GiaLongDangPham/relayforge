@@ -9,7 +9,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Persistence boundary for immutable event acceptance and original delivery work only.
+ * Persistence boundary for immutable event acceptance, delivery work, and durable attempt-start state.
  */
 public interface DeliveryStore {
 
@@ -28,4 +28,16 @@ public interface DeliveryStore {
     ClaimedDelivery claim(ClaimCandidate candidate, UUID claimToken, Duration initialLease);
 
     int recoverExpiredPreAttemptClaims(int capacity);
+
+    Optional<AttemptStartCandidate> lockCurrentClaimForAttemptStart(ClaimedDelivery claim);
+
+    boolean releaseClaimBeforeAttempt(AttemptStartCandidate candidate);
+
+    Optional<StartedAttempt> startAttempt(
+            AttemptStartCandidate candidate,
+            UUID attemptId,
+            short destinationFingerprintVersion,
+            byte[] destinationFingerprint,
+            Duration attemptExecutionLease
+    );
 }
