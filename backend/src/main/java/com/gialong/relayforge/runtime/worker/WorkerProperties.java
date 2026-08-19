@@ -16,7 +16,8 @@ public record WorkerProperties(
         @DefaultValue("20s") Duration attemptExecutionLease,
         @DefaultValue("500ms") Duration pollingInterval,
         @DefaultValue("100ms") Duration pollingJitter,
-        @DefaultValue("5s") Duration recoveryInterval
+        @DefaultValue("5s") Duration recoveryInterval,
+        @DefaultValue("1s") Duration finalizationMinimumRemaining
 ) {
 
     public WorkerProperties {
@@ -27,6 +28,7 @@ public record WorkerProperties(
         attemptExecutionLease = positive(attemptExecutionLease, "attempt-execution-lease");
         pollingInterval = positive(pollingInterval, "polling-interval");
         recoveryInterval = positive(recoveryInterval, "recovery-interval");
+        finalizationMinimumRemaining = positive(finalizationMinimumRemaining, "finalization-minimum-remaining");
         pollingJitter = Objects.requireNonNull(pollingJitter, "polling-jitter must not be null");
         if (pollingJitter.isNegative()) {
             throw new IllegalArgumentException("relayforge.worker.polling-jitter must not be negative");
@@ -39,6 +41,11 @@ public record WorkerProperties(
         }
         if (recoveryInterval.compareTo(attemptExecutionLease) >= 0) {
             throw new IllegalArgumentException("relayforge.worker.recovery-interval must be shorter than attempt-execution-lease");
+        }
+        if (finalizationMinimumRemaining.compareTo(attemptExecutionLease) >= 0) {
+            throw new IllegalArgumentException(
+                    "relayforge.worker.finalization-minimum-remaining must be shorter than attempt-execution-lease"
+            );
         }
     }
 

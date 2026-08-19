@@ -3,11 +3,15 @@ package com.gialong.relayforge.delivery.persistence;
 import com.gialong.relayforge.delivery.application.DeliveryStore;
 import com.gialong.relayforge.delivery.application.ClaimCandidate;
 import com.gialong.relayforge.delivery.application.AttemptStartCandidate;
+import com.gialong.relayforge.delivery.application.AttemptCompletion;
+import com.gialong.relayforge.delivery.application.CompletionDecision;
+import com.gialong.relayforge.delivery.application.ExpiredStartedAttempt;
 import com.gialong.relayforge.delivery.application.NewEvent;
 import com.gialong.relayforge.delivery.application.PendingDelivery;
 import com.gialong.relayforge.delivery.application.StartedAttempt;
 import com.gialong.relayforge.delivery.application.StoredEvent;
 import com.gialong.relayforge.delivery.api.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.DispatchInstruction;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -271,6 +275,163 @@ public class JdbcDeliveryStore implements DeliveryStore {
                 .findFirst();
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean finalizeCurrentAttempt(
+            DispatchInstruction instruction,
+            AttemptCompletion completion,
+            CompletionDecision decision
+    ) {
+        long retryDelayMilliseconds = decision.retryDelay() == null ? 0L : decision.retryDelay().toMillis();
+        boolean pending = decision.deliveryState().name().equals("PENDING");
+        boolean terminal = !pending;
+        return !jdbcTemplate.query(
+                "with locked as ("
+                        + "select delivery.id as delivery_id, attempt.id as attempt_id "
+                        + "from public.deliveries delivery "
+                        + "join public.delivery_attempts attempt on attempt.delivery_id = delivery.id "
+                        + "where delivery.id = ? and delivery.state = 'CLAIMED' "
+                        + "and delivery.claim_token = ? and delivery.lease_expires_at > CURRENT_TIMESTAMP "
+                        + "and delivery.attempt_count = ? and attempt.id = ? and attempt.claim_token = delivery.claim_token "
+                        + "and attempt.attempt_number = ? and attempt.status = 'STARTED' "
+                        + "for update of delivery, attempt"
+                        + "), finalized_attempt as ("
+                        + "update public.delivery_attempts attempt set status = ?, finished_at = CURRENT_TIMESTAMP, "
+                        + "http_status = ?, failure_code = ?, latency_ms = ?, response_preview = ?, response_truncated = ? "
+                        + "from locked where attempt.id = locked.attempt_id and attempt.status = 'STARTED' "
+                        + "returning attempt.id"
+                        + ") update public.deliveries delivery set state = ?, "
+                        + "due_at = case when ? then CURRENT_TIMESTAMP + (? * interval '1 millisecond') else null end, "
+                        + "claim_token = null, lease_expires_at = null, updated_at = CURRENT_TIMESTAMP, "
+                        + "terminal_at = case when ? then CURRENT_TIMESTAMP else null end "
+                        + "from locked, finalized_attempt where delivery.id = locked.delivery_id "
+                        + "returning delivery.id",
+                (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
+                instruction.deliveryId(),
+                instruction.claimToken(),
+                instruction.attemptNumber(),
+                instruction.attemptId(),
+                instruction.attemptNumber(),
+                completion.status().name(),
+                completion.httpStatus(),
+                completion.failureCode(),
+                completion.latencyMilliseconds(),
+                completion.responsePreview(),
+                completion.responseTruncated(),
+                decision.deliveryState().name(),
+                pending,
+                retryDelayMilliseconds,
+                terminal
+        ).isEmpty();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public boolean hasCurrentLease(DispatchInstruction instruction, Duration minimumRemaining) {
+        Boolean current = jdbcTemplate.queryForObject(
+                "select exists("
+                        + "select 1 from public.deliveries delivery "
+                        + "join public.delivery_attempts attempt on attempt.delivery_id = delivery.id "
+                        + "where delivery.id = ? and delivery.state = 'CLAIMED' and delivery.claim_token = ? "
+                        + "and delivery.lease_expires_at >= CURRENT_TIMESTAMP + (? * interval '1 millisecond') "
+                        + "and delivery.attempt_count = ? and attempt.id = ? and attempt.claim_token = delivery.claim_token "
+                        + "and attempt.attempt_number = ? and attempt.status = 'STARTED'"
+                        + ")",
+                Boolean.class,
+                instruction.deliveryId(),
+                instruction.claimToken(),
+                minimumRemaining.toMillis(),
+                instruction.attemptNumber(),
+                instruction.attemptId(),
+                instruction.attemptNumber()
+        );
+        return Boolean.TRUE.equals(current);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean recordLateDiagnostic(
+            DispatchInstruction instruction,
+            AttemptCompletion completion,
+            UUID diagnosticId
+    ) {
+        return !jdbcTemplate.query(
+                "insert into public.attempt_late_diagnostics (id, attempt_id, claim_token, observed_status, "
+                        + "http_status, failure_code, latency_ms, observed_at) "
+                        + "select ?, attempt.id, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP "
+                        + "from public.delivery_attempts attempt "
+                        + "where attempt.id = ? and attempt.claim_token = ? and attempt.status = 'UNKNOWN' "
+                        + "on conflict (attempt_id) do nothing returning id",
+                (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
+                diagnosticId,
+                instruction.claimToken(),
+                completion.status().name(),
+                completion.httpStatus(),
+                completion.failureCode(),
+                completion.latencyMilliseconds(),
+                instruction.attemptId(),
+                instruction.claimToken()
+        ).isEmpty();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<ExpiredStartedAttempt> lockExpiredStartedAttempts(int capacity) {
+        return jdbcTemplate.query(
+                "select delivery.id as delivery_id, attempt.id as attempt_id, delivery.claim_token, "
+                        + "delivery.attempt_count from public.deliveries delivery "
+                        + "join public.delivery_attempts attempt on attempt.delivery_id = delivery.id "
+                        + "and attempt.claim_token = delivery.claim_token and attempt.status = 'STARTED' "
+                        + "where delivery.state = 'CLAIMED' and delivery.lease_expires_at <= CURRENT_TIMESTAMP "
+                        + "order by delivery.lease_expires_at, delivery.id limit ? "
+                        + "for update of delivery, attempt skip locked",
+                this::mapExpiredStartedAttempt,
+                capacity
+        );
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean recoverExpiredStartedAttempt(
+            ExpiredStartedAttempt expiredAttempt,
+            CompletionDecision decision
+    ) {
+        long retryDelayMilliseconds = decision.retryDelay() == null ? 0L : decision.retryDelay().toMillis();
+        boolean pending = decision.deliveryState().name().equals("PENDING");
+        boolean terminal = !pending;
+        return !jdbcTemplate.query(
+                "with locked as ("
+                        + "select delivery.id as delivery_id, attempt.id as attempt_id "
+                        + "from public.deliveries delivery "
+                        + "join public.delivery_attempts attempt on attempt.delivery_id = delivery.id "
+                        + "where delivery.id = ? and delivery.state = 'CLAIMED' and delivery.claim_token = ? "
+                        + "and delivery.lease_expires_at <= CURRENT_TIMESTAMP and delivery.attempt_count = ? "
+                        + "and attempt.id = ? and attempt.claim_token = delivery.claim_token "
+                        + "and attempt.attempt_number = ? and attempt.status = 'STARTED' "
+                        + "for update of delivery, attempt"
+                        + "), finalized_attempt as ("
+                        + "update public.delivery_attempts attempt set status = 'UNKNOWN', finished_at = CURRENT_TIMESTAMP, "
+                        + "http_status = null, failure_code = null, latency_ms = null, response_preview = null, "
+                        + "response_truncated = false from locked "
+                        + "where attempt.id = locked.attempt_id and attempt.status = 'STARTED' returning attempt.id"
+                        + ") update public.deliveries delivery set state = ?, "
+                        + "due_at = case when ? then CURRENT_TIMESTAMP + (? * interval '1 millisecond') else null end, "
+                        + "claim_token = null, lease_expires_at = null, updated_at = CURRENT_TIMESTAMP, "
+                        + "terminal_at = case when ? then CURRENT_TIMESTAMP else null end "
+                        + "from locked, finalized_attempt where delivery.id = locked.delivery_id returning delivery.id",
+                (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
+                expiredAttempt.deliveryId(),
+                expiredAttempt.claimToken(),
+                expiredAttempt.attemptNumber(),
+                expiredAttempt.attemptId(),
+                expiredAttempt.attemptNumber(),
+                decision.deliveryState().name(),
+                pending,
+                retryDelayMilliseconds,
+                terminal
+        ).isEmpty();
+    }
+
     private String payloadJson(JsonNode payload) {
         try {
             return new String(objectMapper.writeValueAsBytes(payload), StandardCharsets.UTF_8);
@@ -324,6 +485,15 @@ public class JdbcDeliveryStore implements DeliveryStore {
         return new StartedDelivery(
                 resultSet.getInt("attempt_count"),
                 resultSet.getObject("lease_expires_at", OffsetDateTime.class).toInstant()
+        );
+    }
+
+    private ExpiredStartedAttempt mapExpiredStartedAttempt(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new ExpiredStartedAttempt(
+                resultSet.getObject("delivery_id", UUID.class),
+                resultSet.getObject("attempt_id", UUID.class),
+                resultSet.getObject("claim_token", UUID.class),
+                resultSet.getInt("attempt_count")
         );
     }
 

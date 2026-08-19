@@ -36,6 +36,7 @@ relayforge:
     polling-interval: 500ms
     polling-jitter: 100ms
     recovery-interval: 5s
+    finalization-minimum-remaining: 1s
     outbound:
       connection-timeout: 2s
       dispatch-deadline: 10s

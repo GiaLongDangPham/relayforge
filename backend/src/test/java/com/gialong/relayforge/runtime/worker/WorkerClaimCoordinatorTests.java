@@ -68,7 +68,8 @@ class WorkerClaimCoordinatorTests {
                 Duration.ofSeconds(20),
                 Duration.ofMillis(500),
                 Duration.ofMillis(100),
-                Duration.ofSeconds(5)
+                Duration.ofSeconds(5),
+                Duration.ofSeconds(1)
         );
     }
 

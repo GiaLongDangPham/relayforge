@@ -1,6 +1,7 @@
 package com.gialong.relayforge.delivery.application;
 
 import com.gialong.relayforge.delivery.api.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.DispatchInstruction;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -39,5 +40,22 @@ public interface DeliveryStore {
             short destinationFingerprintVersion,
             byte[] destinationFingerprint,
             Duration attemptExecutionLease
+    );
+
+    boolean finalizeCurrentAttempt(
+            DispatchInstruction instruction,
+            AttemptCompletion completion,
+            CompletionDecision decision
+    );
+
+    boolean hasCurrentLease(DispatchInstruction instruction, Duration minimumRemaining);
+
+    boolean recordLateDiagnostic(DispatchInstruction instruction, AttemptCompletion completion, UUID diagnosticId);
+
+    List<ExpiredStartedAttempt> lockExpiredStartedAttempts(int capacity);
+
+    boolean recoverExpiredStartedAttempt(
+            ExpiredStartedAttempt expiredAttempt,
+            CompletionDecision decision
     );
 }

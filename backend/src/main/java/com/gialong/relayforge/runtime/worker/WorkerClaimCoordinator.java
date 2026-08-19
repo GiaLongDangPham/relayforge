@@ -9,7 +9,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Reserves local capacity before claiming. Group 7 will attach bound claims to attempt-start tasks.
+ * Reserves local capacity before claiming. A bound claim retains its permit until Group 9 task handling stops.
  */
 public final class WorkerClaimCoordinator {
 
@@ -56,7 +56,7 @@ public final class WorkerClaimCoordinator {
     }
 
     /**
-     * The Group 7 task must close this in a {@code finally} block after it stops all work for the token.
+     * The worker task must close this in a {@code finally} block after it stops all work for the token.
      */
     public static final class BoundClaim implements AutoCloseable {
 

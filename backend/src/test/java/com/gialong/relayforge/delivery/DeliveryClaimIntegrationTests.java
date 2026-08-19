@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 @SpringBootTest(
         classes = RelayForgeApplication.class,
-        properties = "relayforge.runtime=worker",
+        properties = {"relayforge.runtime=worker", "relayforge.worker.lifecycle-enabled=false"},
         webEnvironment = SpringBootTest.WebEnvironment.NONE
 )
 class DeliveryClaimIntegrationTests {
