@@ -169,13 +169,15 @@ Transaction boundaries belong to module application use cases, not controllers, 
 | Finalize attempt | `delivery` | One short conditional transaction atomically finalizes attempt and delivery state and invalidates token/lease. |
 | Recover expired claim | `delivery` | One short conditional transaction uses PostgreSQL time and the expired current token. |
 | Replay exhausted delivery | `delivery` | One transaction resolves replay idempotency and creates one linked delivery with a fresh budget. |
+| Inspect owner delivery history | `delivery` | One short read-only transaction verifies project ownership, reads delivery history, and obtains only safe current endpoint metadata through its public query contract. |
 | Compose dashboard read response | API adapter using module query contracts | No cross-module mutation transaction; the adapter may compose immutable query results. |
 
-Three cross-module read capabilities are deliberately allowed inside `delivery` transactions:
+Four cross-module read capabilities are deliberately allowed inside `delivery` transactions:
 
 1. publish reads an `endpoint` routing snapshot;
 2. claim reads an enabled-endpoint snapshot to exclude paused backlog, then rechecks and row-locks its selected candidate endpoints in one batch;
 3. attempt start reads an `endpoint` configuration snapshot.
+4. history inspection reads only current endpoint identity, name, and enabled state to derive owner-visible delivery status; it never reads a URL or signing material.
 
 Those endpoint contracts must join the caller's existing local transaction, perform database work only, and never open `REQUIRES_NEW` transactions or make network calls. The first claim snapshot is a fairness aid, not the correctness boundary: candidate delivery SQL excludes disabled endpoints so paused rows cannot occupy claim capacity. The final endpoint recheck row-locks only candidate endpoints. A candidate becomes `CLAIMED` only after that recheck says its endpoint is enabled; a concurrent disable either commits first and excludes it, or waits until claim commit.
 

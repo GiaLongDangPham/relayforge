@@ -3,6 +3,7 @@ package com.gialong.relayforge.endpoint.persistence;
 import com.gialong.relayforge.endpoint.api.WebhookEndpointDetails;
 import com.gialong.relayforge.endpoint.api.WebhookEndpointVersionConflictException;
 import com.gialong.relayforge.endpoint.api.RoutingEndpoint;
+import com.gialong.relayforge.endpoint.api.EndpointHistoryMetadata;
 import com.gialong.relayforge.endpoint.application.EncryptedEndpointSecret;
 import com.gialong.relayforge.endpoint.application.EndpointCursor;
 import com.gialong.relayforge.endpoint.application.EndpointStore;
@@ -112,6 +113,39 @@ public class JpaEndpointStore implements EndpointStore {
                         UUID.class
                 )
                 .getResultList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Set<UUID> findEnabledEndpointIdsForHistory(UUID projectId) {
+        return Set.copyOf(entityManager.createQuery(
+                        "select endpoint.id from WebhookEndpoint endpoint "
+                                + "where endpoint.projectId = :projectId and endpoint.enabled = true",
+                        UUID.class
+                )
+                .setParameter("projectId", projectId)
+                .getResultList());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Map<UUID, EndpointHistoryMetadata> findHistoryMetadata(UUID projectId, Collection<UUID> endpointIds) {
+        if (endpointIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, EndpointHistoryMetadata> metadata = new LinkedHashMap<>();
+        entityManager.createQuery(
+                        "select new com.gialong.relayforge.endpoint.api.EndpointHistoryMetadata("
+                                + "endpoint.id, endpoint.name, endpoint.enabled) "
+                                + "from WebhookEndpoint endpoint where endpoint.projectId = :projectId "
+                                + "and endpoint.id in :endpointIds",
+                        EndpointHistoryMetadata.class
+                )
+                .setParameter("projectId", projectId)
+                .setParameter("endpointIds", endpointIds)
+                .getResultList()
+                .forEach(endpoint -> metadata.put(endpoint.endpointId(), endpoint));
+        return Map.copyOf(metadata);
     }
 
     @Override

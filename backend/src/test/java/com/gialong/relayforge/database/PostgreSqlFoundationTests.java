@@ -88,8 +88,8 @@ class PostgreSqlFoundationTests {
         var currentMigration = flyway.info().current();
 
         assertThat(currentMigration).isNotNull();
-        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("9");
-        assertThat(currentMigration.getDescription()).isEqualTo("create delivery attempts");
+        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("11");
+        assertThat(currentMigration.getDescription()).isEqualTo("add delivery history and replays");
 
         Integer successfulMigrations = jdbcTemplate.queryForObject(
                 "select count(*) from flyway_schema_history where success",
@@ -102,8 +102,9 @@ class PostgreSqlFoundationTests {
                 String.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(9);
+        assertThat(successfulMigrations).isEqualTo(11);
         assertThat(tables).containsExactly(
+                "attempt_late_diagnostics",
                 "deliveries",
                 "delivery_attempts",
                 "endpoint_subscriptions",
@@ -111,6 +112,7 @@ class PostgreSqlFoundationTests {
                 "owner_accounts",
                 "project_api_keys",
                 "projects",
+                "replay_requests",
                 "spring_session",
                 "spring_session_attributes",
                 "webhook_endpoints"
@@ -406,6 +408,74 @@ class PostgreSqlFoundationTests {
                         + "and indexname = 'uq_delivery_attempts_one_started_per_delivery'",
                 String.class
         )).containsExactly("uq_delivery_attempts_one_started_per_delivery");
+    }
+
+    @Test
+    void enforcesOriginalDeliveryUniquenessAndReplayLineage() {
+        UUID ownerId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        UUID endpointId = UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+        UUID otherEventId = UUID.randomUUID();
+        UUID sourceDeliveryId = UUID.randomUUID();
+        UUID replayDeliveryId = UUID.randomUUID();
+        byte[] fingerprint = new byte[32];
+
+        insertOwner(ownerId, "replay_lineage_owner", "$2a$12$valid-looking-test-hash");
+        jdbcTemplate.update("insert into projects (id, owner_id, name) values (?, ?, ?)", projectId, ownerId, "Replay lineage");
+        jdbcTemplate.update(
+                "insert into webhook_endpoints (id, project_id, name, destination_url, enabled, "
+                        + "signing_secret_ciphertext, encryption_key_reference) values (?, ?, ?, ?, true, ?, ?)",
+                endpointId, projectId, "Receiver", "https://receiver.example/replay", new byte[]{1}, "test-key-v1"
+        );
+        jdbcTemplate.update(
+                "insert into events (id, project_id, event_type, payload, idempotency_key, fingerprint_version, "
+                        + "command_fingerprint) values (?, ?, ?, '{}'::jsonb, ?, 1, ?)",
+                eventId, projectId, "invoice.paid", "replay-lineage-source", fingerprint
+        );
+        jdbcTemplate.update(
+                "insert into events (id, project_id, event_type, payload, idempotency_key, fingerprint_version, "
+                        + "command_fingerprint) values (?, ?, ?, '{}'::jsonb, ?, 1, ?)",
+                otherEventId, projectId, "invoice.paid", "replay-lineage-other", fingerprint
+        );
+        jdbcTemplate.update(
+                "insert into deliveries (id, project_id, event_id, endpoint_id, state, due_at, attempt_count) "
+                        + "values (?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP, 0)",
+                sourceDeliveryId, projectId, eventId, endpointId
+        );
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into deliveries (id, project_id, event_id, endpoint_id, state, due_at, attempt_count) "
+                        + "values (?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP, 0)",
+                UUID.randomUUID(), projectId, eventId, endpointId
+        )).isInstanceOf(DataIntegrityViolationException.class);
+
+        jdbcTemplate.update(
+                "insert into deliveries (id, project_id, event_id, endpoint_id, replay_of_delivery_id, state, due_at, "
+                        + "attempt_count) values (?, ?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP, 0)",
+                replayDeliveryId, projectId, eventId, endpointId, sourceDeliveryId
+        );
+        jdbcTemplate.update(
+                "insert into replay_requests (id, project_id, idempotency_key, source_delivery_id, replay_delivery_id) "
+                        + "values (?, ?, ?, ?, ?)",
+                UUID.randomUUID(), projectId, "replay-lineage-key", sourceDeliveryId, replayDeliveryId
+        );
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "insert into deliveries (id, project_id, event_id, endpoint_id, replay_of_delivery_id, state, due_at, "
+                        + "attempt_count) values (?, ?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP, 0)",
+                UUID.randomUUID(), projectId, otherEventId, endpointId, sourceDeliveryId
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbcTemplate.queryForList(
+                "select indexname from pg_indexes where schemaname = 'public' and tablename = 'deliveries' "
+                        + "and indexname in ('ix_deliveries_project_created_at_id', "
+                        + "'ix_deliveries_project_event_created_at_id', 'uq_deliveries_original_event_endpoint') "
+                        + "order by indexname",
+                String.class
+        )).containsExactly(
+                "ix_deliveries_project_created_at_id",
+                "ix_deliveries_project_event_created_at_id",
+                "uq_deliveries_original_event_endpoint"
+        );
     }
 
     @Test

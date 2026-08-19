@@ -292,6 +292,8 @@ Group 6 adds the initial physical claim support in V8: a partial pending `(endpo
 
 Group 7 adds V9 `delivery_attempts`: restrictive delivery ownership, unique `(delivery_id, attempt_number)`, a partial unique `STARTED`-per-delivery index, attempt-number/fingerprint/status checks, and the strict `STARTED` result-field shape. Its attempt-start transaction locks the current claim and endpoint snapshot, then conditionally rechecks state/token/PostgreSQL-time lease/budget and absence of `STARTED` before incrementing the count and inserting the record. The destination fingerprint is version `1`: SHA-256 over UTF-8 `relayforge.destination.v1` followed by one NUL byte and the exact stored URL UTF-8 bytes. This is durable audit evidence only; the exact URL and encrypted signing material are in-memory dispatch data and are never persisted in the attempt row.
 
+Group 10 adds V11 physical replay support. A partial unique `(event_id, endpoint_id)` index applies only to original rows with a null replay parent, while a project/event/endpoint/self-reference tuple prevents replay identity drift. `replay_requests` has project-scoped key uniqueness and a deferred lineage foreign key to the exact replay child, allowing the transaction to reserve the idempotency command before it inserts that child. V11 also adds the project delivery and project/event delivery keyset indexes used by owner history; they are query-shape support, not performance claims.
+
 ## 11. Required future test evidence
 
 PostgreSQL Testcontainers tests must eventually prove:

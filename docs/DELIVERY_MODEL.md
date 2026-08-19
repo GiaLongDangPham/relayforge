@@ -165,6 +165,50 @@ Exact SQL and indexes are deferred to the database-design slice.
 
 ## 6. Claim, send, and completion lifecycle
 
+### 6.0 End-to-end decision tree
+
+The following tree connects publisher setup, event acceptance, worker claim, attempt start, outbound dispatch, finalization, and lease recovery. `UNKNOWN` and `EXHAUSTED` are persisted states, not Java exceptions; API validation failures are returned as HTTP errors, while dispatch failures become an `Observation` that the worker finalizes.
+
+```mermaid
+flowchart TD
+    A["Owner creates project"] --> B["Create publisher API key"]
+    B --> C["Create endpoint + subscriptions + whsec secret"]
+    C --> D["Publisher sends event with Bearer key"]
+    D --> E{"API validation"}
+    E -->|"bad or revoked key"| E1["401 Unauthorized"]
+    E -->|"key belongs to another project"| E2["403 Forbidden"]
+    E -->|"invalid body / idempotency conflict / oversized body"| E3["400 / 409 / 413"]
+    E -->|"valid command"| F["Persist event + routed deliveries as PENDING"]
+
+    F --> G["Worker claims due delivery"]
+    G --> H{"Current claim valid?"}
+    H -->|"no"| H1["No attempt; recovery or current owner decides"]
+    H -->|"yes"| I["CLAIMED + token + lease"]
+
+    I --> J["Start attempt"]
+    J --> K{"Endpoint enabled, lease valid, budget remains?"}
+    K -->|"no / stale / expired"| K1["No HTTP; Optional.empty"]
+    K -->|"disabled before start"| K2["CLAIMED → PENDING; no budget used"]
+    K -->|"yes"| L["Persist STARTED + URL snapshot + attempt lease"]
+
+    L --> M["Build HMAC + resolve/pin destination + send one HTTP request"]
+    M --> N{"Dispatch observation"}
+    N -->|"2xx"| O["Attempt SUCCEEDED; delivery SUCCEEDED"]
+    N -->|"blocked destination / other permanent 4xx / signing failure"| P["Attempt PERMANENT_FAILURE; delivery FAILED_PERMANENT"]
+    N -->|"timeout / network / 408 / 429 / 5xx"| Q{"Attempt number < 5?"}
+    Q -->|"yes"| R["Attempt RETRYABLE_FAILURE; delivery PENDING with backoff"]
+    Q -->|"no"| S["Attempt RETRYABLE_FAILURE; delivery EXHAUSTED"]
+
+    L --> T{"Worker crashes or STARTED lease expires?"}
+    T -->|"yes"| U["Attempt UNKNOWN"]
+    U --> V{"Attempt number < 5?"}
+    V -->|"yes"| R
+    V -->|"no"| S
+
+    M --> W["HTTP result arrives after UNKNOWN recovery"]
+    W --> X["Store one late diagnostic; do not rewrite UNKNOWN"]
+```
+
 ### Step 1 - Claim in a short transaction
 
 The worker first obtains a current enabled-endpoint snapshot so paused backlog is excluded from candidate selection. It then locks due `PENDING` work without waiting on rows already claimed by another worker, rechecks and row-locks the selected candidate endpoints, and for every successful claim:

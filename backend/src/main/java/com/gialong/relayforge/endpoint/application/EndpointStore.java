@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Map;
 
 /**
  * Persistence boundary for endpoint-owned aggregate state.
@@ -31,6 +32,13 @@ public interface EndpointStore {
     List<RoutingEndpoint> findEnabledForExactEventType(UUID projectId, String eventType);
 
     List<UUID> findEnabledEndpointIdsForClaim();
+
+    Set<UUID> findEnabledEndpointIdsForHistory(UUID projectId);
+
+    Map<UUID, com.gialong.relayforge.endpoint.api.EndpointHistoryMetadata> findHistoryMetadata(
+            UUID projectId,
+            Collection<UUID> endpointIds
+    );
 
     Set<UUID> lockAndFindEnabledForClaim(Collection<UUID> endpointIds);
 

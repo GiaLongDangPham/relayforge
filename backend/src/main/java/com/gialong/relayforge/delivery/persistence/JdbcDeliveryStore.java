@@ -10,8 +10,17 @@ import com.gialong.relayforge.delivery.application.NewEvent;
 import com.gialong.relayforge.delivery.application.PendingDelivery;
 import com.gialong.relayforge.delivery.application.StartedAttempt;
 import com.gialong.relayforge.delivery.application.StoredEvent;
+import com.gialong.relayforge.delivery.application.EventHistoryCursor;
+import com.gialong.relayforge.delivery.application.DeliveryHistoryCursor;
+import com.gialong.relayforge.delivery.application.HistoryRecords;
 import com.gialong.relayforge.delivery.api.ClaimedDelivery;
 import com.gialong.relayforge.delivery.api.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.AttemptHistoryStatus;
+import com.gialong.relayforge.delivery.api.AttemptHistorySummary;
+import com.gialong.relayforge.delivery.api.DeliveryDisplayStatus;
+import com.gialong.relayforge.delivery.api.DeliveryStoredState;
+import com.gialong.relayforge.delivery.api.EventDeliverySummary;
+import com.gialong.relayforge.delivery.api.ReplayDeliveryResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -40,6 +49,10 @@ import java.util.UUID;
 public class JdbcDeliveryStore implements DeliveryStore {
 
     private static final String EVENT_COLUMNS = "id, project_id, event_type, accepted_at";
+    private static final String HISTORY_DELIVERY_COLUMNS = "delivery.id, delivery.event_id, delivery.endpoint_id, "
+            + "delivery.replay_of_delivery_id, delivery.state, delivery.attempt_count, delivery.due_at, "
+            + "(delivery.state = 'PENDING' and delivery.attempt_count > 0 and delivery.due_at > CURRENT_TIMESTAMP) "
+            + "as retry_scheduled, delivery.created_at, delivery.terminal_at";
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
@@ -432,6 +445,453 @@ public class JdbcDeliveryStore implements DeliveryStore {
         ).isEmpty();
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public List<HistoryRecords.EventRecord> listHistoryEvents(
+            UUID projectId,
+            String eventType,
+            EventHistoryCursor cursor,
+            int fetchLimit
+    ) {
+        StringBuilder sql = new StringBuilder(
+                "select event.id, event.event_type, event.accepted_at, null::text as payload_json, "
+                        + "count(delivery.id) as delivery_count from public.events event "
+                        + "left join public.deliveries delivery on delivery.event_id = event.id "
+                        + "and delivery.project_id = event.project_id where event.project_id = ? "
+        );
+        List<Object> parameters = new ArrayList<>();
+        parameters.add(projectId);
+        if (eventType != null) {
+            sql.append("and event.event_type = ? ");
+            parameters.add(eventType);
+        }
+        if (cursor != null) {
+            sql.append("and (event.accepted_at < ? or (event.accepted_at = ? and event.id < ?)) ");
+            parameters.add(OffsetDateTime.ofInstant(cursor.acceptedAt(), java.time.ZoneOffset.UTC));
+            parameters.add(OffsetDateTime.ofInstant(cursor.acceptedAt(), java.time.ZoneOffset.UTC));
+            parameters.add(cursor.eventId());
+        }
+        sql.append("group by event.id, event.event_type, event.accepted_at "
+                + "order by event.accepted_at desc, event.id desc limit ?");
+        parameters.add(fetchLimit);
+        return jdbcTemplate.query(sql.toString(), this::mapHistoryEvent, parameters.toArray());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Optional<HistoryRecords.EventRecord> findHistoryEvent(UUID projectId, UUID eventId) {
+        return jdbcTemplate.query(
+                        "select event.id, event.event_type, event.accepted_at, event.payload::text as payload_json, "
+                                + "count(delivery.id) as delivery_count from public.events event "
+                                + "left join public.deliveries delivery on delivery.event_id = event.id "
+                                + "and delivery.project_id = event.project_id "
+                                + "where event.project_id = ? and event.id = ? "
+                                + "group by event.id, event.event_type, event.accepted_at, event.payload",
+                        this::mapHistoryEvent,
+                        projectId,
+                        eventId
+                )
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public EventDeliverySummary summarizeEventDeliveries(UUID projectId, UUID eventId) {
+        return jdbcTemplate.queryForObject(
+                "select count(*) as total_count, "
+                        + "count(*) filter (where state in ('PENDING', 'CLAIMED')) as active_count, "
+                        + "count(*) filter (where state = 'SUCCEEDED') as succeeded_count, "
+                        + "count(*) filter (where state = 'FAILED_PERMANENT') as failed_permanent_count, "
+                        + "count(*) filter (where state = 'EXHAUSTED') as exhausted_count "
+                        + "from public.deliveries where project_id = ? and event_id = ?",
+                (resultSet, rowNumber) -> new EventDeliverySummary(
+                        resultSet.getInt("total_count"),
+                        resultSet.getInt("active_count"),
+                        resultSet.getInt("succeeded_count"),
+                        resultSet.getInt("failed_permanent_count"),
+                        resultSet.getInt("exhausted_count")
+                ),
+                projectId,
+                eventId
+        );
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public List<HistoryRecords.DeliveryRecord> listEventHistoryDeliveries(
+            UUID projectId,
+            UUID eventId,
+            DeliveryHistoryCursor cursor,
+            int fetchLimit
+    ) {
+        StringBuilder sql = new StringBuilder(
+                "select " + HISTORY_DELIVERY_COLUMNS + " from public.deliveries delivery "
+                        + "where delivery.project_id = ? and delivery.event_id = ? "
+        );
+        List<Object> parameters = new ArrayList<>(List.of(projectId, eventId));
+        if (cursor != null) {
+            sql.append("and (delivery.created_at > ? or (delivery.created_at = ? and delivery.id > ?)) ");
+            parameters.add(OffsetDateTime.ofInstant(cursor.createdAt(), java.time.ZoneOffset.UTC));
+            parameters.add(OffsetDateTime.ofInstant(cursor.createdAt(), java.time.ZoneOffset.UTC));
+            parameters.add(cursor.deliveryId());
+        }
+        sql.append("order by delivery.created_at asc, delivery.id asc limit ?");
+        parameters.add(fetchLimit);
+        return jdbcTemplate.query(sql.toString(), this::mapHistoryDelivery, parameters.toArray());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public List<HistoryRecords.DeliveryRecord> listProjectHistoryDeliveries(
+            UUID projectId,
+            UUID eventId,
+            UUID endpointId,
+            DeliveryDisplayStatus displayStatus,
+            Collection<UUID> enabledEndpointIds,
+            DeliveryHistoryCursor cursor,
+            int fetchLimit
+    ) {
+        StringBuilder sql = new StringBuilder(
+                "select " + HISTORY_DELIVERY_COLUMNS + " from public.deliveries delivery where delivery.project_id = ? "
+        );
+        List<Object> parameters = new ArrayList<>();
+        parameters.add(projectId);
+        if (eventId != null) {
+            sql.append("and delivery.event_id = ? ");
+            parameters.add(eventId);
+        }
+        if (endpointId != null) {
+            sql.append("and delivery.endpoint_id = ? ");
+            parameters.add(endpointId);
+        }
+        appendDisplayStatusPredicate(sql, parameters, displayStatus, List.copyOf(enabledEndpointIds));
+        if (cursor != null) {
+            sql.append("and (delivery.created_at < ? or (delivery.created_at = ? and delivery.id < ?)) ");
+            parameters.add(OffsetDateTime.ofInstant(cursor.createdAt(), java.time.ZoneOffset.UTC));
+            parameters.add(OffsetDateTime.ofInstant(cursor.createdAt(), java.time.ZoneOffset.UTC));
+            parameters.add(cursor.deliveryId());
+        }
+        sql.append("order by delivery.created_at desc, delivery.id desc limit ?");
+        parameters.add(fetchLimit);
+        return jdbcTemplate.query(sql.toString(), this::mapHistoryDelivery, parameters.toArray());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Optional<HistoryRecords.DeliveryDetailRecord> findHistoryDelivery(UUID projectId, UUID deliveryId) {
+        return jdbcTemplate.query(
+                        "select " + HISTORY_DELIVERY_COLUMNS + ", event.event_type, "
+                                + "attempt.id as latest_attempt_id, attempt.attempt_number as latest_attempt_number, "
+                                + "attempt.status as latest_attempt_status, attempt.started_at as latest_attempt_started_at, "
+                                + "attempt.finished_at as latest_attempt_finished_at, attempt.http_status as latest_attempt_http_status, "
+                                + "attempt.failure_code as latest_attempt_failure_code, "
+                                + "attempt.latency_ms as latest_attempt_latency_ms "
+                                + "from public.deliveries delivery join public.events event "
+                                + "on event.id = delivery.event_id and event.project_id = delivery.project_id "
+                                + "left join lateral (select * from public.delivery_attempts candidate "
+                                + "where candidate.delivery_id = delivery.id order by candidate.attempt_number desc limit 1) attempt "
+                                + "on true where delivery.project_id = ? and delivery.id = ?",
+                        this::mapHistoryDeliveryDetail,
+                        projectId,
+                        deliveryId
+                )
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public List<UUID> findReplayDeliveryIds(UUID projectId, UUID deliveryId) {
+        return jdbcTemplate.queryForList(
+                "select id from public.deliveries where project_id = ? and replay_of_delivery_id = ? order by created_at asc, id asc",
+                UUID.class,
+                projectId,
+                deliveryId
+        );
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public List<AttemptHistorySummary> listHistoryAttempts(UUID projectId, UUID deliveryId) {
+        return jdbcTemplate.query(
+                "select attempt.id as attempt_id, attempt.attempt_number, attempt.status, attempt.started_at, "
+                        + "attempt.finished_at, attempt.http_status, attempt.failure_code, attempt.latency_ms "
+                        + "from public.delivery_attempts attempt join public.deliveries delivery "
+                        + "on delivery.id = attempt.delivery_id where delivery.project_id = ? and delivery.id = ? "
+                        + "order by attempt.attempt_number asc",
+                this::mapAttemptSummary,
+                projectId,
+                deliveryId
+        );
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Optional<HistoryRecords.AttemptDetailRecord> findHistoryAttempt(UUID projectId, UUID deliveryId, UUID attemptId) {
+        return jdbcTemplate.query(
+                        "select attempt.id as attempt_id, attempt.attempt_number, attempt.status, attempt.started_at, "
+                                + "attempt.finished_at, attempt.http_status, attempt.failure_code, attempt.latency_ms, "
+                                + "attempt.destination_fingerprint_version, attempt.destination_fingerprint, "
+                                + "attempt.response_preview, attempt.response_truncated, diagnostic.observed_status, "
+                                + "diagnostic.http_status as diagnostic_http_status, "
+                                + "diagnostic.failure_code as diagnostic_failure_code, "
+                                + "diagnostic.latency_ms as diagnostic_latency_ms, diagnostic.observed_at "
+                                + "from public.delivery_attempts attempt join public.deliveries delivery "
+                                + "on delivery.id = attempt.delivery_id left join public.attempt_late_diagnostics diagnostic "
+                                + "on diagnostic.attempt_id = attempt.id where delivery.project_id = ? "
+                                + "and delivery.id = ? and attempt.id = ?",
+                        this::mapHistoryAttemptDetail,
+                        projectId,
+                        deliveryId,
+                        attemptId
+                )
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public HistoryRecords.ReplayResult replay(
+            UUID projectId,
+            UUID sourceDeliveryId,
+            String idempotencyKey,
+            UUID replayRequestId,
+            UUID replayDeliveryId
+    ) {
+        Optional<ReplayDeliveryResult> existing = findReplayByKey(projectId, idempotencyKey);
+        if (existing.isPresent()) {
+            return existing.orElseThrow().sourceDeliveryId().equals(sourceDeliveryId)
+                    ? new HistoryRecords.ReplayResult(HistoryRecords.ReplayOutcome.EXISTING, existing.orElseThrow())
+                    : new HistoryRecords.ReplayResult(HistoryRecords.ReplayOutcome.CONFLICT, null);
+        }
+
+        Optional<ReplaySource> source = jdbcTemplate.query(
+                        "select event_id, endpoint_id, state from public.deliveries "
+                                + "where project_id = ? and id = ? for update",
+                        (resultSet, rowNumber) -> new ReplaySource(
+                                resultSet.getObject("event_id", UUID.class),
+                                resultSet.getObject("endpoint_id", UUID.class),
+                                resultSet.getString("state")
+                        ),
+                        projectId,
+                        sourceDeliveryId
+                )
+                .stream()
+                .findFirst();
+        if (source.isEmpty()) {
+            return new HistoryRecords.ReplayResult(HistoryRecords.ReplayOutcome.SOURCE_NOT_FOUND, null);
+        }
+        ReplaySource lockedSource = source.orElseThrow();
+        if (!"EXHAUSTED".equals(lockedSource.state())) {
+            return new HistoryRecords.ReplayResult(HistoryRecords.ReplayOutcome.SOURCE_NOT_EXHAUSTED, null);
+        }
+
+        boolean insertedRequest = !jdbcTemplate.query(
+                "insert into public.replay_requests "
+                        + "(id, project_id, idempotency_key, source_delivery_id, replay_delivery_id) "
+                        + "values (?, ?, ?, ?, ?) on conflict (project_id, idempotency_key) do nothing returning id",
+                (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
+                replayRequestId,
+                projectId,
+                idempotencyKey,
+                sourceDeliveryId,
+                replayDeliveryId
+        ).isEmpty();
+        if (!insertedRequest) {
+            ReplayDeliveryResult replay = findReplayByKey(projectId, idempotencyKey)
+                    .orElseThrow(() -> new IllegalStateException("replay idempotency row was not visible after conflict"));
+            return replay.sourceDeliveryId().equals(sourceDeliveryId)
+                    ? new HistoryRecords.ReplayResult(HistoryRecords.ReplayOutcome.EXISTING, replay)
+                    : new HistoryRecords.ReplayResult(HistoryRecords.ReplayOutcome.CONFLICT, null);
+        }
+
+        java.time.Instant createdAt = jdbcTemplate.query(
+                        "insert into public.deliveries "
+                                + "(id, project_id, event_id, endpoint_id, replay_of_delivery_id, state, due_at, attempt_count) "
+                                + "values (?, ?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP, 0) returning created_at",
+                        (resultSet, rowNumber) -> resultSet.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        replayDeliveryId,
+                        projectId,
+                        lockedSource.eventId(),
+                        lockedSource.endpointId(),
+                        sourceDeliveryId
+                )
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("inserted replay delivery was not returned"));
+        return new HistoryRecords.ReplayResult(
+                HistoryRecords.ReplayOutcome.CREATED,
+                new ReplayDeliveryResult(
+                        sourceDeliveryId,
+                        replayDeliveryId,
+                        lockedSource.eventId(),
+                        lockedSource.endpointId(),
+                        createdAt,
+                        false
+                )
+        );
+    }
+
+    private Optional<ReplayDeliveryResult> findReplayByKey(UUID projectId, String idempotencyKey) {
+        return jdbcTemplate.query(
+                        "select request.source_delivery_id, request.replay_delivery_id, delivery.event_id, "
+                                + "delivery.endpoint_id, delivery.created_at from public.replay_requests request "
+                                + "join public.deliveries delivery on delivery.id = request.replay_delivery_id "
+                                + "and delivery.project_id = request.project_id where request.project_id = ? "
+                                + "and request.idempotency_key = ?",
+                        (resultSet, rowNumber) -> new ReplayDeliveryResult(
+                                resultSet.getObject("source_delivery_id", UUID.class),
+                                resultSet.getObject("replay_delivery_id", UUID.class),
+                                resultSet.getObject("event_id", UUID.class),
+                                resultSet.getObject("endpoint_id", UUID.class),
+                                resultSet.getObject("created_at", OffsetDateTime.class).toInstant(),
+                                true
+                        ),
+                        projectId,
+                        idempotencyKey
+                )
+                .stream()
+                .findFirst();
+    }
+
+    private static void appendDisplayStatusPredicate(
+            StringBuilder sql,
+            List<Object> parameters,
+            DeliveryDisplayStatus displayStatus,
+            List<UUID> enabledEndpointIds
+    ) {
+        if (displayStatus == null) {
+            return;
+        }
+        switch (displayStatus) {
+            case SUCCEEDED, FAILED_PERMANENT, EXHAUSTED -> sql.append("and delivery.state = '")
+                    .append(displayStatus.name())
+                    .append("' ");
+            case PAUSED -> {
+                sql.append("and delivery.state in ('PENDING', 'CLAIMED') ");
+                if (!enabledEndpointIds.isEmpty()) {
+                    appendEndpointMembership(sql, parameters, enabledEndpointIds, false);
+                }
+            }
+            case CLAIMED -> {
+                sql.append("and delivery.state = 'CLAIMED' ");
+                appendEndpointMembership(sql, parameters, enabledEndpointIds, true);
+            }
+            case RETRY_SCHEDULED -> {
+                sql.append("and delivery.state = 'PENDING' and delivery.attempt_count > 0 "
+                        + "and delivery.due_at > CURRENT_TIMESTAMP ");
+                appendEndpointMembership(sql, parameters, enabledEndpointIds, true);
+            }
+            case PENDING -> {
+                sql.append("and delivery.state = 'PENDING' and (delivery.attempt_count = 0 "
+                        + "or delivery.due_at <= CURRENT_TIMESTAMP) ");
+                appendEndpointMembership(sql, parameters, enabledEndpointIds, true);
+            }
+        }
+    }
+
+    private static void appendEndpointMembership(
+            StringBuilder sql,
+            List<Object> parameters,
+            List<UUID> endpointIds,
+            boolean expectedMembership
+    ) {
+        if (endpointIds.isEmpty()) {
+            sql.append("and false ");
+            return;
+        }
+        sql.append("and delivery.endpoint_id ");
+        if (!expectedMembership) {
+            sql.append("not ");
+        }
+        sql.append("in (")
+                .append(String.join(", ", java.util.Collections.nCopies(endpointIds.size(), "?")))
+                .append(") ");
+        parameters.addAll(endpointIds);
+    }
+
+    private HistoryRecords.EventRecord mapHistoryEvent(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new HistoryRecords.EventRecord(
+                resultSet.getObject("id", UUID.class),
+                resultSet.getString("event_type"),
+                instant(resultSet, "accepted_at"),
+                resultSet.getString("payload_json"),
+                resultSet.getInt("delivery_count")
+        );
+    }
+
+    private HistoryRecords.DeliveryRecord mapHistoryDelivery(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new HistoryRecords.DeliveryRecord(
+                resultSet.getObject("id", UUID.class),
+                resultSet.getObject("event_id", UUID.class),
+                resultSet.getObject("endpoint_id", UUID.class),
+                resultSet.getObject("replay_of_delivery_id", UUID.class),
+                DeliveryStoredState.valueOf(resultSet.getString("state")),
+                resultSet.getInt("attempt_count"),
+                instant(resultSet, "due_at"),
+                resultSet.getBoolean("retry_scheduled"),
+                instant(resultSet, "created_at"),
+                instant(resultSet, "terminal_at")
+        );
+    }
+
+    private HistoryRecords.DeliveryDetailRecord mapHistoryDeliveryDetail(ResultSet resultSet, int rowNumber)
+            throws SQLException {
+        HistoryRecords.DeliveryRecord delivery = mapHistoryDelivery(resultSet, rowNumber);
+        UUID latestAttemptId = resultSet.getObject("latest_attempt_id", UUID.class);
+        AttemptHistorySummary latestAttempt = latestAttemptId == null ? null : new AttemptHistorySummary(
+                latestAttemptId,
+                resultSet.getShort("latest_attempt_number"),
+                AttemptHistoryStatus.valueOf(resultSet.getString("latest_attempt_status")),
+                instant(resultSet, "latest_attempt_started_at"),
+                instant(resultSet, "latest_attempt_finished_at"),
+                resultSet.getObject("latest_attempt_http_status", Integer.class),
+                resultSet.getString("latest_attempt_failure_code"),
+                resultSet.getObject("latest_attempt_latency_ms", Integer.class)
+        );
+        return new HistoryRecords.DeliveryDetailRecord(delivery, resultSet.getString("event_type"), latestAttempt);
+    }
+
+    private AttemptHistorySummary mapAttemptSummary(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new AttemptHistorySummary(
+                resultSet.getObject("attempt_id", UUID.class),
+                resultSet.getShort("attempt_number"),
+                AttemptHistoryStatus.valueOf(resultSet.getString("status")),
+                instant(resultSet, "started_at"),
+                instant(resultSet, "finished_at"),
+                resultSet.getObject("http_status", Integer.class),
+                resultSet.getString("failure_code"),
+                resultSet.getObject("latency_ms", Integer.class)
+        );
+    }
+
+    private HistoryRecords.AttemptDetailRecord mapHistoryAttemptDetail(ResultSet resultSet, int rowNumber)
+            throws SQLException {
+        AttemptHistorySummary summary = mapAttemptSummary(resultSet, rowNumber);
+        String observedStatus = resultSet.getString("observed_status");
+        HistoryRecords.LateDiagnosticRecord diagnostic = observedStatus == null ? null : new HistoryRecords.LateDiagnosticRecord(
+                AttemptHistoryStatus.valueOf(observedStatus),
+                resultSet.getObject("diagnostic_http_status", Integer.class),
+                resultSet.getString("diagnostic_failure_code"),
+                resultSet.getObject("diagnostic_latency_ms", Integer.class),
+                instant(resultSet, "observed_at")
+        );
+        return new HistoryRecords.AttemptDetailRecord(
+                summary,
+                resultSet.getShort("destination_fingerprint_version"),
+                resultSet.getBytes("destination_fingerprint"),
+                resultSet.getBytes("response_preview"),
+                resultSet.getBoolean("response_truncated"),
+                diagnostic
+        );
+    }
+
+    private static java.time.Instant instant(ResultSet resultSet, String column) throws SQLException {
+        OffsetDateTime value = resultSet.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
+    }
+
     private String payloadJson(JsonNode payload) {
         try {
             return new String(objectMapper.writeValueAsBytes(payload), StandardCharsets.UTF_8);
@@ -498,5 +958,8 @@ public class JdbcDeliveryStore implements DeliveryStore {
     }
 
     private record StartedDelivery(int attemptNumber, java.time.Instant leaseExpiresAt) {
+    }
+
+    private record ReplaySource(UUID eventId, UUID endpointId, String state) {
     }
 }

@@ -8,6 +8,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.gialong.relayforge.delivery.api.DeliveryDisplayStatus;
+import com.gialong.relayforge.delivery.api.AttemptHistorySummary;
+import com.gialong.relayforge.delivery.api.EventDeliverySummary;
 
 /**
  * Persistence boundary for immutable event acceptance, delivery work, and durable attempt-start state.
@@ -57,5 +60,49 @@ public interface DeliveryStore {
     boolean recoverExpiredStartedAttempt(
             ExpiredStartedAttempt expiredAttempt,
             CompletionDecision decision
+    );
+
+    List<HistoryRecords.EventRecord> listHistoryEvents(
+            UUID projectId,
+            String eventType,
+            EventHistoryCursor cursor,
+            int fetchLimit
+    );
+
+    Optional<HistoryRecords.EventRecord> findHistoryEvent(UUID projectId, UUID eventId);
+
+    EventDeliverySummary summarizeEventDeliveries(UUID projectId, UUID eventId);
+
+    List<HistoryRecords.DeliveryRecord> listEventHistoryDeliveries(
+            UUID projectId,
+            UUID eventId,
+            DeliveryHistoryCursor cursor,
+            int fetchLimit
+    );
+
+    List<HistoryRecords.DeliveryRecord> listProjectHistoryDeliveries(
+            UUID projectId,
+            UUID eventId,
+            UUID endpointId,
+            DeliveryDisplayStatus displayStatus,
+            Collection<UUID> enabledEndpointIds,
+            DeliveryHistoryCursor cursor,
+            int fetchLimit
+    );
+
+    Optional<HistoryRecords.DeliveryDetailRecord> findHistoryDelivery(UUID projectId, UUID deliveryId);
+
+    List<UUID> findReplayDeliveryIds(UUID projectId, UUID deliveryId);
+
+    List<AttemptHistorySummary> listHistoryAttempts(UUID projectId, UUID deliveryId);
+
+    Optional<HistoryRecords.AttemptDetailRecord> findHistoryAttempt(UUID projectId, UUID deliveryId, UUID attemptId);
+
+    HistoryRecords.ReplayResult replay(
+            UUID projectId,
+            UUID sourceDeliveryId,
+            String idempotencyKey,
+            UUID replayRequestId,
+            UUID replayDeliveryId
     );
 }

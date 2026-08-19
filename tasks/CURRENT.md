@@ -4,28 +4,27 @@ Status: Complete
 
 ## Goal
 
-Complete Group 9: durably finalize one observed dispatch attempt, persist bounded retries and recovery, and compose the first worker polling lifecycle.
+Complete Group 10: expose owner-scoped event, delivery, and attempt history, then create idempotent manual replay deliveries from exhausted history.
 
 ## Decisions
 
-- A delivery-owned completion policy maps a `DispatchObservation` to an immutable attempt observation and either a terminal delivery state or a PostgreSQL-time retry delay. Randomness is injectable so retry bounds have deterministic unit evidence.
-- Normal finalization is one short `READ COMMITTED` conditional transaction. It must match `CLAIMED`, the current token, unexpired PostgreSQL lease, and `STARTED` attempt before atomically completing both attempt and delivery and clearing the token/lease.
-- After HTTP, the worker may retry only finalization database work with the documented bounded delays while PostgreSQL reports at least one second of current lease remains. It never invokes the HTTP dispatcher twice for one started instruction.
-- Expired `STARTED` claims are recovered in a short transaction as immutable `UNKNOWN`, then become retry-scheduled or `EXHAUSTED`. A result arriving after that transition may create at most one diagnostic record and never rewrites the delivery.
-- Worker mode starts a bounded polling/recovery lifecycle. It uses virtual-thread tasks behind the existing permit reservation boundary; API mode composes none of these worker adapters.
+- Owner history is delivery-owned: its public query contract scopes every event, delivery, and attempt read through an owned project and returns immutable secret-free DTOs. Exact URLs, signing material, claim tokens, headers, and unbounded response data never cross that boundary.
+- List cursors bind owner, project, requested filters, ordering position, and query kind so a cursor cannot be reused for a different owned/history query. PostgreSQL remains the order/time authority.
+- Replay is a short `READ COMMITTED` delivery transaction. It resolves a project-scoped idempotency key, returns the existing equivalent command, conflicts on a different source, and otherwise creates a linked `PENDING` delivery only when its owned source is currently `EXHAUSTED`.
+- A replay row has a new delivery identifier and a fresh zero-attempt budget while preserving its source event/endpoint/project identity. Existing worker polling and attempt-start logic process it normally; API requests never send outbound HTTP.
 
 ## Out of scope
 
-Replay, owner history endpoints, retention, metrics/health, full graceful-shutdown policy, cloud, and frontend work.
+Retention, metrics/health, full graceful-shutdown policy, cloud, and frontend work.
 
 ## Evidence required
 
-- Unit evidence proves completion classification, jitter boundaries, exhaustion at attempt five, and finalization retry without a second HTTP dispatch.
-- PostgreSQL evidence proves atomic attempt/delivery finalization, stale or expired token fencing, due-time persistence from PostgreSQL time, and `UNKNOWN` post-attempt recovery.
-- Worker evidence proves a normal claim-to-finalization lifecycle, bounded permits, and worker-only composition. API mode must not start worker scheduling.
+- PostgreSQL/Testcontainers evidence proves V11 lineage and integrity, owner isolation, stable cursor pagination, safe bounded attempt data, replay source preservation, idempotent convergence, and key/source conflict behavior.
+- API evidence proves session ownership, `404` cross-owner behavior, safe history projection, CSRF-protected replay, validation/error mapping, and the absence of Group 10 controllers in worker mode.
+- Existing worker evidence is extended only as needed to prove a replay starts as ordinary `PENDING` work; no new delivery execution path is introduced.
 
 ## Verification evidence
 
-- 2026-08-14: clean JDK 25 focused non-container verification passed 13/13: retry policy (2), one-dispatch/finalization-retry behavior (1), permit admission (3), and architecture boundaries (7). `git diff --check` passed.
-- 2026-08-14: JDK 25 Docker/Testcontainers regression passed 11/11: claim (3), attempt start (3), conditional finalization/recovery/late diagnostics (3), worker lifecycle against a local HTTP receiver (1), and packaged worker composition (1). It migrated a new PostgreSQL database through V10.
-- 2026-08-14: independent read-only review returned `READY` with no P0/P1. The reviewer could not use Docker in its sandbox; the PostgreSQL result above is the primary execution evidence.
+- JDK 25 focused Docker/Testcontainers regression passed 34/34: PostgreSQL foundation (22), delivery history/replay integration (2), history/replay HTTP (1), API and worker runtime composition (2), and module boundaries (7).
+- The evidence covers V11 migration integrity, history owner isolation and cursor binding, bounded/redacted attempt inspection, CSRF-protected replay, replay idempotency convergence/conflict, and ordinary worker claim of the newly pending replay.
+- `git diff --check` passed. No full suite was run under the focused-test policy.

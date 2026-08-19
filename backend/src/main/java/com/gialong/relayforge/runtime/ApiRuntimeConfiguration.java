@@ -91,7 +91,7 @@ class ApiRuntimeConfiguration {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(properties.dashboardOrigin()));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Content-Type", "X-CSRF-TOKEN"));
+        configuration.setAllowedHeaders(List.of("Content-Type", "X-CSRF-TOKEN", "Idempotency-Key"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -183,6 +183,7 @@ class ApiRuntimeConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/endpoints/*/disable").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/v1/projects/*/endpoints/*").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/events").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/deliveries/*/replays").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/projects/**").authenticated()
                         .requestMatchers(HttpMethod.OPTIONS, "/api/v1/**").permitAll()
                         .anyRequest().denyAll()
