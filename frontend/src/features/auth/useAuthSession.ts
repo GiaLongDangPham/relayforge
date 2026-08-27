@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { apiClient, ApiProblem, type OwnerIdentity } from '../../api/apiClient'
 
 type AuthenticationState =
@@ -19,17 +19,23 @@ export function useAuthSession() {
 
   const login = useCallback(async (loginName: string, password: string) => {
     const owner = await apiClient.login(loginName, password)
-    queryClient.clear()
+    clearOwnerData(queryClient)
     queryClient.setQueryData(sessionQueryKey, owner)
   }, [queryClient])
 
   const logout = useCallback(async () => {
     await apiClient.logout()
-    queryClient.clear()
+    clearOwnerData(queryClient)
     queryClient.setQueryData(sessionQueryKey, null)
   }, [queryClient])
 
   return { state: authenticationState(currentOwner.data, currentOwner.isPending, currentOwner.isError), login, logout }
+}
+
+function clearOwnerData(queryClient: QueryClient) {
+  queryClient.removeQueries({
+    predicate: (query) => query.queryKey[0] !== sessionQueryKey[0],
+  })
 }
 
 async function loadCurrentOwner(): Promise<OwnerIdentity | null> {

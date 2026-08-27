@@ -2,7 +2,7 @@
 .createForm,
 .list {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .panel h3,
@@ -32,8 +32,9 @@
 
 .row {
   align-items: center;
+  background: var(--surface-raised);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   display: flex;
   gap: 16px;
   justify-content: space-between;
@@ -48,6 +49,7 @@
 .row code {
   color: var(--muted);
   font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 
 .revoked,

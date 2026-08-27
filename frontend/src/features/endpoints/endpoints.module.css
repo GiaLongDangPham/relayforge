@@ -33,11 +33,12 @@
   color: var(--text);
   display: grid;
   gap: 5px;
+  min-height: 68px;
   text-align: left;
 }
 
 .selectedEndpoint {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-raised));
   border-color: var(--accent);
 }
 

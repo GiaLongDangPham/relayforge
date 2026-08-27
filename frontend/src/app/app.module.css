@@ -1,17 +1,17 @@
 .pageFrame {
   box-sizing: border-box;
-  margin: 0 auto;
-  max-width: 1120px;
+  margin-inline: auto;
+  max-width: 1320px;
   min-height: 100svh;
-  padding: 32px;
+  padding: clamp(20px, 4vw, 48px);
 }
 
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: var(--shadow);
-  padding: 32px;
+  padding: clamp(20px, 3vw, 32px);
 }
 
 .eyebrow {
@@ -28,13 +28,15 @@
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
-  padding-bottom: 28px;
+  padding-bottom: 24px;
 }
 
 .appHeader h1 {
-  font-size: 2.25rem;
-  line-height: 1;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
   margin: 6px 0 0;
+  text-wrap: balance;
 }
 
 .ownerActions,
@@ -51,7 +53,15 @@
 
 .secondaryButton {
   background: transparent;
+  border-color: var(--border-strong);
   color: var(--text);
+}
+
+@media (hover: hover) {
+  .secondaryButton:not(:disabled):hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: var(--accent);
+  }
 }
 
 .formError {
