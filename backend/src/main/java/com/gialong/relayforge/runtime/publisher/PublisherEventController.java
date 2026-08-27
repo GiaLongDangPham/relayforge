@@ -82,10 +82,10 @@ final class PublisherEventController {
             }
             JsonNode eventType = root.get("eventType");
             JsonNode payload = root.get("payload");
-            if (eventType == null || !eventType.isTextual() || payload == null) {
+            if (eventType == null || !eventType.isString() || payload == null) {
                 throw new IllegalArgumentException("publish request requires textual eventType and payload");
             }
-            return new ParsedPublishRequest(eventType.asText(), payload);
+            return new ParsedPublishRequest(eventType.stringValue(), payload);
         } catch (JacksonException exception) {
             throw new PublisherMalformedJsonException(exception);
         } finally {

@@ -1,0 +1,83 @@
+.panel,
+.endpointList,
+.editor {
+  display: grid;
+  gap: 16px;
+}
+
+.heading,
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.heading h3,
+.heading p,
+.editor h4,
+.editor p {
+  margin: 0;
+}
+
+.heading p,
+.muted {
+  color: var(--muted);
+}
+
+.endpointButton,
+.selectedEndpoint {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+  display: grid;
+  gap: 5px;
+  text-align: left;
+}
+
+.selectedEndpoint {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent);
+}
+
+.endpointButton small,
+.muted {
+  color: var(--muted);
+}
+
+.editor {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 20px;
+}
+
+.editor label {
+  display: grid;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.editor input:not([type='checkbox']) {
+  background: var(--input);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  padding: 11px 12px;
+}
+
+.checkbox {
+  align-items: center;
+  display: flex !important;
+  gap: 10px !important;
+}
+
+.secondaryButton {
+  background: transparent;
+  color: var(--text);
+}
+
+.error {
+  color: var(--danger);
+}

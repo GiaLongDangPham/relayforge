@@ -1,0 +1,96 @@
+.pageFrame {
+  box-sizing: border-box;
+  margin: 0 auto;
+  max-width: 1120px;
+  min-height: 100svh;
+  padding: 32px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 32px;
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.appHeader {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 28px;
+}
+
+.appHeader h1 {
+  font-size: 2.25rem;
+  line-height: 1;
+  margin: 6px 0 0;
+}
+
+.ownerActions,
+.logoutControl {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+}
+
+.logoutControl {
+  align-items: flex-end;
+  flex-direction: column;
+}
+
+.secondaryButton {
+  background: transparent;
+  color: var(--text);
+}
+
+.formError {
+  color: var(--danger);
+  margin: 0;
+}
+
+.logoutControl .formError {
+  font-size: 0.8rem;
+}
+
+.statusPanel {
+  margin: 96px auto;
+  max-width: 640px;
+}
+
+.statusPanel h1 {
+  margin: 0;
+}
+
+.statusPanel p {
+  color: var(--muted);
+  margin-top: 12px;
+}
+
+.statusMessage {
+  color: var(--muted);
+  margin: 40vh auto;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .pageFrame {
+    padding: 20px;
+  }
+
+  .appHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 20px;
+  }
+}

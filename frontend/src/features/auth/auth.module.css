@@ -1,0 +1,58 @@
+.loginLayout {
+  align-items: center;
+  display: grid;
+  gap: 72px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  min-height: calc(100svh - 64px);
+}
+
+.loginIntroduction h1 {
+  font-size: clamp(2.5rem, 7vw, 5rem);
+  line-height: 1;
+  margin: 12px 0 20px;
+}
+
+.loginIntroduction > p:last-child {
+  font-size: 1.2rem;
+  line-height: 1.55;
+  max-width: 38rem;
+}
+
+.loginForm {
+  display: grid;
+  gap: 18px;
+}
+
+.loginForm h2 {
+  margin: 0;
+}
+
+.formDescription {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: -8px 0 4px;
+}
+
+.loginForm label {
+  display: grid;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.loginForm input {
+  background: var(--input);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  padding: 11px 12px;
+}
+
+@media (max-width: 720px) {
+  .loginLayout {
+    align-content: center;
+    gap: 36px;
+    grid-template-columns: 1fr;
+  }
+}

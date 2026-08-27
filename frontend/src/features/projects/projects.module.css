@@ -1,0 +1,109 @@
+.workspace {
+  display: grid;
+  gap: 32px;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  padding-top: 36px;
+}
+
+.projectListPanel {
+  display: grid;
+  gap: 18px;
+}
+
+.sectionHeading h2,
+.projectDetailsPanel h2 {
+  margin: 8px 0 0;
+}
+
+.createForm,
+.renameForm {
+  display: grid;
+  gap: 10px;
+}
+
+.createForm label,
+.renameForm label {
+  display: grid;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.createForm input,
+.renameForm input {
+  background: var(--input);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  padding: 11px 12px;
+}
+
+.projectList {
+  display: grid;
+  gap: 8px;
+}
+
+.projectButton,
+.selectedProject {
+  align-items: flex-start;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  display: grid;
+  font-weight: 600;
+  gap: 4px;
+  text-align: left;
+}
+
+.selectedProject {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent);
+}
+
+.projectButton small,
+.muted {
+  color: var(--muted);
+}
+
+.detailsContent {
+  display: grid;
+  gap: 24px;
+}
+
+.metadata {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.metadata div {
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 12px;
+}
+
+.metadata dt {
+  color: var(--muted);
+}
+
+.metadata dd {
+  margin: 0;
+}
+
+.emptySelection {
+  display: grid;
+  gap: 8px;
+  min-height: 230px;
+  place-content: center;
+}
+
+.emptySelection h2 {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}

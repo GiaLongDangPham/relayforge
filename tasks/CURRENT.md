@@ -1,30 +1,34 @@
 # Current Task
 
-Status: Complete
+Status: Waiting for owner review
 
 ## Goal
 
-Complete Group 10: expose owner-scoped event, delivery, and attempt history, then create idempotent manual replay deliveries from exhausted history.
+Complete every remaining Group 11 dashboard slice: project-scoped API-key management, endpoint configuration, event/delivery/attempt inspection, and idempotent exhausted-delivery replay.
 
 ## Decisions
 
-- Owner history is delivery-owned: its public query contract scopes every event, delivery, and attempt read through an owned project and returns immutable secret-free DTOs. Exact URLs, signing material, claim tokens, headers, and unbounded response data never cross that boundary.
-- List cursors bind owner, project, requested filters, ordering position, and query kind so a cursor cannot be reused for a different owned/history query. PostgreSQL remains the order/time authority.
-- Replay is a short `READ COMMITTED` delivery transaction. It resolves a project-scoped idempotency key, returns the existing equivalent command, conflicts on a different source, and otherwise creates a linked `PENDING` delivery only when its owned source is currently `EXHAUSTED`.
-- A replay row has a new delivery identifier and a fresh zero-attempt budget while preserving its source event/endpoint/project identity. Existing worker polling and attempt-start logic process it normally; API requests never send outbound HTTP.
+- The dashboard uses React + Vite + TypeScript and calls the API origin from `VITE_API_ORIGIN`, defaulting to local API development at `http://localhost:8080`. It relies on the backend's explicit credentialed CORS allowlist rather than adding a frontend authentication mechanism.
+- The browser never reads or stores the server-side session identifier. Every request uses `credentials: "include"`; the client requests a fresh CSRF token before each owner mutation and keeps it only for that request.
+- Slice 1 intentionally models authentication as a small local React state machine instead of adding routing or global state dependencies before multiple actual screens exist.
+- TanStack Query is now justified for REST-backed project pages and mutations. It owns cached server state and refetching after create/rename; selected-project UI state remains local React state, so Zustand is not introduced.
+- Deprecated React `FormEvent` uses `SubmitEvent`; the active deprecated publisher APIs use their Spring/Jackson replacements without changing HTTP behavior.
+- Raw API keys and endpoint signing secrets are creation-only local component state. They are never put in TanStack Query, browser storage, logs, or a URL; closing their one-time reveal clears the component state.
+- The dashboard uses existing bounded REST polling/refresh controls rather than SSE/WebSocket. A replay keeps one `crypto.randomUUID()` idempotency key in component memory so an explicit retry after a transient browser failure represents the same command.
 
 ## Out of scope
 
-Retention, metrics/health, full graceful-shutdown policy, cloud, and frontend work.
+Frontend routing, retention, metrics/health, cloud, and Docker.
 
 ## Evidence required
 
-- PostgreSQL/Testcontainers evidence proves V11 lineage and integrity, owner isolation, stable cursor pagination, safe bounded attempt data, replay source preservation, idempotent convergence, and key/source conflict behavior.
-- API evidence proves session ownership, `404` cross-owner behavior, safe history projection, CSRF-protected replay, validation/error mapping, and the absence of Group 10 controllers in worker mode.
-- Existing worker evidence is extended only as needed to prove a replay starts as ordinary `PENDING` work; no new delivery execution path is introduced.
+- Frontend build and lint evidence proves all Group 11 TypeScript/React screens compile and lint correctly.
+- Manual local browser evidence will prove one-time secret handling, API-key revocation, atomic endpoint configuration, owner history isolation, bounded attempt display, CSRF, and replay idempotency against the existing API.
 
 ## Verification evidence
 
-- JDK 25 focused Docker/Testcontainers regression passed 34/34: PostgreSQL foundation (22), delivery history/replay integration (2), history/replay HTTP (1), API and worker runtime composition (2), and module boundaries (7).
-- The evidence covers V11 migration integrity, history owner isolation and cursor binding, bounded/redacted attempt inspection, CSRF-protected replay, replay idempotency convergence/conflict, and ordinary worker claim of the newly pending replay.
-- `git diff --check` passed. No full suite was run under the focused-test policy.
+- `npm run lint` passed.
+- `npx tsc -b` passed.
+- `npm run build` passed (TypeScript plus Vite production bundle).
+- Docker/Testcontainers verification passed: `DeliveryHistoryReplayIntegrationTests` (2/2) and `DeliveryHistoryHttpIntegrationTests` (1/1).
+- Manual browser acceptance is intentionally deferred to Group 12 because the repository does not yet provide a local PostgreSQL/API/worker/receiver demo stack. It is not a blocker for the completed Group 11 implementation.

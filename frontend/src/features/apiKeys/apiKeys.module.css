@@ -1,0 +1,56 @@
+.panel,
+.createForm,
+.list {
+  display: grid;
+  gap: 16px;
+}
+
+.panel h3,
+.panel p {
+  margin: 0;
+}
+
+.muted,
+.row small {
+  color: var(--muted);
+}
+
+.createForm label {
+  display: grid;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.createForm input {
+  background: var(--input);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  padding: 11px 12px;
+}
+
+.row {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.row > div {
+  display: grid;
+  gap: 5px;
+}
+
+.row code {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.revoked,
+.error {
+  color: var(--danger);
+}

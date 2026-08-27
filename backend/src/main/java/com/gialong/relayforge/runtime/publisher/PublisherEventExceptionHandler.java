@@ -49,7 +49,7 @@ final class PublisherEventExceptionHandler {
 
     @ExceptionHandler(PublisherRequestTooLargeException.class)
     ProblemDetail requestTooLarge() {
-        return problem(HttpStatus.PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE", "Payload too large", "The request body exceeds 64 KiB.");
+        return problem(HttpStatus.CONTENT_TOO_LARGE, "PAYLOAD_TOO_LARGE", "Payload too large", "The request body exceeds 64 KiB.");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

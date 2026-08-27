@@ -1,0 +1,24 @@
+.resources {
+  border-top: 1px solid var(--border);
+  margin-top: 32px;
+  padding-top: 24px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.tab,
+.activeTab {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.activeTab {
+  border-color: var(--accent);
+  color: var(--text);
+}

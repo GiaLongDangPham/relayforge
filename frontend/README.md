@@ -1,75 +1,26 @@
-# React + TypeScript + Vite
+# RelayForge dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The dashboard is a deliberately small React + Vite client for the RelayForge owner API. It does not contain delivery rules or authentication tokens: PostgreSQL-backed server sessions remain owned by the backend.
 
-Currently, two official plugins are available:
+## Local development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Start the RelayForge API in `api` mode at `http://localhost:8080` with a bootstrap owner configured.
+2. From this directory, run `npm run dev`.
+3. Open the Vite address, normally `http://localhost:5173`.
 
-## React Compiler
+The default API origin is `http://localhost:8080`. Set `VITE_API_ORIGIN` only when the API is served elsewhere, for example:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```text
+VITE_API_ORIGIN=https://api.example.test npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The browser includes the HttpOnly `RF_SESSION` cookie with each API request. It obtains a fresh CSRF token immediately before an owner mutation; neither value is written to local storage.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Dashboard scope
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+The dashboard is intentionally an operational demo rather than a second implementation of RelayForge rules. It supports project configuration, one-time API-key and endpoint-secret presentation, endpoint enablement/configuration, and owner history/replay inspection.
 
-```
+- TanStack Query caches only safe server metadata. Raw API keys and signing secrets are local component state, are shown once after creation, and are cleared when dismissed.
+- The deliveries tab polls bounded REST endpoints only while visible; it does not create an SSE/WebSocket lifecycle for Portfolio v1.
+- Payloads and receiver previews are rendered as ordinary React text. No dashboard view injects receiver-controlled content as HTML.
+- Each replay button retains an idempotency UUID only in the open component instance, allowing a user to retry a failed browser request without requesting a second replay.
