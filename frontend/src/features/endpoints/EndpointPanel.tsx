@@ -49,28 +49,34 @@ export function EndpointPanel({ projectId }: { projectId: string }) {
     <section className={styles.panel} aria-labelledby="endpoints-heading">
       <div className={styles.heading}>
         <div>
-          <h3 id="endpoints-heading">Webhook endpoints</h3>
-          <p>Every endpoint has one immutable signing secret and an exact subscription set.</p>
+          <h3 id="endpoints-heading">Endpoints</h3>
+          <p>Route subscribed event types to webhook receivers.</p>
         </div>
         <button onClick={() => setCreating(true)} type="button">New endpoint</button>
       </div>
       {signingSecret ? <OneTimeSecret label="endpoint signing secret" onClose={() => setSigningSecret(null)} value={signingSecret} /> : null}
       {endpointsQuery.isPending ? <p className={styles.muted}>Loading endpoints…</p> : null}
       {endpointsQuery.error ? <p className={styles.error} role="alert">Unable to load endpoints.</p> : null}
-      <div className={styles.endpointList}>
-        {endpoints.map((endpoint) => (
-          <button
-            aria-pressed={endpoint.id === activeEndpointId && !creating}
-            className={endpoint.id === activeEndpointId && !creating ? styles.selectedEndpoint : styles.endpointButton}
-            key={endpoint.id}
-            onClick={() => { setCreating(false); setSelectedEndpointId(endpoint.id) }}
-            type="button"
-          >
-            <strong>{endpoint.name}</strong>
-            <small>{endpoint.enabled ? 'Enabled' : 'Paused'} · {endpoint.eventTypes.join(', ')}</small>
-          </button>
-        ))}
-      </div>
+      <section className={styles.endpointCollection} aria-labelledby="configured-endpoints-heading">
+        <div className={styles.collectionHeading}>
+          <h4 id="configured-endpoints-heading">Configured endpoints</h4>
+          <p className={styles.muted}>Select one to edit its route or delivery state.</p>
+        </div>
+        <div className={styles.endpointList}>
+          {endpoints.map((endpoint) => (
+            <button
+              aria-pressed={endpoint.id === activeEndpointId && !creating}
+              className={endpoint.id === activeEndpointId && !creating ? styles.selectedEndpoint : styles.endpointButton}
+              key={endpoint.id}
+              onClick={() => { setCreating(false); setSelectedEndpointId(endpoint.id) }}
+              type="button"
+            >
+              <strong>{endpoint.name}</strong>
+              <small>{endpoint.enabled ? 'Enabled' : 'Paused'} · {endpoint.eventTypes.join(', ')}</small>
+            </button>
+          ))}
+        </div>
+      </section>
       {endpointsQuery.hasNextPage ? <button disabled={endpointsQuery.isFetchingNextPage} onClick={() => void endpointsQuery.fetchNextPage()} type="button">Load more</button> : null}
       <EndpointEditor key={activeEndpoint ? `${activeEndpoint.id}:${activeEndpoint.version}` : 'new'} endpoint={activeEndpoint} onSave={save} onToggle={setEnabled} />
     </section>
@@ -121,7 +127,8 @@ function EndpointEditor({ endpoint, onSave, onToggle }: {
 
   return (
     <form className={styles.editor} onSubmit={submit}>
-      <h4>{endpoint ? `Configure ${endpoint.name}` : 'Create endpoint'}</h4>
+      <h4>{endpoint ? 'Endpoint configuration' : 'New endpoint'}</h4>
+      {endpoint ? <p className={styles.muted}>Editing {endpoint.name}. The signing secret remains unchanged.</p> : null}
       <label>Name<input disabled={submitting} maxLength={100} onChange={(event) => setName(event.target.value)} required value={name} /></label>
       <label>Destination URL<input disabled={submitting} onChange={(event) => setDestinationUrl(event.target.value)} placeholder="https://receiver.example/webhooks" required type="url" value={destinationUrl} /></label>
       <label>Event types (comma-separated)<input disabled={submitting} onChange={(event) => setEventTypes(event.target.value)} placeholder="invoice.paid, invoice.failed" required value={eventTypes} /></label>

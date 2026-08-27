@@ -20,6 +20,8 @@
 
 .heading h3,
 .heading p,
+.listHeading h4,
+.listHeading p,
 .card h4,
 .list h4,
 .preview h5 {
@@ -28,6 +30,15 @@
 
 .heading h3 {
   font-size: 1.15rem;
+}
+
+.listHeading {
+  display: grid;
+  gap: 4px;
+}
+
+.listHeading p {
+  margin: 0;
 }
 
 .heading p,
@@ -66,7 +77,8 @@
 }
 
 .card,
-.preview {
+.preview,
+.list {
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -101,6 +113,13 @@
 .card p {
   line-height: 1.5;
   margin: 10px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.detailTitle {
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 

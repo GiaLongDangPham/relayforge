@@ -59,6 +59,15 @@ export type EventHistorySummary = {
 
 export type EventHistoryPage = { items: EventHistorySummary[]; nextCursor: string | null }
 
+export type PublishedEvent = {
+  eventId: string
+  projectId: string
+  eventType: string
+  acceptedAt: string
+  deliveryCount: number
+  idempotentReplay: boolean
+}
+
 export type EventHistoryDetails = {
   event: EventHistorySummary
   payload: unknown
@@ -255,6 +264,23 @@ class ApiClient {
     return this.request<EventHistoryPage>(`/api/v1/projects/${projectId}/events?${parameters.toString()}`)
   }
 
+  async publishEvent(
+    projectId: string,
+    rawApiKey: string,
+    idempotencyKey: string,
+    eventType: string,
+    payload: unknown,
+  ): Promise<PublishedEvent> {
+    return this.publisherRequest<PublishedEvent>(`/api/v1/projects/${projectId}/events`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${rawApiKey}`,
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify({ eventType, payload }),
+    })
+  }
+
   async findEvent(projectId: string, eventId: string): Promise<EventHistoryDetails> {
     return this.request<EventHistoryDetails>(`/api/v1/projects/${projectId}/events/${eventId}`)
   }
@@ -299,6 +325,24 @@ class ApiClient {
       parameters.set('cursor', cursor)
     }
     return this.request<T>(`${path}?${parameters.toString()}`)
+  }
+
+  private async publisherRequest<T>(path: string, request: RequestInit): Promise<T> {
+    const headers = new Headers(request.headers)
+    headers.set('Accept', 'application/json')
+    headers.set('Content-Type', 'application/json')
+
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      ...request,
+      cache: 'no-store',
+      credentials: 'omit',
+      headers,
+    })
+
+    if (!response.ok) {
+      throw await ApiClient.problem(response)
+    }
+    return response.json() as Promise<T>
   }
 
   private async request<T>(path: string, request: RequestInit = {}): Promise<T> {

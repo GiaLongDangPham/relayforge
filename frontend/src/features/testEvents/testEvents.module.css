@@ -1,0 +1,194 @@
+.panel,
+.form,
+.subscriptions,
+.endpointList,
+.result {
+  display: grid;
+  gap: 18px;
+}
+
+.heading h3,
+.heading p,
+.formHeading h4,
+.formHeading p,
+.subscriptions h4,
+.subscriptions p,
+.result h4,
+.result p {
+  margin: 0;
+}
+
+.heading h3,
+.formHeading h4,
+.subscriptions h4,
+.result h4 {
+  font-size: 1.15rem;
+}
+
+.heading p,
+.formHeading p,
+.muted {
+  color: var(--muted);
+}
+
+.heading p,
+.formHeading p,
+.guidance li,
+.subscriptions p,
+.result p {
+  line-height: 1.5;
+}
+
+.guidance,
+.result {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.guidance ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-inline-start: 20px;
+}
+
+.guidance summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.guidance code,
+.endpoint code,
+.result code {
+  overflow-wrap: anywhere;
+}
+
+.form {
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+}
+
+.formHeading {
+  display: grid;
+  gap: 4px;
+}
+
+.form label {
+  display: grid;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.form input,
+.form textarea {
+  background: var(--input);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--text);
+  font: inherit;
+  padding: 10px 12px;
+}
+
+.form textarea {
+  line-height: 1.5;
+  min-height: 11rem;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.secondaryButton {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.endpointList {
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.endpoint {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.endpoint > div {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.endpoint p {
+  color: var(--muted);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.enabled,
+.paused {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
+.enabled {
+  color: var(--success);
+}
+
+.paused {
+  color: var(--muted);
+}
+
+.result dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.result dl div {
+  align-items: start;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding-bottom: 10px;
+}
+
+.result dt {
+  color: var(--muted);
+}
+
+.result dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: end;
+}
+
+.error {
+  color: var(--danger);
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .actions > button,
+  .result > button,
+  .form > .secondaryButton {
+    width: 100%;
+  }
+}

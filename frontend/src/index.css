@@ -74,7 +74,8 @@ input {
 }
 
 input:focus-visible,
-button:focus-visible {
+button:focus-visible,
+summary:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }

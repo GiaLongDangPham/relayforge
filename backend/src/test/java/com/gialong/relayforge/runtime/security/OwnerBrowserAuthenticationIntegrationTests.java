@@ -126,6 +126,7 @@ class OwnerBrowserAuthenticationIntegrationTests {
                         .method("OPTIONS", BodyPublishers.noBody())
                         .header("Origin", "http://localhost:5173")
                         .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key")
                         .build(),
                 BodyHandlers.ofString()
         );
@@ -133,6 +134,12 @@ class OwnerBrowserAuthenticationIntegrationTests {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("Access-Control-Allow-Origin"))
                 .contains("http://localhost:5173");
+        assertThat(response.headers().firstValue("Access-Control-Allow-Headers"))
+                .hasValueSatisfying(headers -> {
+                    assertThat(headers).containsIgnoringCase("Authorization");
+                    assertThat(headers).containsIgnoringCase("Content-Type");
+                    assertThat(headers).containsIgnoringCase("Idempotency-Key");
+                });
     }
 
     private void assertRejectedCors(HttpClient client, URI baseUri) throws Exception {

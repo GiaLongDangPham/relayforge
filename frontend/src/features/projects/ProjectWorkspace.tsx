@@ -128,27 +128,32 @@ function ProjectDetailsPanel({ project, onRename }: { project: ProjectDetails; o
   }
 
   return (
-    <div className={styles.detailsContent}>
-      <div>
-        <p className={appStyles.eyebrow}>Selected project</p>
+    <div className={styles.projectContext}>
+      <div className={styles.projectIdentity}>
+        <p className={appStyles.eyebrow}>Project</p>
         <h2>{project.name}</h2>
       </div>
-      <form className={styles.renameForm} onSubmit={submit}>
-        <label>
-          Project name
-          <input disabled={submitting} maxLength={100} onChange={(event) => setName(event.target.value)} required value={name} />
-        </label>
-        <button disabled={submitting || name === project.name} type="submit">
-          {submitting ? 'Saving…' : 'Save name'}
-        </button>
-      </form>
-      {errorMessage ? <p className={appStyles.formError} role="alert">{errorMessage}</p> : null}
-      <dl className={styles.metadata}>
-        <div><dt>Version</dt><dd>{project.version}</dd></div>
-        <div><dt>Created</dt><dd>{formatInstant(project.createdAt)}</dd></div>
-        <div><dt>Updated</dt><dd>{formatInstant(project.updatedAt)}</dd></div>
-      </dl>
-      <p className={styles.muted}>The version is sent on rename. If another dashboard update wins first, RelayForge returns a conflict instead of silently overwriting it.</p>
+      <span className={styles.version}>Version {project.version}</span>
+      <details className={styles.projectSettings}>
+        <summary>Project settings</summary>
+        <div className={styles.settingsContent}>
+          <form className={styles.renameForm} onSubmit={submit}>
+            <label>
+              Project name
+              <input disabled={submitting} maxLength={100} onChange={(event) => setName(event.target.value)} required value={name} />
+            </label>
+            <button disabled={submitting || name === project.name} type="submit">
+              {submitting ? 'Saving…' : 'Save name'}
+            </button>
+          </form>
+          {errorMessage ? <p className={appStyles.formError} role="alert">{errorMessage}</p> : null}
+          <dl className={styles.metadata}>
+            <div><dt>Created</dt><dd>{formatInstant(project.createdAt)}</dd></div>
+            <div><dt>Updated</dt><dd>{formatInstant(project.updatedAt)}</dd></div>
+          </dl>
+          <p className={styles.muted}>The version is sent on rename. If another dashboard update wins first, RelayForge returns a conflict instead of silently overwriting it.</p>
+        </div>
+      </details>
     </div>
   )
 }

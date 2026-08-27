@@ -1,6 +1,7 @@
 .panel,
 .endpointList,
-.editor {
+.editor,
+.endpointCollection {
   display: grid;
   gap: 16px;
 }
@@ -16,6 +17,8 @@
 
 .heading h3,
 .heading p,
+.collectionHeading h4,
+.collectionHeading p,
 .editor h4,
 .editor p {
   margin: 0;
@@ -24,6 +27,23 @@
 .heading p,
 .muted {
   color: var(--muted);
+}
+
+.heading h3,
+.collectionHeading h4,
+.editor h4 {
+  font-size: 1.15rem;
+}
+
+.heading p,
+.collectionHeading p,
+.editor p {
+  line-height: 1.5;
+}
+
+.collectionHeading {
+  display: grid;
+  gap: 4px;
 }
 
 .endpointButton,
