@@ -89,7 +89,13 @@ final class DestinationAddressPolicy {
                 return false;
             }
         }
-        return (bytes[10] == 0 && bytes[11] == 0) || (bytes[10] == (byte) 0xff && bytes[11] == (byte) 0xff);
+        if (bytes[10] == (byte) 0xff && bytes[11] == (byte) 0xff) {
+            return true;
+        }
+        if (bytes[10] != 0 || bytes[11] != 0) {
+            return false;
+        }
+        return bytes[12] != 0 || bytes[13] != 0 || bytes[14] != 0 || Byte.toUnsignedInt(bytes[15]) > 1;
     }
 
     private static int unsigned(byte value) {

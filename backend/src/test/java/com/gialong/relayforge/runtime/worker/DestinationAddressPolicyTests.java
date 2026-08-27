@@ -39,4 +39,10 @@ class DestinationAddressPolicyTests {
 
         assertThat(policy.isPublic(compatibleAddress)).isFalse();
     }
+
+    @Test
+    void keepsIpv6UnspecifiedAndLoopbackAddressesInTheirNativeForm() throws Exception {
+        assertThat(policy.isLoopback(InetAddress.getByName("::"))).isFalse();
+        assertThat(policy.isLoopback(InetAddress.getByName("::1"))).isTrue();
+    }
 }

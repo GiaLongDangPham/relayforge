@@ -116,7 +116,6 @@ public final class PinnedOutboundWebhookDispatcher implements OutboundWebhookDis
         Duration remaining = deadline.remaining();
         Duration connectionTimeout = min(properties.connectionTimeout(), remaining);
         RequestConfig requestConfig = RequestConfig.custom()
-                .setConnectTimeout(Timeout.of(connectionTimeout))
                 .setResponseTimeout(Timeout.of(remaining))
                 .setHardCancellationEnabled(true)
                 .setRedirectsEnabled(false)
@@ -199,7 +198,7 @@ public final class PinnedOutboundWebhookDispatcher implements OutboundWebhookDis
         byte[] body = message.body();
         try {
             request.setEntity(new ByteArrayEntity(body, ContentType.APPLICATION_JSON));
-            try (var response = client.execute(request)) {
+            return client.execute(request, response -> {
                 ResponsePreview preview = readPreview(response.getEntity());
                 return DispatchObservation.httpResponse(
                         classify(response.getCode()),
@@ -208,7 +207,7 @@ public final class PinnedOutboundWebhookDispatcher implements OutboundWebhookDis
                         preview.bytes(),
                         preview.truncated()
                 );
-            }
+            });
         } finally {
             Arrays.fill(body, (byte) 0);
         }

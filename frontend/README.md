@@ -2,6 +2,8 @@
 
 The dashboard is a deliberately small React + Vite client for the RelayForge owner API. It does not contain delivery rules or authentication tokens: PostgreSQL-backed server sessions remain owned by the backend.
 
+For the complete PostgreSQL/API/worker/receiver/frontend stack, follow the repository [Local Docker Demo](../docs/LOCAL_DOCKER_DEMO.md). This directory's commands are for frontend-only development.
+
 ## Local development
 
 1. Start the RelayForge API in `api` mode at `http://localhost:8080` with a bootstrap owner configured.

@@ -1,0 +1,90 @@
+name: relayforge
+
+x-backend-environment: &backend-environment
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${RELAYFORGE_DB_NAME:?copy .env.example to .env}
+  SPRING_DATASOURCE_USERNAME: ${RELAYFORGE_DB_USERNAME:?copy .env.example to .env}
+  SPRING_DATASOURCE_PASSWORD: ${RELAYFORGE_DB_PASSWORD:?copy .env.example to .env}
+  RELAYFORGE_API_KEY_PEPPER: ${RELAYFORGE_API_KEY_PEPPER:?copy .env.example to .env}
+  RELAYFORGE_ENDPOINT_ENCRYPTION_KEY: ${RELAYFORGE_ENDPOINT_ENCRYPTION_KEY:?copy .env.example to .env}
+  RELAYFORGE_ENDPOINT_ENCRYPTION_KEY_REFERENCE: ${RELAYFORGE_ENDPOINT_ENCRYPTION_KEY_REFERENCE:-local-aes-gcm-v1}
+  RELAYFORGE_DASHBOARD_ORIGIN: http://localhost:5173
+  RELAYFORGE_SECURE_COOKIES: "false"
+  RELAYFORGE_PRODUCTION: "false"
+  RELAYFORGE_ENDPOINT_ALLOW_LOCAL_HTTP: "true"
+
+services:
+  postgres:
+    image: postgres:17.10-alpine
+    environment:
+      POSTGRES_DB: ${RELAYFORGE_DB_NAME}
+      POSTGRES_USER: ${RELAYFORGE_DB_USERNAME}
+      POSTGRES_PASSWORD: ${RELAYFORGE_DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - relayforge-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  receiver:
+    build:
+      context: ./demo-receiver
+    image: relayforge-demo-receiver:local
+    ports:
+      - "8081:8081"
+    environment:
+      RECEIVER_PORT: "8081"
+      RECEIVER_SLOW_DELAY_MILLIS: "12000"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+    image: relayforge-backend:local
+    environment:
+      <<: *backend-environment
+      RELAYFORGE_RUNTIME: api
+      RELAYFORGE_BOOTSTRAP_OWNER_ENABLED: "true"
+      RELAYFORGE_BOOTSTRAP_OWNER_LOGIN_NAME: ${RELAYFORGE_OWNER_LOGIN_NAME:?copy .env.example to .env}
+      RELAYFORGE_BOOTSTRAP_OWNER_PASSWORD: ${RELAYFORGE_OWNER_PASSWORD:?copy .env.example to .env}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    stop_grace_period: 20s
+    restart: unless-stopped
+
+  worker:
+    image: relayforge-backend:local
+    environment:
+      <<: *backend-environment
+      RELAYFORGE_RUNTIME: worker
+    network_mode: service:receiver
+    depends_on:
+      postgres:
+        condition: service_healthy
+      receiver:
+        condition: service_started
+    stop_grace_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_ORIGIN: http://localhost:8080
+    image: relayforge-frontend:local
+    ports:
+      - "5173:8080"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  relayforge-postgres:

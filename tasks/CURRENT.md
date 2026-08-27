@@ -1,34 +1,37 @@
 # Current Task
 
-Status: Waiting for owner review
+Status: Completed — awaiting owner review
 
 ## Goal
 
-Complete every remaining Group 11 dashboard slice: project-scoped API-key management, endpoint configuration, event/delivery/attempt inspection, and idempotent exhausted-delivery replay.
+Complete Group 12 as one cohesive local-operability milestone: build one backend image, start it separately in API and worker modes beside PostgreSQL, serve the React dashboard, provide a bounded demo webhook receiver, and prove the integrated workflow.
 
 ## Decisions
 
-- The dashboard uses React + Vite + TypeScript and calls the API origin from `VITE_API_ORIGIN`, defaulting to local API development at `http://localhost:8080`. It relies on the backend's explicit credentialed CORS allowlist rather than adding a frontend authentication mechanism.
-- The browser never reads or stores the server-side session identifier. Every request uses `credentials: "include"`; the client requests a fresh CSRF token before each owner mutation and keeps it only for that request.
-- Slice 1 intentionally models authentication as a small local React state machine instead of adding routing or global state dependencies before multiple actual screens exist.
-- TanStack Query is now justified for REST-backed project pages and mutations. It owns cached server state and refetching after create/rename; selected-project UI state remains local React state, so Zustand is not introduced.
-- Deprecated React `FormEvent` uses `SubmitEvent`; the active deprecated publisher APIs use their Spring/Jackson replacements without changing HTTP behavior.
-- Raw API keys and endpoint signing secrets are creation-only local component state. They are never put in TanStack Query, browser storage, logs, or a URL; closing their one-time reveal clears the component state.
-- The dashboard uses existing bounded REST polling/refresh controls rather than SSE/WebSocket. A replay keeps one `crypto.randomUUID()` idempotency key in component memory so an explicit retry after a transient browser failure represents the same command.
+- API and worker use the same immutable backend image and differ only through `RELAYFORGE_RUNTIME` plus mode-specific bootstrap configuration.
+- PostgreSQL remains the only durable source of truth. Compose uses a named volume so ordinary process/container restarts do not erase data.
+- Local secrets come from the ignored repository-root `.env`; `.env.example` contains placeholders only, and Docker build contexts exclude every `.env` file.
+- The worker shares the receiver fixture's network namespace. This makes `http://localhost:8081` genuinely loopback from the worker and preserves the accepted local-only HTTP/SSRF policy without adding a Docker-hostname exception.
+- The receiver is a bounded Java fixture, not another RelayForge business service. It can return success, failure, or a slow response, retain at most 100 sanitized observations, and optionally verify the v1 HMAC after receiving the one-time endpoint secret through a local-only configuration endpoint.
+- Container liveness/readiness beyond PostgreSQL startup and explicit smoke waiting stays in Group 13; Group 12 does not prematurely add Actuator or a worker management server.
 
 ## Out of scope
 
-Frontend routing, retention, metrics/health, cloud, and Docker.
+Cloud deployment, Kubernetes, CI/CD, production TLS, metrics/tracing, history retention, and changes to delivery semantics.
 
 ## Evidence required
 
-- Frontend build and lint evidence proves all Group 11 TypeScript/React screens compile and lint correctly.
-- Manual local browser evidence will prove one-time secret handling, API-key revocation, atomic endpoint configuration, owner history isolation, bounded attempt display, CSRF, and replay idempotency against the existing API.
+- Docker Compose configuration resolves without embedding ignored secrets into images.
+- Backend, frontend, and receiver images build.
+- PostgreSQL, API, worker, frontend, and receiver start together.
+- A smoke flow logs in, creates project/key/endpoint, configures receiver verification, publishes idempotently, and observes one signed successful delivery through the owner history API.
+- Restart evidence proves API and worker use the same image and committed PostgreSQL state survives process restart.
 
 ## Verification evidence
 
-- `npm run lint` passed.
-- `npx tsc -b` passed.
-- `npm run build` passed (TypeScript plus Vite production bundle).
-- Docker/Testcontainers verification passed: `DeliveryHistoryReplayIntegrationTests` (2/2) and `DeliveryHistoryHttpIntegrationTests` (1/1).
-- Manual browser acceptance is intentionally deferred to Group 12 because the repository does not yet provide a local PostgreSQL/API/worker/receiver demo stack. It is not a blocker for the completed Group 11 implementation.
+- `docker compose config` resolved the Compose model with the ignored `.env` outside every build context.
+- `docker compose build --pull` built the backend, frontend, and bounded Java receiver images.
+- Focused JDK 25 worker regression passed: `DestinationAddressPolicyTests`, `AttemptDestinationResolverTests`, and `PinnedOutboundWebhookDispatcherTests`.
+- The actual Compose stack started with PostgreSQL healthy, API/worker using the same backend image, and every application container running as a non-root user.
+- `group12-smoke.ps1 -VerifyRestart` proved owner login and CSRF-protected mutations, API-key and endpoint creation, one-time signing-secret receiver configuration, idempotent publisher acceptance, one valid HMAC-signed successful delivery, and session/event persistence across API/worker restart.
+- The frontend returned HTTP 200 from `/health`; browser acceptance reached the login screen with no console errors. Authenticated dashboard browser actions remain an owner-controlled review step because entering a password in browser automation requires an immediate confirmation.

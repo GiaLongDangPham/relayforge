@@ -1,6 +1,6 @@
 # RelayForge Project Status
 
-Last updated: 2026-08-19
+Last updated: 2026-08-27
 
 This file is the durable source of truth for project scope and progress. Update it after every completed slice.
 
@@ -14,7 +14,7 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 1 - Foundation.
-- Current slice: Group 11 dashboard implementation completed and automatically verified; Group 12 must first supply the runnable local stack needed for browser acceptance.
+- Current slice: Group 12 local Docker Compose stack completed and smoke-verified. The next backend milestone is Group 13 operational observability; authenticated dashboard walkthrough remains an owner review activity.
 - Repository state: Git repository on `main`; RelayForge backend foundation exists under `backend/` and the thin React/Vite owner dashboard exists under `frontend/`.
 - Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Apache HttpClient 5, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Spring Security with JDBC Spring Session, Lombok 1.18.46 as a compile-time processor, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. V2 creates `owner_accounts`, V3 adds technical Spring Session tables, V4 creates `projects`, V5 creates `project_api_keys`, V6 creates `webhook_endpoints` plus `endpoint_subscriptions`, V7 creates immutable `events` plus original `deliveries`, V8 adds partial claim/recovery indexes, V9 creates `delivery_attempts`, V10 creates `attempt_late_diagnostics`, and V11 adds replay lineage, replay idempotency, and history query indexes. Identity supports opt-in bootstrap and generic credential verification; API mode has completed browser authentication, owner-scoped configuration access, publisher event acceptance, safe owner history, and CSRF-protected manual replay. Worker mode now has durable claim/recovery/attempt-start contracts, signed and SSRF-pinned outbound HTTP dispatch, conditional finalization/retry, post-attempt `UNKNOWN` recovery, and bounded polling through local permit admission.
 - Local environment note: the default terminal Java is JDK 21 while this project requires JDK 25; Maven verification currently selects `C:\Program Files\Java\jdk-25` explicitly.
@@ -79,6 +79,7 @@ This file is the durable source of truth for project scope and progress. Update 
 | Outbound HTTP client | Apache HttpClient 5 with a per-dispatch validating/pinned DNS resolver, no redirect/retry/cookie/reuse | Its explicit resolver seam proves the socket uses the selected validated address; JDK `HttpClient` does not expose an equivalent connection-pinning boundary. |
 | Resource bounds | 64 KiB event payload, 8 KiB response preview, 30-day terminal-history retention | Prevents unbounded persistence while keeping Portfolio v1 manageable. |
 | Hardening timebox | Maximum 16 hours inside the 80-96 hour Portfolio v1 target | Bounds CI, cloud, load, JFR, and documentation work so correctness remains first. |
+| Local Compose demo | One backend image starts as API and worker; worker shares the bounded receiver fixture's network namespace for an actual loopback demo target | Keeps ADR-001's one-artifact model and development-only loopback SSRF rule intact without allowing arbitrary Docker-private destinations. |
 
 ## Completed
 
@@ -125,12 +126,13 @@ This file is the durable source of truth for project scope and progress. Update 
 - Completed Group 11 Slice 1 frontend authentication shell: replaced the Vite starter with a typed React session state machine for initial `me` lookup, anonymous login, authenticated shell, unavailable API state, and logout. The shared API client uses credentialed requests, obtains a fresh CSRF token immediately before every owner mutation, and persists neither cookie nor CSRF material in browser storage. No frontend routing, configuration, history, or replay UI entered this slice.
 - Completed Group 11 Slice 2 project workspace: added TanStack Query only where server-state cache, mutation invalidation, and cursor-page loading make it useful. React local state still owns the selected project. The dashboard can list, load more, create, select, and optimistically-versioned rename owner projects; logout clears all in-memory query cache. Authentication, API, app-shell, and project UI are separated by feature rather than continuing to grow `App.tsx`/one global stylesheet. Deprecated React, Spring, and Jackson APIs in the active paths were replaced without changing contract behavior.
 - Completed Group 11 remaining dashboard slices: project API-key creation/list/revocation, endpoint creation/configuration/enablement, and bounded delivery operations now call the existing owner API. One-time raw keys and signing secrets live only in local component state and clear when dismissed; TanStack Query caches only safe metadata. The operations view polls visible REST queries every five seconds, displays event payload/attempt previews as React text rather than HTML, and keeps each explicit exhausted-delivery replay UUID idempotency key only in component memory.
+- Completed Group 12 local operability: root Docker Compose builds PostgreSQL, one shared non-root backend image for API/worker modes, the React dashboard, and a bounded Java receiver. Local secrets are ignored/excluded from builds; the smoke flow proves CSRF configuration mutations, idempotent publishing, valid v1 HMAC delivery, history visibility, and PostgreSQL-backed session/event persistence across API/worker restart. An IPv6 loopback normalization defect exposed by the real Compose path was corrected with a focused regression test, without weakening production SSRF rejection.
 
 ## Not completed
 
 - Entity mappings beyond the configuration aggregates where a concrete use case needs them; delivery history/replay deliberately remains explicit PostgreSQL SQL instead of adding a duplicate ORM model.
 - History retention/deletion execution and operational views beyond the owner-safe inspection contract.
-- Docker, CI, frontend, observability, performance testing, or cloud infrastructure.
+- CI, operational observability, performance testing, history-retention execution, or cloud infrastructure.
 
 ## Verification log
 
@@ -171,9 +173,11 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-19 | Phase 1 Group 11 Slice 2 project workspace and deprecated API cleanup | Added `@tanstack/react-query` for project server state: cursor-page caching, first-page creation invalidation, cache replacement after versioned rename, and query-cache clearing on logout. React local state selects the current project; feature folders separate auth, app shell, projects, and HTTP client. Replaced React `FormEvent` with `SubmitEvent`, Jackson `isTextual`/`asText` with `isString`/`stringValue`, and Spring `PAYLOAD_TOO_LARGE` with `CONTENT_TOO_LARGE`; public HTTP code/payload behavior stays unchanged. Frontend lint, TypeScript, and production build passed; JDK 25 compile and focused publisher-filter test passed. Publisher HTTP integration could not start because Docker was unavailable to Testcontainers, so that evidence remains pending. |
 | 2026-08-19 | Phase 1 Group 11 dashboard completion | Added feature-scoped dashboard panels for project API keys, webhook endpoints, and delivery operations. Creation uses direct request handling specifically so one-time raw API keys and signing secrets cannot enter TanStack Query's mutation cache; all normal metadata uses query cache and targeted invalidation. Endpoint replacement preserves the backend's optimistic version model, while enable/disable remains separate. The operations panel uses bounded visible-tab REST polling, escaped React text rendering for payload/response diagnostics, and one component-memory UUID per explicit replay source so a network retry is idempotent. Frontend lint, TypeScript compilation, and production Vite build passed. Docker/Testcontainers rerun passed 3/3: history/replay data behavior (2) and owner HTTP flow (1). Manual browser acceptance still needs a deliberate local API/worker/receiver demo stack rather than a transient Testcontainers database. |
 
+| 2026-08-27 | Phase 1 Group 12 local Docker Compose stack | Added ignored root `.env` configuration, a root Compose stack with PostgreSQL 17.10, one backend image in API/worker modes, React dashboard, and bounded Java demo receiver; all app images run non-root. The worker shares the receiver namespace, preserving literal-loopback-only local HTTP under the existing SSRF policy. Focused JDK 25 dispatcher/policy tests passed; images built; the running stack reported PostgreSQL healthy, identical API/worker image IDs, non-root processes, frontend health 200, and a clean anonymous browser login screen. `group12-smoke.ps1 -VerifyRestart` passed: CSRF owner mutations, API-key/endpoint creation, one-time secret receiver configuration, idempotent publish, one valid HMAC-signed success, and session/event persistence across restart. The real integration run exposed an IPv6 `::1` normalization defect; a narrow regression fixed it without relaxing destination policy. |
+
 ## Next recommended slice
 
-Begin Group 12 with a Docker Compose local stack: PostgreSQL, one shared backend image started as separate API and worker processes, a demo receiver, and the frontend. Its final acceptance pass will prove one-time secret dismissal, CSRF mutations, endpoint version conflict, history rendering/isolation, and replay idempotency through the browser. Do not add routing, SSE, or persistent browser state without a concrete workflow need.
+Begin Group 13 operational observability: define a small health/metrics/logging scope, choose what must be measured before adding a dependency, and add only the signals needed to diagnose delivery latency, failure classes, claim backlog, and worker capacity. Keep authenticated dashboard browser walkthrough as an owner-led acceptance review; do not add routing, SSE, or persistent browser state without a concrete workflow need.
 
 ## Deferred until evidence justifies them
 
