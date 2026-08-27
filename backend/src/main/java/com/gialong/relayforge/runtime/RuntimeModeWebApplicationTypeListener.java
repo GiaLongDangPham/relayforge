@@ -5,19 +5,20 @@ import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEven
 import org.springframework.context.ApplicationListener;
 
 /**
- * Selects the process type from the required RelayForge runtime mode before Spring creates its context.
+ * Selects the servlet process type before Spring creates its context.
+ *
+ * <p>API mode exposes business HTTP. Worker mode starts the same servlet infrastructure solely for
+ * tightly scoped management endpoints; its business adapters stay conditional on API mode and its
+ * security configuration denies every non-management request.</p>
  */
 public final class RuntimeModeWebApplicationTypeListener
         implements ApplicationListener<ApplicationEnvironmentPreparedEvent> {
 
     @Override
     public void onApplicationEvent(ApplicationEnvironmentPreparedEvent event) {
-        RuntimeMode runtimeMode = RuntimeMode.fromConfigurationValue(
+        RuntimeMode.fromConfigurationValue(
                 event.getEnvironment().getProperty("relayforge.runtime")
         );
-        WebApplicationType applicationType = runtimeMode == RuntimeMode.WORKER
-                ? WebApplicationType.NONE
-                : WebApplicationType.SERVLET;
-        event.getSpringApplication().setWebApplicationType(applicationType);
+        event.getSpringApplication().setWebApplicationType(WebApplicationType.SERVLET);
     }
 }

@@ -143,9 +143,9 @@ Worker mode activates:
 - destination validation, request signing, and outbound HTTP;
 - conditional attempt finalization;
 - expired-lease recovery;
-- worker health and observability adapters.
+- worker health and observability adapters through a management-only servlet surface.
 
-It does not expose owner or publisher business endpoints. A dedicated management endpoint may later expose only health and metrics.
+It does not expose owner or publisher business endpoints. Worker servlet routing permits only health probes and Prometheus scraping; a fallback security chain denies every other worker request. This is intentionally a management surface, not a second worker API.
 
 ### 6.3 Mode selection
 

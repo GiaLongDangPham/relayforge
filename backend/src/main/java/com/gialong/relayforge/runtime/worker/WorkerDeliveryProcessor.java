@@ -2,9 +2,12 @@ package com.gialong.relayforge.runtime.worker;
 
 import com.gialong.relayforge.delivery.api.DeliveryAttemptFinalizer;
 import com.gialong.relayforge.delivery.api.DeliveryAttemptStarter;
+import com.gialong.relayforge.delivery.api.AttemptFinalizationResult;
 import com.gialong.relayforge.delivery.api.DispatchInstruction;
 import com.gialong.relayforge.delivery.api.DispatchObservation;
 import com.gialong.relayforge.delivery.api.OutboundWebhookDispatcher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -15,6 +18,7 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public final class WorkerDeliveryProcessor {
 
+    private static final Logger log = LoggerFactory.getLogger(WorkerDeliveryProcessor.class);
     private static final Duration[] FINALIZATION_RETRY_CAPS = {
             Duration.ofMillis(100),
             Duration.ofMillis(250),
@@ -27,12 +31,14 @@ public final class WorkerDeliveryProcessor {
     private final DeliveryAttemptFinalizer finalizer;
     private final Duration attemptExecutionLease;
     private final Duration finalizationMinimumRemaining;
+    private final WorkerOperationalMetrics metrics;
 
     public WorkerDeliveryProcessor(
             DeliveryAttemptStarter attemptStarter,
             OutboundWebhookDispatcher dispatcher,
             DeliveryAttemptFinalizer finalizer,
-            WorkerProperties properties
+            WorkerProperties properties,
+            WorkerOperationalMetrics metrics
     ) {
         this.attemptStarter = Objects.requireNonNull(attemptStarter, "attemptStarter must not be null");
         this.dispatcher = Objects.requireNonNull(dispatcher, "dispatcher must not be null");
@@ -40,6 +46,7 @@ public final class WorkerDeliveryProcessor {
         WorkerProperties requiredProperties = Objects.requireNonNull(properties, "properties must not be null");
         this.attemptExecutionLease = requiredProperties.attemptExecutionLease();
         this.finalizationMinimumRemaining = requiredProperties.finalizationMinimumRemaining();
+        this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
     }
 
     public void process(WorkerClaimCoordinator.BoundClaim boundClaim) {
@@ -50,6 +57,8 @@ public final class WorkerDeliveryProcessor {
 
     private void dispatchAndFinalize(DispatchInstruction instruction) {
         try (instruction; DispatchObservation observation = dispatcher.dispatch(instruction)) {
+            metrics.recordDispatch(observation);
+            logDispatch(instruction, observation);
             finalizeWithoutResending(instruction, observation);
         }
     }
@@ -58,10 +67,22 @@ public final class WorkerDeliveryProcessor {
         int retryOrdinal = 0;
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                finalizer.finalizeAttempt(instruction, observation);
+                AttemptFinalizationResult result = finalizer.finalizeAttempt(instruction, observation);
+                metrics.recordFinalization(result);
+                logFinalization(instruction, result);
                 return;
             } catch (RuntimeException ignored) {
                 if (!finalizer.hasCurrentLease(instruction, finalizationMinimumRemaining)) {
+                    metrics.recordFinalizationAbandoned();
+                    log.atWarn()
+                            .addKeyValue("event", "delivery_finalization_abandoned")
+                            .addKeyValue("runtimeMode", "worker")
+                            .addKeyValue("projectId", instruction.projectId())
+                            .addKeyValue("eventId", instruction.eventId())
+                            .addKeyValue("deliveryId", instruction.deliveryId())
+                            .addKeyValue("attemptId", instruction.attemptId())
+                            .addKeyValue("attemptNumber", instruction.attemptNumber())
+                            .log("Delivery finalization left for lease recovery");
                     return;
                 }
                 if (!sleep(equalJitter(FINALIZATION_RETRY_CAPS[Math.min(retryOrdinal, FINALIZATION_RETRY_CAPS.length - 1)]))) {
@@ -70,6 +91,35 @@ public final class WorkerDeliveryProcessor {
                 retryOrdinal++;
             }
         }
+    }
+
+    private static void logDispatch(DispatchInstruction instruction, DispatchObservation observation) {
+        log.atInfo()
+                .addKeyValue("event", "delivery_dispatch_completed")
+                .addKeyValue("runtimeMode", "worker")
+                .addKeyValue("projectId", instruction.projectId())
+                .addKeyValue("eventId", instruction.eventId())
+                .addKeyValue("deliveryId", instruction.deliveryId())
+                .addKeyValue("attemptId", instruction.attemptId())
+                .addKeyValue("attemptNumber", instruction.attemptNumber())
+                .addKeyValue("outcome", observation.outcome())
+                .addKeyValue("failureCode", observation.failureCode().map(Enum::name).orElse("none"))
+                .addKeyValue("httpStatus", observation.httpStatus().isPresent() ? observation.httpStatus().getAsInt() : "none")
+                .addKeyValue("durationMs", observation.duration().toMillis())
+                .log("Outbound delivery dispatch completed");
+    }
+
+    private static void logFinalization(DispatchInstruction instruction, AttemptFinalizationResult result) {
+        log.atInfo()
+                .addKeyValue("event", "delivery_finalization_completed")
+                .addKeyValue("runtimeMode", "worker")
+                .addKeyValue("projectId", instruction.projectId())
+                .addKeyValue("eventId", instruction.eventId())
+                .addKeyValue("deliveryId", instruction.deliveryId())
+                .addKeyValue("attemptId", instruction.attemptId())
+                .addKeyValue("attemptNumber", instruction.attemptNumber())
+                .addKeyValue("result", result)
+                .log("Delivery finalization completed");
     }
 
     private static Duration equalJitter(Duration cap) {

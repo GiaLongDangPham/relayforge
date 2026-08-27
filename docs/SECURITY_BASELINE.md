@@ -44,7 +44,7 @@ Phase 1 credential verification now returns the same empty application outcome f
 
 Phase 1 composes the `AuthenticationProvider` and browser-authentication adapter only in API mode. The provider delegates username/password verification to the identity public contract; on success it uses the hash-free owner ID and canonical login as the principal, and an empty identity result becomes one generic bad-credentials failure. The API filter chain is deny-by-default for `/api/v1/**`, permits only the four accepted authentication routes at this stage, explicitly saves the server-side security context after login, and disables framework form/basic login behavior.
 
-The packaged launcher switches a worker to a non-web application context after Spring prepares configuration and before it creates the context. This matters because the shared artifact contains servlet, Spring Security, and Spring Session dependencies: worker mode must not fall back to Boot's default web security/session behavior merely because those libraries are present.
+The packaged launcher starts both modes as servlet contexts so the worker can expose only its management health and metrics. This does not make it an API process: worker mode has no owner/session/publisher adapters and its ordered security chains permit only the selected actuator paths, then deny every other request.
 
 
 ### 2.3 Session cookie and lifecycle
@@ -233,7 +233,7 @@ Never log:
 - full destination URL, query string, or user-info;
 - database connection string or cloud credentials.
 
-Structured logging uses explicit safe fields rather than serializing request/response/entity objects. Representative automated tests capture logs and search for seeded secret markers.
+Structured logging uses ECS JSON by default and explicit safe fields rather than serializing request/response/entity objects. API requests receive a validated-or-generated UUID trace ID in `X-RelayForge-Trace-Id`; it is included in sanitized API errors and MDC-backed logs. Metrics use bounded outcome/state tags only and never tenant, event, delivery, attempt, URL, or raw-error values as tags. Representative automated tests capture logs and search for seeded secret markers.
 
 ## 10. Browser and transport headers
 

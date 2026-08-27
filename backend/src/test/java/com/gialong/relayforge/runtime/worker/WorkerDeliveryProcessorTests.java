@@ -32,7 +32,13 @@ class WorkerDeliveryProcessorTests {
         RecordingDispatcher dispatcher = new RecordingDispatcher();
         FlakyFinalizer finalizer = new FlakyFinalizer();
         DeliveryAttemptStarter starter = (ignored, lease) -> Optional.of(instruction(claim));
-        WorkerDeliveryProcessor processor = new WorkerDeliveryProcessor(starter, dispatcher, finalizer, properties());
+        WorkerDeliveryProcessor processor = new WorkerDeliveryProcessor(
+                starter,
+                dispatcher,
+                finalizer,
+                properties(),
+                WorkerOperationalMetrics.noop()
+        );
 
         processor.process(boundClaim);
 

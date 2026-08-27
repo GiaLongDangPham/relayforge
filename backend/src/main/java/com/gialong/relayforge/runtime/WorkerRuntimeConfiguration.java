@@ -12,6 +12,9 @@ import com.gialong.relayforge.runtime.worker.WorkerClaimCoordinator;
 import com.gialong.relayforge.runtime.worker.DeliveryWorkerLoop;
 import com.gialong.relayforge.runtime.worker.WorkerDeliveryProcessor;
 import com.gialong.relayforge.runtime.worker.WorkerProperties;
+import com.gialong.relayforge.runtime.worker.WorkerOperationalMetrics;
+import com.gialong.relayforge.runtime.worker.MicrometerWorkerOperationalMetrics;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +33,15 @@ class WorkerRuntimeConfiguration {
     @ConditionalOnBean(DeliveryClaimer.class)
     WorkerClaimCoordinator workerClaimCoordinator(DeliveryClaimer deliveryClaimer, WorkerProperties properties) {
         return new WorkerClaimCoordinator(deliveryClaimer, properties);
+    }
+
+    @Bean
+    @ConditionalOnBean(WorkerClaimCoordinator.class)
+    WorkerOperationalMetrics workerOperationalMetrics(
+            MeterRegistry meterRegistry,
+            WorkerClaimCoordinator claimCoordinator
+    ) {
+        return new MicrometerWorkerOperationalMetrics(meterRegistry, claimCoordinator);
     }
 
     @Bean(destroyMethod = "close")
@@ -54,9 +66,10 @@ class WorkerRuntimeConfiguration {
             DeliveryAttemptStarter attemptStarter,
             OutboundWebhookDispatcher dispatcher,
             DeliveryAttemptFinalizer finalizer,
-            WorkerProperties properties
+            WorkerProperties properties,
+            WorkerOperationalMetrics metrics
     ) {
-        return new WorkerDeliveryProcessor(attemptStarter, dispatcher, finalizer, properties);
+        return new WorkerDeliveryProcessor(attemptStarter, dispatcher, finalizer, properties, metrics);
     }
 
     @Bean
@@ -67,8 +80,9 @@ class WorkerRuntimeConfiguration {
             DeliveryClaimer deliveryClaimer,
             DeliveryAttemptRecovery attemptRecovery,
             WorkerDeliveryProcessor processor,
-            WorkerProperties properties
+            WorkerProperties properties,
+            WorkerOperationalMetrics metrics
     ) {
-        return new DeliveryWorkerLoop(claimCoordinator, deliveryClaimer, attemptRecovery, processor, properties);
+        return new DeliveryWorkerLoop(claimCoordinator, deliveryClaimer, attemptRecovery, processor, properties, metrics);
     }
 }

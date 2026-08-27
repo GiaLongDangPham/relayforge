@@ -46,7 +46,7 @@ The API key authenticates exactly one project. The project ID in the path must m
 
 ### 3.3 Operator endpoints
 
-Liveness, readiness, and metrics are management endpoints, not owner business APIs. Cloud networking restricts them; their final paths and management port are deployment decisions.
+Liveness, readiness, and metrics are management endpoints, not owner business APIs. Portfolio v1 exposes only `GET /actuator/health/liveness`, `GET /actuator/health/readiness`, and `GET /actuator/prometheus`. The API uses its normal port; the worker uses a management-only port. Cloud networking must restrict both surfaces and no other actuator endpoint is exposed.
 
 ## 4. Error contract
 

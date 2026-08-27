@@ -18,9 +18,7 @@ export function EndpointPanel({ projectId }: { projectId: string }) {
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   })
   const endpoints = useMemo(() => endpointsQuery.data?.pages.flatMap((page) => page.items) ?? [], [endpointsQuery.data])
-  const activeEndpointId = endpoints.some((endpoint) => endpoint.id === selectedEndpointId)
-    ? selectedEndpointId
-    : endpoints[0]?.id ?? null
+  const activeEndpointId = endpoints.some((endpoint) => endpoint.id === selectedEndpointId) ? selectedEndpointId : null
   const activeEndpoint = creating ? null : endpoints.find((endpoint) => endpoint.id === activeEndpointId) ?? null
 
   async function refresh() {
@@ -52,7 +50,7 @@ export function EndpointPanel({ projectId }: { projectId: string }) {
           <h3 id="endpoints-heading">Endpoints</h3>
           <p>Route subscribed event types to webhook receivers.</p>
         </div>
-        <button onClick={() => setCreating(true)} type="button">New endpoint</button>
+        <button onClick={() => { setSelectedEndpointId(null); setCreating(true) }} type="button">New endpoint</button>
       </div>
       {signingSecret ? <OneTimeSecret label="endpoint signing secret" onClose={() => setSigningSecret(null)} value={signingSecret} /> : null}
       {endpointsQuery.isPending ? <p className={styles.muted}>Loading endpoints…</p> : null}
@@ -78,7 +76,7 @@ export function EndpointPanel({ projectId }: { projectId: string }) {
         </div>
       </section>
       {endpointsQuery.hasNextPage ? <button disabled={endpointsQuery.isFetchingNextPage} onClick={() => void endpointsQuery.fetchNextPage()} type="button">Load more</button> : null}
-      <EndpointEditor key={activeEndpoint ? `${activeEndpoint.id}:${activeEndpoint.version}` : 'new'} endpoint={activeEndpoint} onSave={save} onToggle={setEnabled} />
+      {creating || activeEndpoint ? <EndpointEditor key={activeEndpoint ? `${activeEndpoint.id}:${activeEndpoint.version}` : 'new'} endpoint={activeEndpoint} onSave={save} onToggle={setEnabled} /> : null}
     </section>
   )
 }

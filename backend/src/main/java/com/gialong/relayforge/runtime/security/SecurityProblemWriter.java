@@ -1,6 +1,7 @@
 package com.gialong.relayforge.runtime.security;
 
 import jakarta.servlet.http.HttpServletResponse;
+import com.gialong.relayforge.runtime.observability.TraceIdContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -24,6 +25,7 @@ public final class SecurityProblemWriter {
         problem.setType(URI.create("urn:relayforge:problem:" + code.toLowerCase().replace('_', '-')));
         problem.setTitle(title);
         problem.setProperty("code", code);
+        TraceIdContext.current().ifPresent(traceId -> problem.setProperty("traceId", traceId));
 
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);

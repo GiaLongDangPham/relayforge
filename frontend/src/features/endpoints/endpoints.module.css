@@ -73,6 +73,15 @@
   padding-top: 20px;
 }
 
+.selectionHint {
+  background: var(--surface-raised);
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  color: var(--muted);
+  margin: 0;
+  padding: 18px;
+}
+
 .editor label {
   display: grid;
   font-weight: 600;

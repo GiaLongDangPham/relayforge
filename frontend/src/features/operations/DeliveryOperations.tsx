@@ -94,13 +94,17 @@ export function DeliveryOperations({ projectId }: { projectId: string }) {
       </div>
       <label className={styles.filter}>Event type filter<input onChange={(event) => { setEventType(event.target.value); setSelectedEventId(null); setSelectedDeliveryId(null) }} placeholder="invoice.paid" value={eventType} /></label>
       {eventsQuery.error ? <p className={styles.error} role="alert">Unable to load event history.</p> : null}
-      <div className={styles.columns}>
+      <div className={styles.workspace}>
         <EventList activeEventId={activeEventId} events={events} loading={eventsQuery.isPending} onSelect={(event) => { setSelectedEventId(event.id); setSelectedDeliveryId(null) }} />
         <section className={styles.details}>
           {activeEvent ? <EventDetails event={activeEvent} payload={eventQuery.data?.payload} summary={eventQuery.data?.deliverySummary} /> : <EmptyState text="Select an event to inspect its deliveries." />}
-          <DeliveryList activeDeliveryId={activeDeliveryId} deliveries={deliveries} loading={deliveriesQuery.isPending} onSelect={setSelectedDeliveryId} />
-          {activeDelivery ? <DeliveryDetails attempt={attemptQuery.data} delivery={activeDelivery} deliveryInfo={deliveryQuery.data} onReplay={() => void replay(activeDelivery)} replayError={replayError} replayResult={replayResult} /> : null}
-          <AttemptList activeAttemptId={activeAttemptId} attempt={attemptQuery.data} attempts={attempts} loading={attemptsQuery.isPending} onSelect={setSelectedAttemptId} />
+          <div className={styles.deliveryWorkspace}>
+            <DeliveryList activeDeliveryId={activeDeliveryId} deliveries={deliveries} loading={deliveriesQuery.isPending} onSelect={setSelectedDeliveryId} />
+            <section className={styles.deliveryInspector} aria-label="Selected delivery details">
+              {activeDelivery ? <DeliveryDetails attempt={attemptQuery.data} delivery={activeDelivery} deliveryInfo={deliveryQuery.data} onReplay={() => void replay(activeDelivery)} replayError={replayError} replayResult={replayResult} /> : <EmptyState text="Select a delivery to inspect its attempts." />}
+              <AttemptList activeAttemptId={activeAttemptId} attempt={attemptQuery.data} attempts={attempts} loading={attemptsQuery.isPending} onSelect={setSelectedAttemptId} />
+            </section>
+          </div>
         </section>
       </div>
     </section>
@@ -108,7 +112,7 @@ export function DeliveryOperations({ projectId }: { projectId: string }) {
 }
 
 function EventList({ activeEventId, events, loading, onSelect }: { activeEventId: string | null; events: EventHistorySummary[]; loading: boolean; onSelect: (event: EventHistorySummary) => void }) {
-  return <section className={styles.list} aria-label="Events"><div className={styles.listHeading}><h4>Events</h4><p className={styles.muted}>Choose an accepted publisher event.</p></div>{loading ? <p>Loading…</p> : null}{events.length === 0 && !loading ? <EmptyState text="No accepted events match this filter." /> : null}{events.map((event) => <button aria-pressed={event.id === activeEventId} className={event.id === activeEventId ? styles.selected : styles.listItem} key={event.id} onClick={() => onSelect(event)} type="button"><strong>{event.eventType}</strong><small>{event.deliveryCount} deliveries · {formatInstant(event.acceptedAt)}</small></button>)}</section>
+  return <section className={`${styles.list} ${styles.eventList}`} aria-label="Events"><div className={styles.listHeading}><h4>Events</h4><p className={styles.muted}>Choose an accepted publisher event.</p></div>{loading ? <p>Loading…</p> : null}{events.length === 0 && !loading ? <EmptyState text="No accepted events match this filter." /> : null}{events.map((event) => <button aria-pressed={event.id === activeEventId} className={event.id === activeEventId ? styles.selected : styles.listItem} key={event.id} onClick={() => onSelect(event)} type="button"><strong>{event.eventType}</strong><small>{event.deliveryCount} deliveries · {formatInstant(event.acceptedAt)}</small></button>)}</section>
 }
 
 function EventDetails({ event, payload, summary }: { event: EventHistorySummary; payload: unknown; summary: { totalCount: number; activeCount: number; succeededCount: number; failedPermanentCount: number; exhaustedCount: number } | undefined }) {

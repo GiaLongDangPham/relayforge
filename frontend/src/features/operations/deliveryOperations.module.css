@@ -1,7 +1,10 @@
 .panel,
 .details,
 .list,
-.preview {
+.preview,
+.workspace,
+.deliveryWorkspace,
+.deliveryInspector {
   display: grid;
   gap: 16px;
 }
@@ -69,11 +72,26 @@
   padding: 10px 12px;
 }
 
-.columns {
+.workspace {
   align-items: start;
   display: grid;
   gap: 20px;
-  grid-template-columns: minmax(12.5rem, 0.75fr) minmax(0, 1.5fr);
+}
+
+.eventList {
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.eventList .listHeading,
+.eventList > p {
+  grid-column: 1 / -1;
+}
+
+.deliveryWorkspace {
+  align-items: start;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(15rem, 0.8fr) minmax(0, 1.2fr);
 }
 
 .card,
@@ -154,7 +172,7 @@ pre {
 }
 
 @media (max-width: 760px) {
-  .columns {
+  .deliveryWorkspace {
     grid-template-columns: 1fr;
   }
 

@@ -2,6 +2,8 @@ package com.gialong.relayforge.runtime.worker;
 
 import com.gialong.relayforge.delivery.api.DeliveryAttemptRecovery;
 import com.gialong.relayforge.delivery.api.DeliveryClaimer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 
 import java.time.Duration;
@@ -18,11 +20,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class DeliveryWorkerLoop implements SmartLifecycle {
 
+    private static final Logger log = LoggerFactory.getLogger(DeliveryWorkerLoop.class);
     private final WorkerClaimCoordinator claimCoordinator;
     private final DeliveryClaimer deliveryClaimer;
     private final DeliveryAttemptRecovery attemptRecovery;
     private final WorkerDeliveryProcessor processor;
     private final WorkerProperties properties;
+    private final WorkerOperationalMetrics metrics;
     private final AtomicBoolean running = new AtomicBoolean();
 
     private volatile ScheduledExecutorService scheduler;
@@ -33,13 +37,15 @@ public final class DeliveryWorkerLoop implements SmartLifecycle {
             DeliveryClaimer deliveryClaimer,
             DeliveryAttemptRecovery attemptRecovery,
             WorkerDeliveryProcessor processor,
-            WorkerProperties properties
+            WorkerProperties properties,
+            WorkerOperationalMetrics metrics
     ) {
         this.claimCoordinator = Objects.requireNonNull(claimCoordinator, "claimCoordinator must not be null");
         this.deliveryClaimer = Objects.requireNonNull(deliveryClaimer, "deliveryClaimer must not be null");
         this.attemptRecovery = Objects.requireNonNull(attemptRecovery, "attemptRecovery must not be null");
         this.processor = Objects.requireNonNull(processor, "processor must not be null");
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
+        this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
     }
 
     @Override
@@ -49,6 +55,7 @@ public final class DeliveryWorkerLoop implements SmartLifecycle {
         }
         scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().name("relayforge-worker-scheduler-", 0).factory());
         taskExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        metrics.workerStarted();
         schedulePoll(Duration.ZERO);
         scheduleRecovery(Duration.ZERO);
     }
@@ -66,6 +73,7 @@ public final class DeliveryWorkerLoop implements SmartLifecycle {
         if (currentTaskExecutor != null) {
             currentTaskExecutor.shutdown();
         }
+        metrics.workerStopped();
     }
 
     @Override
@@ -117,8 +125,15 @@ public final class DeliveryWorkerLoop implements SmartLifecycle {
 
     private void pollOnce() {
         try {
-            claimCoordinator.claimAvailable().forEach(this::submit);
+            var claims = claimCoordinator.claimAvailable();
+            metrics.recordClaims(claims.size());
+            claims.forEach(this::submit);
         } catch (RuntimeException ignored) {
+            metrics.recordClaimPollFailure();
+            log.atWarn()
+                    .addKeyValue("event", "delivery_claim_poll_failed")
+                    .addKeyValue("runtimeMode", "worker")
+                    .log("Delivery claim poll failed; a later bounded poll will retry");
             // PostgreSQL remains the source of truth; the next bounded poll retries claim acquisition.
         }
     }
@@ -133,15 +148,21 @@ public final class DeliveryWorkerLoop implements SmartLifecycle {
             currentTaskExecutor.submit(() -> processor.process(claim));
         } catch (RejectedExecutionException exception) {
             claim.close();
+            metrics.recordRejectedSubmission();
         }
     }
 
     private void recoverOnce() {
         try {
             int capacity = properties.maxInFlightClaims();
-            deliveryClaimer.recoverExpiredPreAttemptClaims(capacity);
-            attemptRecovery.recoverExpiredStartedAttempts(capacity);
+            metrics.recordRecovery("pre_attempt", deliveryClaimer.recoverExpiredPreAttemptClaims(capacity));
+            metrics.recordRecovery("started_attempt", attemptRecovery.recoverExpiredStartedAttempts(capacity));
         } catch (RuntimeException ignored) {
+            metrics.recordRecoveryFailure();
+            log.atWarn()
+                    .addKeyValue("event", "delivery_recovery_scan_failed")
+                    .addKeyValue("runtimeMode", "worker")
+                    .log("Delivery recovery scan failed; a later scan will retry");
             // A later scan may recover only still-current expired claims; no clock-local decision is made here.
         }
     }

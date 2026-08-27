@@ -2,7 +2,11 @@ package com.gialong.relayforge.runtime;
 
 import com.gialong.relayforge.identity.api.OwnerBootstrap;
 import com.gialong.relayforge.identity.api.OwnerCredentialVerifier;
+import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshotQuery;
 import com.gialong.relayforge.project.api.PublisherApiKeyVerifier;
+import com.gialong.relayforge.runtime.observability.DeliveryBacklogMetrics;
+import com.gialong.relayforge.runtime.observability.TraceIdFilter;
+import io.micrometer.core.instrument.MeterRegistry;
 import com.gialong.relayforge.runtime.publisher.PublisherApiKeyAuthenticationFilter;
 import com.gialong.relayforge.runtime.security.OwnerAuthenticationProvider;
 import com.gialong.relayforge.runtime.security.OwnerLoginFailureLimiter;
@@ -13,6 +17,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -25,6 +30,7 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
@@ -46,7 +52,23 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "relayforge", name = "runtime", havingValue = "api")
 @EnableJdbcHttpSession(maxInactiveIntervalInSeconds = 1800)
 @EnableConfigurationProperties(RelayForgeSecurityProperties.class)
+@EnableScheduling
 class ApiRuntimeConfiguration {
+
+    @Bean
+    TraceIdFilter traceIdFilter() {
+        return new TraceIdFilter();
+    }
+
+    @Bean
+    DeliveryBacklogMetrics deliveryBacklogMetrics(
+            DeliveryOperationalSnapshotQuery snapshotQuery,
+            MeterRegistry meterRegistry
+    ) {
+        DeliveryBacklogMetrics metrics = new DeliveryBacklogMetrics(snapshotQuery, meterRegistry);
+        metrics.refresh();
+        return metrics;
+    }
 
     @Bean
     OwnerAuthenticationProvider ownerAuthenticationProvider(OwnerCredentialVerifier credentialVerifier) {
@@ -130,7 +152,8 @@ class ApiRuntimeConfiguration {
             CsrfTokenRepository csrfTokenRepository,
             CorsConfigurationSource corsConfigurationSource,
             SecurityProblemWriter securityProblemWriter,
-            PublisherApiKeyAuthenticationFilter publisherApiKeyAuthenticationFilter
+            PublisherApiKeyAuthenticationFilter publisherApiKeyAuthenticationFilter,
+            TraceIdFilter traceIdFilter
     ) throws Exception {
         AccessDeniedHandler accessDeniedHandler = (request, response, exception) -> {
             if (exception instanceof CsrfException) {
@@ -210,6 +233,7 @@ class ApiRuntimeConfiguration {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
                 .requestCache(AbstractHttpConfigurer::disable)
+                .addFilterBefore(traceIdFilter, SecurityContextHolderFilter.class)
                 .addFilterBefore(publisherApiKeyAuthenticationFilter, AuthorizationFilter.class)
                 .build();
     }

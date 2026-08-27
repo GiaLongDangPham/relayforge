@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(
         classes = RelayForgeApplication.class,
         properties = {"relayforge.runtime=worker", "relayforge.endpoint.allow-local-http=true"},
-        webEnvironment = SpringBootTest.WebEnvironment.NONE
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
 class DeliveryWorkerLifecycleIntegrationTests {
 

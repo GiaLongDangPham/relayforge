@@ -18,18 +18,39 @@ spring:
         jdbc:
           time_zone: UTC
 
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+    prometheus:
+      access: unrestricted
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    distribution:
+      percentiles-histogram:
+        relayforge.delivery.dispatch: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
 relayforge:
   security:
     # This deterministic value is test-only, not a deployable publisher-secret configuration.
     dashboard-origin: http://localhost:5173
     secure-cookie: false
     production: false
-    api-key-pepper: test-only-publisher-api-key-pepper-not-a-production-secret
+    api-key-pepper: ${RELAYFORGE_API_KEY_PEPPER:test-only-api-key-pepper}
   endpoint:
     allow-local-http: true
   endpoint-secret:
     # Base64URL of exactly 32 test-only bytes; never deploy this value.
-    encryption-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    encryption-key: ${RELAYFORGE_ENDPOINT_ENCRYPTION_KEY:test-only-32-byte-base64url-key}
     key-reference: test-local-aes-gcm-v1
   worker:
     max-in-flight-claims: 8

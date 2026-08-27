@@ -11,6 +11,7 @@ import java.util.UUID;
 import com.gialong.relayforge.delivery.api.DeliveryDisplayStatus;
 import com.gialong.relayforge.delivery.api.AttemptHistorySummary;
 import com.gialong.relayforge.delivery.api.EventDeliverySummary;
+import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshot;
 
 /**
  * Persistence boundary for immutable event acceptance, delivery work, and durable attempt-start state.
@@ -61,6 +62,8 @@ public interface DeliveryStore {
             ExpiredStartedAttempt expiredAttempt,
             CompletionDecision decision
     );
+
+    DeliveryOperationalSnapshot currentOperationalSnapshot();
 
     List<HistoryRecords.EventRecord> listHistoryEvents(
             UUID projectId,

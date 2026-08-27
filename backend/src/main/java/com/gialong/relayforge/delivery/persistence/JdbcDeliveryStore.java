@@ -20,6 +20,7 @@ import com.gialong.relayforge.delivery.api.AttemptHistorySummary;
 import com.gialong.relayforge.delivery.api.DeliveryDisplayStatus;
 import com.gialong.relayforge.delivery.api.DeliveryStoredState;
 import com.gialong.relayforge.delivery.api.EventDeliverySummary;
+import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshot;
 import com.gialong.relayforge.delivery.api.ReplayDeliveryResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -190,6 +191,29 @@ public class JdbcDeliveryStore implements DeliveryStore {
                 (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
                 capacity
         ).size();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public DeliveryOperationalSnapshot currentOperationalSnapshot() {
+        return jdbcTemplate.queryForObject(
+                "select "
+                        + "count(*) filter (where delivery.state = 'PENDING' and delivery.due_at <= CURRENT_TIMESTAMP "
+                        + "and endpoint.enabled) as ready_due_count, "
+                        + "count(*) filter (where delivery.state = 'PENDING' and delivery.due_at <= CURRENT_TIMESTAMP "
+                        + "and not endpoint.enabled) as paused_due_count, "
+                        + "count(*) filter (where delivery.state = 'CLAIMED') as claimed_count, "
+                        + "min(delivery.due_at) filter (where delivery.state = 'PENDING' "
+                        + "and delivery.due_at <= CURRENT_TIMESTAMP and endpoint.enabled) as oldest_ready_due_at "
+                        + "from public.deliveries delivery "
+                        + "join public.webhook_endpoints endpoint on endpoint.id = delivery.endpoint_id",
+                (resultSet, rowNumber) -> new DeliveryOperationalSnapshot(
+                        resultSet.getLong("ready_due_count"),
+                        resultSet.getLong("paused_due_count"),
+                        resultSet.getLong("claimed_count"),
+                        instant(resultSet, "oldest_ready_due_at")
+                )
+        );
     }
 
     @Override
