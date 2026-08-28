@@ -112,6 +112,25 @@ The combined container memory caps are 1,280 MiB: 512 MiB API, 384 MiB worker,
 Ubuntu, Docker, filesystem cache, and burst behavior on the temporary
 `t3.small`; it is a conservative demo boundary rather than a capacity claim.
 
+## Manual image build and publication
+
+Run the local helper from the repository root with the final public HTTPS
+origin. It derives one Git-SHA tag and builds both Docker Hub images under
+`gialong1416` without registry mutation by default:
+
+```powershell
+.\deploy\build-production-images.ps1 -PublicOrigin https://relayforge.example.com
+```
+
+The gateway build receives the origin as `VITE_API_ORIGIN`; Vite embeds that
+value into static browser code. Therefore, do not publish a gateway image for a
+placeholder, raw IP address, or a domain that is not the final HTTPS origin.
+After the owner has logged Docker into their Docker Hub account and reviewed
+the exact tag, the same command with `-Push` publishes both images. This is a
+deliberate external action and is not part of the no-push validation slice. The
+helper refuses a dirty Git working tree so an image tag can never falsely claim
+to represent an older commit.
+
 ## Operational limits and rollback
 
 - Compose restart policies restore containers after a host reboot; they do not

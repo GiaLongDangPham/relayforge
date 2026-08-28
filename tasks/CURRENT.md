@@ -4,28 +4,25 @@ Status: Completed
 
 ## Goal
 
-Create and validate the local production Compose/Caddy configuration for the accepted EC2 deployment without pushing images, creating secrets, opening web ports, or deploying to EC2.
+Create an ignored local production environment file for the accepted DuckDNS hostname, with generated infrastructure secrets and the owner-selected bootstrap credentials, without pushing an image or deploying to EC2.
 
 ## Decisions
 
-- Production Compose uses a prebuilt backend image twice and a prebuilt Caddy/dashboard image once; it never builds source on EC2.
-- PostgreSQL, API, and worker publish no host ports. Caddy is the only service declaring `80:80` and `443:443`.
-- API owns Flyway and must pass readiness before worker starts with `SPRING_FLYWAY_ENABLED=false`.
-- Container limits reserve 512 MiB for API, 384 MiB for worker, 256 MiB for PostgreSQL, and 128 MiB for Caddy; Java heap follows an explicit 60% maximum within each application limit.
+- Use `https://gialong.duckdns.org` as the public dashboard/API origin and `longdpg.t1.2023@gmail.com` for Caddy's ACME account contact.
+- Generate the database password, API-key pepper, and AES-256-GCM key from 32 random bytes each; keep them only in the ignored file.
+- Enable exactly one controlled owner bootstrap using the owner-selected temporary credentials. Their values exist only in the ignored environment file and must not be copied into tracked documentation, logs, or chat.
+- Keep the image tag as an explicit placeholder until a clean Git commit has been built and pushed to Docker Hub.
 
 ## Out of scope
 
-Opening public web ports, Elastic IP/DNS/certificate setup, Docker Hub image push, production secret creation, Compose application deployment, automated CD, backup drill, and Java/business behavior change.
+Docker Hub login, repository creation, image push, EC2 secret installation, Elastic IP/DNS/certificate setup, Compose deployment, automated CD, and Java/business behavior change.
 
 ## Evidence required
 
-- `docker compose --env-file deploy/.env.production.example -f deploy/compose.production.yml config` accepts the topology without resolving any image or secret.
-- The gateway Dockerfile builds the production dashboard with an explicit public API origin and Caddy validates its configuration.
-- The backend image builds with the readiness-check client; no container is pushed or deployed.
+- The ignored file has every required Compose variable except the image tag, which intentionally remains a fail-fast placeholder until a pushed release exists.
+- `docker compose ... config` accepts the file without printing secret values or contacting a registry.
 
 ## Verification evidence
 
-- `docker compose --env-file deploy/.env.production.example -f deploy/compose.production.yml config` passed without pulling, pushing, or running a production service. Its rendered topology has only gateway ports 80/443.
-- `docker build --tag relayforge-backend:production-check backend` passed. The verified image contains `curl` for health checks and runs as the non-root `relayforge` user.
-- `docker build --build-arg VITE_API_ORIGIN=https://relayforge.example.com --file deploy/Dockerfile.gateway --tag relayforge-gateway:production-check .` passed after the root `.dockerignore` limited the build context to the required files. Caddy configuration validation passed using the built image and placeholder domain values.
-- Local Compose was started only for the required dashboard smoke check. `curl.exe` returned success for both `http://localhost:5173/` and API readiness at `http://localhost:8080/actuator/health/readiness`. The embedded browser's initial request saw the dashboard offline before Compose started; its subsequent reload was blocked by the browser URL policy, so no browser DOM/console assertion was available.
+- `docker compose --env-file deploy/.env.production -f deploy/compose.production.yml config --quiet` passed without pulling, pushing, or starting any production service.
+- A non-secret structural check confirmed that all required values are present, the endpoint encryption key decodes to exactly 32 bytes, and the image tag remains the intentional fail-fast placeholder.
