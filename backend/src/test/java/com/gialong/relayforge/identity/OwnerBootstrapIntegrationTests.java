@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @SpringBootTest(
         classes = RelayForgeApplication.class,
         properties = "relayforge.runtime=api",
-        webEnvironment = SpringBootTest.WebEnvironment.NONE
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
 class OwnerBootstrapIntegrationTests {
 

@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @SpringBootTest(
         classes = RelayForgeApplication.class,
         properties = {"relayforge.runtime=worker", "relayforge.worker.lifecycle-enabled=false"},
-        webEnvironment = SpringBootTest.WebEnvironment.NONE
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
 class DeliveryHistoryReplayIntegrationTests {
 

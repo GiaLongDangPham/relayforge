@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @SpringBootTest(
         classes = RelayForgeApplication.class,
         properties = {"relayforge.runtime=worker", "relayforge.worker.lifecycle-enabled=false"},
-        webEnvironment = SpringBootTest.WebEnvironment.NONE
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
 class PostgreSqlFoundationTests {
 
@@ -88,8 +88,8 @@ class PostgreSqlFoundationTests {
         var currentMigration = flyway.info().current();
 
         assertThat(currentMigration).isNotNull();
-        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("11");
-        assertThat(currentMigration.getDescription()).isEqualTo("add delivery history and replays");
+        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("12");
+        assertThat(currentMigration.getDescription()).isEqualTo("add terminal history retention indexes");
 
         Integer successfulMigrations = jdbcTemplate.queryForObject(
                 "select count(*) from flyway_schema_history where success",
@@ -102,7 +102,7 @@ class PostgreSqlFoundationTests {
                 String.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(11);
+        assertThat(successfulMigrations).isEqualTo(12);
         assertThat(tables).containsExactly(
                 "attempt_late_diagnostics",
                 "deliveries",

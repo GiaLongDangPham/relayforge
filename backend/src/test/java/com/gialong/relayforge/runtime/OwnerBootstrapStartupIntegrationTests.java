@@ -66,9 +66,10 @@ class OwnerBootstrapStartupIntegrationTests {
 
     private ConfigurableApplicationContext startApplication(String password) {
         return new SpringApplicationBuilder(RelayForgeApplication.class)
-                .web(WebApplicationType.NONE)
+                .web(WebApplicationType.SERVLET)
                 .properties(Map.of(
                         "relayforge.runtime", "api",
+                        "server.port", "0",
                         "relayforge.bootstrap.owner.enabled", "true",
                         OwnerBootstrapStartupRunner.LOGIN_PROPERTY, " Startup.Owner ",
                         OwnerBootstrapStartupRunner.PASSWORD_PROPERTY, password,
