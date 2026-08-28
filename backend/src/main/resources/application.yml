@@ -70,3 +70,9 @@ relayforge:
       connection-timeout: 2s
       dispatch-deadline: 10s
       response-preview-bytes: 8192
+  retention:
+    enabled: ${RELAYFORGE_RETENTION_ENABLED:true}
+    terminal-history-days: 30
+    max-graphs-per-run: 25
+    initial-delay: 1m
+    cleanup-interval: 1h

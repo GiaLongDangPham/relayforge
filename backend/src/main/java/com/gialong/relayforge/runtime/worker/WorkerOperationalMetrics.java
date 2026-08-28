@@ -2,6 +2,7 @@ package com.gialong.relayforge.runtime.worker;
 
 import com.gialong.relayforge.delivery.api.AttemptFinalizationResult;
 import com.gialong.relayforge.delivery.api.DispatchObservation;
+import com.gialong.relayforge.delivery.api.RetentionCleanupResult;
 
 /** Bounded, instance-local worker signals. Persistent delivery history remains the system of record. */
 public interface WorkerOperationalMetrics {
@@ -26,6 +27,10 @@ public interface WorkerOperationalMetrics {
 
     void recordFinalizationAbandoned();
 
+    void recordRetentionCleanup(RetentionCleanupResult result);
+
+    void recordRetentionFailure();
+
     static WorkerOperationalMetrics noop() {
         return new WorkerOperationalMetrics() {
             @Override public void workerStarted() { }
@@ -38,6 +43,8 @@ public interface WorkerOperationalMetrics {
             @Override public void recordDispatch(DispatchObservation observation) { }
             @Override public void recordFinalization(AttemptFinalizationResult result) { }
             @Override public void recordFinalizationAbandoned() { }
+            @Override public void recordRetentionCleanup(RetentionCleanupResult result) { }
+            @Override public void recordRetentionFailure() { }
         };
     }
 }

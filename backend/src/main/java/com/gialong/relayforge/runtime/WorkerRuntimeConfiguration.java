@@ -6,6 +6,7 @@ import com.gialong.relayforge.delivery.api.DeliveryAttemptRecovery;
 import com.gialong.relayforge.delivery.api.DeliveryAttemptStarter;
 import com.gialong.relayforge.delivery.api.OutboundWebhookDispatcher;
 import com.gialong.relayforge.delivery.api.OutboundWebhookMessageSigner;
+import com.gialong.relayforge.delivery.api.TerminalHistoryRetention;
 import com.gialong.relayforge.runtime.worker.OutboundDispatchProperties;
 import com.gialong.relayforge.runtime.worker.PinnedOutboundWebhookDispatcher;
 import com.gialong.relayforge.runtime.worker.WorkerClaimCoordinator;
@@ -14,6 +15,8 @@ import com.gialong.relayforge.runtime.worker.WorkerDeliveryProcessor;
 import com.gialong.relayforge.runtime.worker.WorkerProperties;
 import com.gialong.relayforge.runtime.worker.WorkerOperationalMetrics;
 import com.gialong.relayforge.runtime.worker.MicrometerWorkerOperationalMetrics;
+import com.gialong.relayforge.runtime.worker.RetentionProperties;
+import com.gialong.relayforge.runtime.worker.TerminalHistoryRetentionLoop;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -26,7 +29,7 @@ import java.time.Duration;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(prefix = "relayforge", name = "runtime", havingValue = "worker")
-@EnableConfigurationProperties({WorkerProperties.class, OutboundDispatchProperties.class})
+@EnableConfigurationProperties({WorkerProperties.class, OutboundDispatchProperties.class, RetentionProperties.class})
 class WorkerRuntimeConfiguration {
 
     @Bean
@@ -84,5 +87,15 @@ class WorkerRuntimeConfiguration {
             WorkerOperationalMetrics metrics
     ) {
         return new DeliveryWorkerLoop(claimCoordinator, deliveryClaimer, attemptRecovery, processor, properties, metrics);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "relayforge.retention", name = "enabled", havingValue = "true", matchIfMissing = true)
+    TerminalHistoryRetentionLoop terminalHistoryRetentionLoop(
+            TerminalHistoryRetention retention,
+            RetentionProperties properties,
+            WorkerOperationalMetrics metrics
+    ) {
+        return new TerminalHistoryRetentionLoop(retention, properties, metrics);
     }
 }

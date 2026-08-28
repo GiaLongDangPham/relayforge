@@ -268,7 +268,11 @@ Cleanup must operate on a complete terminal graph:
 - replay request records are removed with their replay/source graph, never earlier in a way that breaks idempotency during the retention window;
 - configuration rows are not cascaded from delivery cleanup.
 
-Exact cleanup SQL, batch size, scheduling, and foreign-key actions are deferred. The implementation must demonstrate restart-safe bounded cleanup and avoid long transactions.
+Group 14 implements this relation with a worker-only inbound retention port. PostgreSQL `CURRENT_TIMESTAMP` is the time authority. The default retention period is 30 days; a run has an initial one-minute delay, then a fixed one-hour delay, and cleans at most 25 event graphs (configurable from 1 through 100) per run.
+
+Each candidate graph gets its own short `READ COMMITTED` transaction. The cleanup first selects one eligible event, then locks every currently visible delivery in its graph with `FOR UPDATE SKIP LOCKED`. If another transaction owns any graph delivery, this run skips the graph; it does not wait. Only after it owns the whole graph does it lock the event and recheck that the event and all original/replay deliveries are terminal and old enough. It then deletes late diagnostics, attempts, replay requests, replay leaves from child to source, and finally the event. If a replay lineage cannot be removed completely, the transaction fails and rolls back rather than retaining a partial graph. An empty-delivery event is eligible after its own retention period.
+
+Replay locks its source delivery in its own transaction before PostgreSQL takes the event foreign-key lock for the new child. Retention follows that same delivery-then-event order. Therefore retention either sees a committed pending child during the recheck and leaves the graph intact, or retains the source lock first and prevents the replay transaction from creating a child that cleanup would partially remove. This order also prevents their prior event-to-delivery versus delivery-to-event deadlock. V12 supports the bounded candidate and graph checks with `(accepted_at, id)` on `events` and `(event_id, state, terminal_at)` on `deliveries`. These are query-shape support, not performance claims; representative `EXPLAIN ANALYZE` remains future evidence.
 
 ## 10. Required future query patterns
 
@@ -294,9 +298,11 @@ Group 7 adds V9 `delivery_attempts`: restrictive delivery ownership, unique `(de
 
 Group 10 adds V11 physical replay support. A partial unique `(event_id, endpoint_id)` index applies only to original rows with a null replay parent, while a project/event/endpoint/self-reference tuple prevents replay identity drift. `replay_requests` has project-scoped key uniqueness and a deferred lineage foreign key to the exact replay child, allowing the transaction to reserve the idempotency command before it inserts that child. V11 also adds the project delivery and project/event delivery keyset indexes used by owner history; they are query-shape support, not performance claims.
 
+Group 14 adds V12 retention indexes and the bounded PostgreSQL-time cleanup described in section 9. It deletes records only after the complete graph lock/recheck. Retention has no configuration-table cascade and no owner-facing deletion API.
+
 ## 11. Required future test evidence
 
-PostgreSQL Testcontainers tests must eventually prove:
+PostgreSQL Testcontainers tests prove or must eventually prove:
 
 1. concurrent equivalent publish commands create one event and one complete delivery set;
 2. same publish key with different content conflicts without mutation;
@@ -313,17 +319,16 @@ PostgreSQL Testcontainers tests must eventually prove:
 13. replay idempotency converges under concurrent requests and conflicts on another source;
 14. replay retains project/event/endpoint identity and leaves source history unchanged;
 15. blocked receiver flow holds no database transaction during HTTP;
-16. retention never deletes nonterminal work or a partial retained replay graph;
+16. retention removes a complete expired terminal replay graph (including attempts, late diagnostics, and replay idempotency) and an expired no-route event while preserving configuration; it never deletes nonterminal work or a graph with a pending replay child;
 17. cursor queries have no duplicate/omitted rows when multiple records share the same timestamp.
 
 ## 12. Decisions deferred to implementation slices
 
 - Production migration ownership and compatibility validation during rollout. Flyway, a PostgreSQL 17 minimum, the pinned `17.10-alpine` integration-test image, and the `public` schema are already fixed by the Phase 1 persistence foundation.
-- Finalization/recovery-after-attempt constraints, SQL, indexes, lock modes, isolation levels, and cleanup statements. Groups 6-7 have chosen the initial claim/recovery and attempt-start SQL, locks, indexes, and attempt fingerprint encoding.
+- Finalization/recovery-after-attempt constraints, SQL, indexes, and lock modes beyond the current initial claim/recovery, attempt-start, and retention cleanup choices.
 - JPA entity boundaries, repository ports, projections, and fetch plans.
 - JSON canonicalization implementation and fingerprint version format.
 - Response-preview encoding and UI redaction.
 - Cursor token encoding and signing.
-- Retention cleanup schedule and operational safeguards.
 
 Physical design may evolve with evidence, but it must preserve atomic acceptance, project integrity, append-only attempts, conditional claim fencing, immutable unknown outcomes, replay idempotency, and at-least-once behavior.

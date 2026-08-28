@@ -22,6 +22,7 @@ import com.gialong.relayforge.delivery.api.DeliveryStoredState;
 import com.gialong.relayforge.delivery.api.EventDeliverySummary;
 import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshot;
 import com.gialong.relayforge.delivery.api.ReplayDeliveryResult;
+import com.gialong.relayforge.delivery.api.RetentionCleanupResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -214,6 +215,122 @@ public class JdbcDeliveryStore implements DeliveryStore {
                         instant(resultSet, "oldest_ready_due_at")
                 )
         );
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<UUID> findNextExpiredTerminalEvent(int retentionDays) {
+        return jdbcTemplate.query(
+                        "select event.id from public.events event "
+                                + "where event.accepted_at < CURRENT_TIMESTAMP - make_interval(days => ?) "
+                                + "and not exists (select 1 from public.deliveries delivery "
+                                + "where delivery.event_id = event.id and (delivery.state not in "
+                                + "('SUCCEEDED', 'FAILED_PERMANENT', 'EXHAUSTED') "
+                                + "or delivery.terminal_at >= CURRENT_TIMESTAMP - make_interval(days => ?))) "
+                                + "order by event.accepted_at, event.id limit 1",
+                        (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
+                        retentionDays,
+                        retentionDays
+                )
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean tryLockRetentionGraph(UUID eventId) {
+        List<UUID> lockedDeliveryIds = jdbcTemplate.query(
+                "select id from public.deliveries where event_id = ? order by id for update skip locked",
+                (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
+                eventId
+        );
+        Integer deliveryCount = jdbcTemplate.queryForObject(
+                "select count(*) from public.deliveries where event_id = ?",
+                Integer.class,
+                eventId
+        );
+        return deliveryCount != null && lockedDeliveryIds.size() == deliveryCount;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean lockRetentionEvent(UUID eventId) {
+        return !jdbcTemplate.query(
+                        "select id from public.events where id = ? for update",
+                        (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
+                        eventId
+                )
+                .isEmpty();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean isExpiredCompleteTerminalGraph(UUID eventId, int retentionDays) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "select exists (select 1 from public.events event where event.id = ? "
+                        + "and event.accepted_at < CURRENT_TIMESTAMP - make_interval(days => ?) "
+                        + "and not exists (select 1 from public.deliveries delivery "
+                        + "where delivery.event_id = event.id and (delivery.state not in "
+                        + "('SUCCEEDED', 'FAILED_PERMANENT', 'EXHAUSTED') "
+                        + "or delivery.terminal_at >= CURRENT_TIMESTAMP - make_interval(days => ?))))",
+                Boolean.class,
+                eventId,
+                retentionDays,
+                retentionDays
+        ));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public RetentionCleanupResult deleteRetentionGraph(UUID eventId) {
+        int diagnostics = jdbcTemplate.update(
+                "delete from public.attempt_late_diagnostics diagnostic using public.delivery_attempts attempt "
+                        + "join public.deliveries delivery on delivery.id = attempt.delivery_id "
+                        + "where diagnostic.attempt_id = attempt.id and delivery.event_id = ?",
+                eventId
+        );
+        int attempts = jdbcTemplate.update(
+                "delete from public.delivery_attempts attempt using public.deliveries delivery "
+                        + "where attempt.delivery_id = delivery.id and delivery.event_id = ?",
+                eventId
+        );
+        int replayRequests = jdbcTemplate.update(
+                "delete from public.replay_requests request using public.deliveries delivery "
+                        + "where (request.source_delivery_id = delivery.id or request.replay_delivery_id = delivery.id) "
+                        + "and delivery.event_id = ?",
+                eventId
+        );
+        int deliveries = deleteRetentionLeaves(eventId);
+        int events = jdbcTemplate.update("delete from public.events where id = ?", eventId);
+        if (events != 1) {
+            throw new IllegalStateException("retention event graph was not deleted atomically");
+        }
+        return new RetentionCleanupResult(events, deliveries, attempts, diagnostics, replayRequests);
+    }
+
+    private int deleteRetentionLeaves(UUID eventId) {
+        int deleted = 0;
+        while (true) {
+            int leaves = jdbcTemplate.update(
+                    "delete from public.deliveries delivery where delivery.event_id = ? "
+                            + "and not exists (select 1 from public.deliveries child "
+                            + "where child.replay_of_delivery_id = delivery.id)",
+                    eventId
+            );
+            deleted += leaves;
+            if (leaves == 0) {
+                break;
+            }
+        }
+        Integer remaining = jdbcTemplate.queryForObject(
+                "select count(*) from public.deliveries where event_id = ?",
+                Integer.class,
+                eventId
+        );
+        if (remaining == null || remaining != 0) {
+            throw new IllegalStateException("retention graph contains a replay lineage that cannot be removed safely");
+        }
+        return deleted;
     }
 
     @Override

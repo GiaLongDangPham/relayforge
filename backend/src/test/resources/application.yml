@@ -50,7 +50,7 @@ relayforge:
     allow-local-http: true
   endpoint-secret:
     # Base64URL of exactly 32 test-only bytes; never deploy this value.
-    encryption-key: ${RELAYFORGE_ENDPOINT_ENCRYPTION_KEY:test-only-32-byte-base64url-key}
+    encryption-key: ${RELAYFORGE_ENDPOINT_ENCRYPTION_KEY:MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY}
     key-reference: test-local-aes-gcm-v1
   worker:
     max-in-flight-claims: 8
@@ -63,3 +63,9 @@ relayforge:
       connection-timeout: 2s
       dispatch-deadline: 10s
       response-preview-bytes: 8192
+  retention:
+    enabled: true
+    terminal-history-days: 30
+    max-graphs-per-run: 25
+    initial-delay: 1m
+    cleanup-interval: 1h

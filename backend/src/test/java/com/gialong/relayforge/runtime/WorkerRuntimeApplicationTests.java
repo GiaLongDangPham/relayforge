@@ -5,6 +5,7 @@ import com.gialong.relayforge.delivery.api.OutboundWebhookDispatcher;
 import com.gialong.relayforge.runtime.security.OwnerAuthenticationProvider;
 import com.gialong.relayforge.runtime.worker.WorkerClaimCoordinator;
 import com.gialong.relayforge.runtime.worker.DeliveryWorkerLoop;
+import com.gialong.relayforge.runtime.worker.TerminalHistoryRetentionLoop;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.springframework.boot.micrometer.metrics.autoconfigure.export.prometheus.PrometheusScrapeEndpoint;
 import org.junit.jupiter.api.Test;
@@ -46,7 +47,8 @@ class WorkerRuntimeApplicationTests {
                 "server.port", "0",
                 "spring.datasource.url", POSTGRES.getJdbcUrl(),
                 "spring.datasource.username", POSTGRES.getUsername(),
-                "spring.datasource.password", POSTGRES.getPassword()
+                "spring.datasource.password", POSTGRES.getPassword(),
+                "relayforge.endpoint-secret.encryption-key", "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY"
         ));
 
         try (ConfigurableApplicationContext context = application.run()) {
@@ -56,6 +58,7 @@ class WorkerRuntimeApplicationTests {
             assertThat(context.getBeansOfType(WorkerRuntimeConfiguration.class)).hasSize(1);
             assertThat(context.getBeansOfType(WorkerClaimCoordinator.class)).hasSize(1);
             assertThat(context.getBeansOfType(DeliveryWorkerLoop.class)).hasSize(1);
+            assertThat(context.getBeansOfType(TerminalHistoryRetentionLoop.class)).hasSize(1);
             assertThat(context.getBeansOfType(OutboundWebhookDispatcher.class)).hasSize(1);
             assertThat(context.getBeansOfType(OwnerBootstrapStartupRunner.class)).isEmpty();
             assertThat(context.getBeansOfType(OwnerAuthenticationProvider.class)).isEmpty();
@@ -73,7 +76,8 @@ class WorkerRuntimeApplicationTests {
             assertThat(prometheusResponse.statusCode()).isEqualTo(200);
             assertThat(prometheusResponse.body())
                     .contains("relayforge_worker_running")
-                    .contains("relayforge_worker_permits_available");
+                    .contains("relayforge_worker_permits_available")
+                    .contains("relayforge_retention_runs");
             assertThat(get(managementPort, "/api/v1/auth/csrf").statusCode()).isEqualTo(403);
 
             context.getBean(DeliveryWorkerLoop.class).stop();

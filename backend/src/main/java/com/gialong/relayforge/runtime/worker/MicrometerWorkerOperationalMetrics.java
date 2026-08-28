@@ -2,6 +2,7 @@ package com.gialong.relayforge.runtime.worker;
 
 import com.gialong.relayforge.delivery.api.AttemptFinalizationResult;
 import com.gialong.relayforge.delivery.api.DispatchObservation;
+import com.gialong.relayforge.delivery.api.RetentionCleanupResult;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -29,6 +30,7 @@ public final class MicrometerWorkerOperationalMetrics implements WorkerOperation
         Gauge.builder("relayforge.worker.permits.available", requiredCoordinator, WorkerClaimCoordinator::availablePermits)
                 .description("Unreserved local worker dispatch permits")
                 .register(meterRegistry);
+        registerRetentionCounters();
     }
 
     @Override
@@ -110,8 +112,40 @@ public final class MicrometerWorkerOperationalMetrics implements WorkerOperation
         counter("relayforge.delivery.finalization.abandoned").increment();
     }
 
+    @Override
+    public void recordRetentionCleanup(RetentionCleanupResult result) {
+        RetentionCleanupResult requiredResult = Objects.requireNonNull(result, "result must not be null");
+        counter("relayforge.retention.runs").increment();
+        incrementIfPositive("relayforge.retention.events.deleted", requiredResult.eventsDeleted());
+        incrementIfPositive("relayforge.retention.deliveries.deleted", requiredResult.deliveriesDeleted());
+        incrementIfPositive("relayforge.retention.attempts.deleted", requiredResult.attemptsDeleted());
+        incrementIfPositive("relayforge.retention.late.diagnostics.deleted", requiredResult.lateDiagnosticsDeleted());
+        incrementIfPositive("relayforge.retention.replay.requests.deleted", requiredResult.replayRequestsDeleted());
+    }
+
+    @Override
+    public void recordRetentionFailure() {
+        counter("relayforge.retention.failures").increment();
+    }
+
     private Counter counter(String name) {
         return Counter.builder(name).register(meterRegistry);
+    }
+
+    private void incrementIfPositive(String name, int count) {
+        if (count > 0) {
+            counter(name).increment(count);
+        }
+    }
+
+    private void registerRetentionCounters() {
+        counter("relayforge.retention.runs");
+        counter("relayforge.retention.events.deleted");
+        counter("relayforge.retention.deliveries.deleted");
+        counter("relayforge.retention.attempts.deleted");
+        counter("relayforge.retention.late.diagnostics.deleted");
+        counter("relayforge.retention.replay.requests.deleted");
+        counter("relayforge.retention.failures");
     }
 
     private static String lowercase(String value) {

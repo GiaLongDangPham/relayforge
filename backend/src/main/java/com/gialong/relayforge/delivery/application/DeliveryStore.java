@@ -12,6 +12,7 @@ import com.gialong.relayforge.delivery.api.DeliveryDisplayStatus;
 import com.gialong.relayforge.delivery.api.AttemptHistorySummary;
 import com.gialong.relayforge.delivery.api.EventDeliverySummary;
 import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshot;
+import com.gialong.relayforge.delivery.api.RetentionCleanupResult;
 
 /**
  * Persistence boundary for immutable event acceptance, delivery work, and durable attempt-start state.
@@ -64,6 +65,16 @@ public interface DeliveryStore {
     );
 
     DeliveryOperationalSnapshot currentOperationalSnapshot();
+
+    Optional<UUID> findNextExpiredTerminalEvent(int retentionDays);
+
+    boolean tryLockRetentionGraph(UUID eventId);
+
+    boolean lockRetentionEvent(UUID eventId);
+
+    boolean isExpiredCompleteTerminalGraph(UUID eventId, int retentionDays);
+
+    RetentionCleanupResult deleteRetentionGraph(UUID eventId);
 
     List<HistoryRecords.EventRecord> listHistoryEvents(
             UUID projectId,

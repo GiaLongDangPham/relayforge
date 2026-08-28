@@ -19,6 +19,7 @@ Read these Prometheus signals:
 - `relayforge_delivery_oldest_ready_due_age_seconds`: how overdue the oldest enabled work is.
 - `relayforge_worker_running`, `relayforge_worker_permits_available`, and `relayforge_worker_claimed_total`: worker lifecycle and local capacity.
 - `relayforge_delivery_attempts_total`, `relayforge_delivery_dispatch_seconds`, recovery, and finalization metrics: dispatch outcome, latency, and recovery evidence.
+- `relayforge_retention_runs_total`, `relayforge_retention_*_deleted_total`, and `relayforge_retention_failures_total`: bounded terminal-history cleanup runs, deleted operational records, and failures. These metrics have no project, event, delivery, or endpoint labels.
 
 If ready backlog and oldest-due age rise while worker-running is zero, restore or inspect the worker. If permits remain zero with slow dispatch latency, inspect receiver behavior and the configured outbound deadline before increasing concurrency. If paused backlog rises, inspect the endpoint enabled state; do not manually change delivery rows.
 
@@ -35,6 +36,7 @@ Console output is ECS JSON by default. Start with a safe `trace.id`, project UUI
 | Receiver timeout/5xx | Attempt outcome is recorded and retry scheduling follows the existing bounded policy. | Inspect safe attempt history and receiver health; do not force state transitions. |
 | Endpoint disabled | Existing nonterminal deliveries remain pending but paused. | Enable it when delivery should resume. |
 | Worker crashes after outbound I/O | A later recovery records `UNKNOWN` where needed; a retry can duplicate receiver side effects. | Treat receiver processing as idempotent and inspect the durable attempt history. |
+| Retention failure | The failed single graph transaction rolls back; the next fixed-delay worker run retries bounded work. | Inspect the safe `terminal_history_retention_failed` worker log and database readiness. Do not manually delete event, delivery, attempt, or replay rows. |
 
 ## Local Compose commands
 

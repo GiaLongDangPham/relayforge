@@ -4,28 +4,28 @@ Status: Completed
 
 ## Goal
 
-Complete Group 13 operational observability: expose tightly scoped API/worker health and Prometheus metrics, emit safe structured delivery logs, and record an operator failure runbook without adding an observability platform.
+Complete Group 14 terminal-history retention: safely remove only expired, complete terminal delivery graphs in bounded transactions without changing event publishing, delivery semantics, or configuration retention.
 
 ## Decisions
 
-- Use Spring Boot Actuator and Micrometer Prometheus, not a dashboard/ELK/tracing platform.
-- Run worker mode as a management-only servlet on a distinct internal port; no owner or publisher adapter is activated and a fallback security chain denies all non-management requests.
-- Use only bounded state/outcome metric tags. Identity and correlation values belong in structured logs, never metric tags.
-- Refresh the API backlog snapshot periodically so scrape frequency cannot directly create an unbounded database-query load.
+- Use PostgreSQL time and a 30-day default retention period.
+- One application-owned `TransactionTemplate` cleans one candidate event graph per short transaction; it locks, rechecks, then deletes dependent operational records before deliveries and the event.
+- Coordinate cleanup with replay through source-delivery locking, so a new replay cannot produce a partially retained graph.
+- Schedule worker-only cleanup at a fixed delay with bounded per-run work and metrics; do not expose an owner API for deletion.
 
 ## Out of scope
 
-Prometheus/Grafana deployment, ELK, OpenTelemetry collector/tracing backend, alerting, metrics dashboard, cloud networking, retention, and changes to delivery semantics.
+Manual record deletion, configurable per-project retention, archival/object storage, cross-region cleanup, and changes to delivery semantics or configuration retention.
 
 ## Evidence required
 
-- Worker integration proves health and Prometheus are reachable while a worker business API is forbidden.
-- Rebuilt Compose exposes API and worker management ports and preserves the Group 12 smoke flow.
+- A PostgreSQL integration test proves an old all-terminal replay graph and a no-route event are removed atomically with attempts, diagnostics, and replay idempotency records, while configuration remains.
+- The same test proves nonterminal work and a graph with a pending replay child are retained.
+- Worker composition exposes the retention metrics, and rebuilt Compose preserves the Group 12 smoke flow and dashboard sign-in page.
 
 ## Verification evidence
 
-- Focused worker composition and delivery-processor verification passed with PostgreSQL Testcontainers. It proves worker readiness/Prometheus HTTP exposure, no business adapter/session repository, and a deny-all fallback for `/api/v1/**`.
-- API composition test and compile pass after anchoring the trace filter to Spring Security's ordered `SecurityContextHolderFilter`, rather than to a custom publisher filter.
-- Rebuilt Compose reports API and worker `Up`; both readiness endpoints return `UP`, and both Prometheus endpoints include RelayForge metrics.
-- `group12-smoke.ps1 -VerifyRestart` passed: CSRF mutations, idempotent publish, valid receiver HMAC, one successful delivery attempt, and PostgreSQL-backed session/event persistence across API/worker restart.
-- Browser acceptance after the restart passed: the dashboard at `http://localhost:5173/` reached its sign-in state with no console errors.
+- Focused PostgreSQL Testcontainers tests passed 4/4: the retention integration suite proved complete graph/no-route cleanup, nonterminal/pending-child preservation, and concurrent replay/retention all-or-nothing outcomes; worker composition proved retention metrics are exposed. The concurrency test initially exposed an event-to-delivery versus delivery-to-event deadlock, then passed after both flows were aligned to delivery-then-event locking.
+- Compose rebuild succeeded. API and worker readiness are `UP`, worker Prometheus contains `relayforge_retention_runs`, and local Flyway history is V12.
+- `group12-smoke.ps1 -VerifyRestart` passed with idempotent publish, valid HMAC, one successful delivery attempt, and restart persistence.
+- Browser acceptance passed: `http://localhost:5173/` rendered the authenticated workspace with no console errors.
