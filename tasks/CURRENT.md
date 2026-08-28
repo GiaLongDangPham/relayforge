@@ -1,28 +1,29 @@
 # Current Task
 
-Status: Completed
+Status: In progress
 
 ## Goal
 
-Create an ignored local production environment file for the accepted DuckDNS hostname, with generated infrastructure secrets and the owner-selected bootstrap credentials, without pushing an image or deploying to EC2.
+Restore the revoked publisher API-key invariant exposed by CI, then prepare the exact immutable Docker Hub release for manual EC2 Compose deployment without starting the production stack.
 
 ## Decisions
 
-- Use `https://gialong.duckdns.org` as the public dashboard/API origin and `longdpg.t1.2023@gmail.com` for Caddy's ACME account contact.
-- Generate the database password, API-key pepper, and AES-256-GCM key from 32 random bytes each; keep them only in the ignored file.
-- Enable exactly one controlled owner bootstrap using the owner-selected temporary credentials. Their values exist only in the ignored environment file and must not be copied into tracked documentation, logs, or chat.
-- Keep the image tag as an explicit placeholder until a clean Git commit has been built and pushed to Docker Hub.
+- Treat the CI failure as a regression of the revoke security invariant; retain a focused integration test rather than weakening its assertion.
+- Use the existing immutable `ee51d6114a8b` backend and gateway release only; Slice 1 copies Compose configuration and the ignored environment file, validates it, and pulls images without starting containers.
+- The owner runs the required EC2 commands in Termius because this agent has no SSH session to the instance.
 
 ## Out of scope
 
-Docker Hub login, repository creation, image push, EC2 secret installation, Elastic IP/DNS/certificate setup, Compose deployment, automated CD, and Java/business behavior change.
+Opening 80/443, starting production containers, changing AWS networking, automatic CD, and unrelated Java behavior.
 
 ## Evidence required
 
-- The ignored file has every required Compose variable except the image tag, which intentionally remains a fail-fast placeholder until a pushed release exists.
-- `docker compose ... config` accepts the file without printing secret values or contacting a registry.
+- The narrow API-key integration test passes and proves a revoked raw key is rejected.
+- EC2 Compose configuration validates and the two immutable image tags pull successfully without printing secrets or starting services.
 
 ## Verification evidence
 
-- `docker compose --env-file deploy/.env.production -f deploy/compose.production.yml config --quiet` passed without pulling, pushing, or starting any production service.
-- A non-secret structural check confirmed that all required values are present, the endpoint encryption key decodes to exactly 32 bytes, and the image tag remains the intentional fail-fast placeholder.
+- The original focused `ProjectApiKeyIntegrationTests` passed before and after the change with PostgreSQL 17.10 Testcontainers. The source checkout could not reproduce the reported CI failure, so the revoke assertion remains strict.
+- `JpaProjectApiKeyStore.revoke` now uses a JPQL bulk update against the mapped entity, still uses database `CURRENT_TIMESTAMP`, and clears the persistence context before rereading the owner-scoped result.
+- Local Docker rebuilt API and worker successfully; API readiness returned `{"status":"UP"}` and the unchanged dashboard returned HTTP 200 at `http://localhost:5173/`. The in-app browser controller is not available in this task, so no DOM/console assertion was performed.
+- EC2 Slice 1 is pending a fresh immutable release tag because the previously pushed `ee51d6114a8b` image predates this source change.

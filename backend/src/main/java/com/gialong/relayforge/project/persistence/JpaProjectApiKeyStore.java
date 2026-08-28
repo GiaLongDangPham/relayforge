@@ -99,9 +99,9 @@ public class JpaProjectApiKeyStore implements ProjectApiKeyStore {
             return existing;
         }
 
-        entityManager.createNativeQuery(
-                        "update public.project_api_keys set revoked_at = CURRENT_TIMESTAMP "
-                                + "where id = :apiKeyId and revoked_at is null"
+        entityManager.createQuery(
+                        "update ProjectApiKey apiKey set apiKey.revokedAt = CURRENT_TIMESTAMP "
+                                + "where apiKey.id = :apiKeyId and apiKey.revokedAt is null"
                 )
                 .setParameter("apiKeyId", apiKeyId)
                 .executeUpdate();

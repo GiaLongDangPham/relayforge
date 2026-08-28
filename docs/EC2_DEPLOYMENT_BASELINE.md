@@ -131,6 +131,17 @@ deliberate external action and is not part of the no-push validation slice. The
 helper refuses a dirty Git working tree so an image tag can never falsely claim
 to represent an older commit.
 
+### Published release
+
+The first manually published release is Git-SHA tag `ee51d6114a8b`:
+
+- `gialong1416/relayforge-backend:ee51d6114a8b`
+- `gialong1416/relayforge-gateway:ee51d6114a8b`
+
+The gateway was built with `https://gialong.duckdns.org` as its browser API
+origin. The deployment environment file selects this exact tag; it must not be
+replaced by `latest`.
+
 ## Operational limits and rollback
 
 - Compose restart policies restore containers after a host reboot; they do not
@@ -147,7 +158,7 @@ to represent an older commit.
 
 ## Deferred
 
-- Docker Hub repository, CI image build/push, and automated CD.
+- CI image build/push and automated CD.
 - Elastic IP, domain/DNS, certificate issuance, and public HTTP/HTTPS rules.
 - Database backup/restore drill, external log shipping, and AWS SSM-based
   administration.
