@@ -68,6 +68,7 @@ services:
       RELAYFORGE_RUNTIME: worker
       RELAYFORGE_SERVER_PORT: "8082"
       SPRING_FLYWAY_ENABLED: "false"
+      SPRING_AUTOCONFIGURE_EXCLUDE: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
     depends_on:
       api:
         condition: service_healthy

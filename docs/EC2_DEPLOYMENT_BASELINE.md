@@ -133,10 +133,12 @@ to represent an older commit.
 
 ### Published release
 
-The first manually published release is Git-SHA tag `ee51d6114a8b`:
+The first manually published release was Git-SHA tag `ee51d6114a8b`. The
+currently selected release is Git-SHA tag `d70776814883`, which contains the
+publisher API-key revoke correction:
 
-- `gialong1416/relayforge-backend:ee51d6114a8b`
-- `gialong1416/relayforge-gateway:ee51d6114a8b`
+- `gialong1416/relayforge-backend:d70776814883`
+- `gialong1416/relayforge-gateway:d70776814883`
 
 The gateway was built with `https://gialong.duckdns.org` as its browser API
 origin. The deployment environment file selects this exact tag; it must not be
