@@ -11,7 +11,10 @@ COPY src src
 RUN ./mvnw -B -ntp -DskipTests package
 
 FROM eclipse-temurin:25-jre-noble
-RUN groupadd --system relayforge \
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system relayforge \
     && useradd --system --gid relayforge --home-dir /app --shell /usr/sbin/nologin relayforge
 WORKDIR /app
 
@@ -20,4 +23,3 @@ COPY --from=build --chown=relayforge:relayforge /workspace/target/relayforge-bac
 USER relayforge
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/relayforge.jar"]
-

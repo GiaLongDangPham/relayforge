@@ -1,3 +1,4 @@
 .agents/
 .vscode/
 .env
+deploy/.env.production

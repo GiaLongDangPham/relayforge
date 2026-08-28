@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1.7
+
+FROM node:24-alpine AS dashboard-build
+WORKDIR /workspace/frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ .
+ARG VITE_API_ORIGIN
+ENV VITE_API_ORIGIN=${VITE_API_ORIGIN}
+RUN test -n "$VITE_API_ORIGIN"
+RUN npm run build
+
+FROM caddy:2.10.2-alpine
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=dashboard-build /workspace/frontend/dist /srv
+
+EXPOSE 80 443

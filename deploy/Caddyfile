@@ -1,0 +1,24 @@
+{
+	email {$RELAYFORGE_CADDY_EMAIL}
+	admin off
+}
+
+{$RELAYFORGE_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "DENY"
+	}
+
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

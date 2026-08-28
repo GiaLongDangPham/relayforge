@@ -1,0 +1,118 @@
+name: relayforge-production
+
+x-backend-environment: &backend-environment
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${RELAYFORGE_DB_NAME:?set RELAYFORGE_DB_NAME in .env.production}
+  SPRING_DATASOURCE_USERNAME: ${RELAYFORGE_DB_USERNAME:?set RELAYFORGE_DB_USERNAME in .env.production}
+  SPRING_DATASOURCE_PASSWORD: ${RELAYFORGE_DB_PASSWORD:?set RELAYFORGE_DB_PASSWORD in .env.production}
+  RELAYFORGE_API_KEY_PEPPER: ${RELAYFORGE_API_KEY_PEPPER:?set RELAYFORGE_API_KEY_PEPPER in .env.production}
+  RELAYFORGE_ENDPOINT_ENCRYPTION_KEY: ${RELAYFORGE_ENDPOINT_ENCRYPTION_KEY:?set RELAYFORGE_ENDPOINT_ENCRYPTION_KEY in .env.production}
+  RELAYFORGE_ENDPOINT_ENCRYPTION_KEY_REFERENCE: ${RELAYFORGE_ENDPOINT_ENCRYPTION_KEY_REFERENCE:?set RELAYFORGE_ENDPOINT_ENCRYPTION_KEY_REFERENCE in .env.production}
+  RELAYFORGE_DASHBOARD_ORIGIN: ${RELAYFORGE_PUBLIC_ORIGIN:?set RELAYFORGE_PUBLIC_ORIGIN in .env.production}
+  RELAYFORGE_SECURE_COOKIES: "true"
+  RELAYFORGE_PRODUCTION: "true"
+  RELAYFORGE_ENDPOINT_ALLOW_LOCAL_HTTP: "false"
+  JAVA_TOOL_OPTIONS: -XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError
+
+services:
+  postgres:
+    image: postgres:17.10-alpine
+    environment:
+      POSTGRES_DB: ${RELAYFORGE_DB_NAME:?set RELAYFORGE_DB_NAME in .env.production}
+      POSTGRES_USER: ${RELAYFORGE_DB_USERNAME:?set RELAYFORGE_DB_USERNAME in .env.production}
+      POSTGRES_PASSWORD: ${RELAYFORGE_DB_PASSWORD:?set RELAYFORGE_DB_PASSWORD in .env.production}
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=40"]
+    volumes:
+      - relayforge-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    mem_limit: 256m
+    cpus: 0.35
+    restart: unless-stopped
+
+  api:
+    image: ${RELAYFORGE_BACKEND_IMAGE:?set RELAYFORGE_BACKEND_IMAGE in .env.production}:${RELAYFORGE_IMAGE_TAG:?set RELAYFORGE_IMAGE_TAG in .env.production}
+    environment:
+      <<: *backend-environment
+      RELAYFORGE_RUNTIME: api
+      RELAYFORGE_BOOTSTRAP_OWNER_ENABLED: ${RELAYFORGE_BOOTSTRAP_OWNER_ENABLED:-false}
+      RELAYFORGE_BOOTSTRAP_OWNER_LOGIN_NAME: ${RELAYFORGE_BOOTSTRAP_OWNER_LOGIN_NAME:-}
+      RELAYFORGE_BOOTSTRAP_OWNER_PASSWORD: ${RELAYFORGE_BOOTSTRAP_OWNER_PASSWORD:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/actuator/health/readiness > /dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 45s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: 0.70
+    stop_grace_period: 20s
+    restart: unless-stopped
+
+  worker:
+    image: ${RELAYFORGE_BACKEND_IMAGE:?set RELAYFORGE_BACKEND_IMAGE in .env.production}:${RELAYFORGE_IMAGE_TAG:?set RELAYFORGE_IMAGE_TAG in .env.production}
+    environment:
+      <<: *backend-environment
+      RELAYFORGE_RUNTIME: worker
+      RELAYFORGE_SERVER_PORT: "8082"
+      SPRING_FLYWAY_ENABLED: "false"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8082/actuator/health/readiness > /dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 45s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 384m
+    cpus: 0.50
+    stop_grace_period: 20s
+    restart: unless-stopped
+
+  gateway:
+    image: ${RELAYFORGE_GATEWAY_IMAGE:?set RELAYFORGE_GATEWAY_IMAGE in .env.production}:${RELAYFORGE_IMAGE_TAG:?set RELAYFORGE_IMAGE_TAG in .env.production}
+    environment:
+      RELAYFORGE_DOMAIN: ${RELAYFORGE_DOMAIN:?set RELAYFORGE_DOMAIN in .env.production}
+      RELAYFORGE_CADDY_EMAIL: ${RELAYFORGE_CADDY_EMAIL:?set RELAYFORGE_CADDY_EMAIL in .env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - relayforge-caddy-data:/data
+      - relayforge-caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    mem_limit: 128m
+    cpus: 0.15
+    restart: unless-stopped
+
+volumes:
+  relayforge-postgres:
+  relayforge-caddy-data:
+  relayforge-caddy-config:
