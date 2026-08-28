@@ -1,32 +1,30 @@
 # Current Task
 
-Status: Completed
+Status: In progress
 
 ## Goal
 
-Perform the first owner-led dashboard acceptance workflow at the live HTTPS origin: create production configuration, publish one routed event, and inspect its asynchronous result.
+Add a production backup artifact, documented rollback procedure, and guarded GitHub Actions image publication/CD for the existing single-EC2 Compose deployment.
 
 ## Decisions
 
-- The owner explicitly approved dashboard mutations for this acceptance run.
-- Start from the already authenticated owner session and use only the dashboard rather than exposing internal service ports.
-- Use one public HTTPS receiver returning HTTP 204, with one subscribed event type, to demonstrate the normal successful path without exercising failure/retry/replay behavior.
+- Preserve immutable Git-SHA image tags; never introduce `latest`.
+- Build and publish only after the existing backend/frontend/container checks pass on `main`.
+- Gate the production job through GitHub's `production` environment. It is enabled only after the owner creates the required repository/environment secrets and sets an explicit enable variable.
+- Keep backup archive creation separate from destructive restore. A release failure stops and reports; it does not attempt an unsafe automatic database rollback.
 
 ## Out of scope
 
-Failure/retry/replay behavior, database inspection, production data cleanup, automatic CD, and unrelated Java behavior.
+Creating GitHub secrets/environment protection, uploading/installing host scripts, executing the first backup, and running the first automated deployment; these require the owner's external access. Performance/JVM work and DuckDNS auto-update remain out of scope.
 
 ## Evidence required
 
-- The live dashboard loads as the existing owner without browser console errors.
-- The dashboard can read the owner-scoped project list over the public HTTPS route.
-- The accepted event creates one delivery and the worker's terminal result is visible in the owner history.
-- The session, configuration metadata, event, and delivery survive a dashboard reload.
+- Shell scripts pass static syntax checks and do not print or commit runtime secrets.
+- GitHub workflow syntax passes static validation and release/deploy gates preserve test-before-push and API-before-worker ordering.
+- The owner can follow a short external setup list without exposing a secret in chat or Git.
 
 ## Verification evidence
 
-- Read-only browser acceptance passed at `https://gialong.duckdns.org`: the existing `owner` session loaded, the owner-scoped project list returned empty as expected for a new deployment, and no browser console error was captured after reload.
-- Created the `Production Acceptance` project, a publisher API key, and one enabled `HTTPBin 204 Acceptance` endpoint subscribed to `invoice.paid`. One-time raw key and signing-secret values were redacted from acceptance output and were not copied outside the browser flow.
-- The dashboard published one `invoice.paid` event with the new publisher key. It was accepted with one routed delivery; the worker completed one attempt with HTTP 204 and terminal `SUCCEEDED` status.
-- A subsequent dashboard reload retained the owner session and exposed only API-key metadata, not the one-time raw key. No browser console error was captured during the workflow.
-- The verified production Compose hardening and deployment evidence were recorded in local Git; this did not rebuild an image, push a release, or change the EC2 runtime.
+- `deploy/backup-production-postgres.sh` and `deploy/apply-production-release.sh` passed `bash -n` through Git Bash. They were not run against EC2 because installation and production mutation require the owner's SSH access.
+- `.github/workflows/ci.yml` passed Python YAML parsing and `git diff --check`. The local `actionlint` binary is unavailable; an external lint container was deliberately not given repository access because the workspace contains an ignored production environment file.
+- ADR-006 and the runbook record the guarded release decision, dedicated SSH account, host-key verification, backup/rollback boundary, and DuckDNS recovery procedure. GitHub Environment secrets/variables and the EC2 installation remain pending owner setup.

@@ -4,9 +4,9 @@
 
 This is the active Group 16 deployment baseline following
 [ADR-005](adr/0005-single-ec2-compose-deployment.md). It defines the temporary
-single-host EC2 shape and the manual deployment boundary. It does not open web
-ports, create a domain, push an image, create production secrets, or start a
-RelayForge container.
+single-host EC2 shape and its production release boundary. The automated
+release extension is defined by [ADR-006](adr/0006-guarded-github-actions-ec2-release.md)
+and the [Production Release Runbook](PRODUCTION_RELEASE_RUNBOOK.md).
 
 ## Current server baseline
 
@@ -20,9 +20,9 @@ RelayForge container.
 | Host software | Docker Engine and Compose plugin | The owner has already verified both. |
 
 Stopping EC2 stops compute charges but EBS and public-address resources can
-still incur charges. A stopped instance normally receives a different public IP
-when started again; allocate an Elastic IP only when the domain step needs a
-stable address, then release it during teardown.
+still incur charges. The owner selected DuckDNS dynamic-IP updates rather than
+an Elastic IP: after every stop/start, DuckDNS must be updated before browser
+or SSH traffic can safely use `gialong.duckdns.org` again.
 
 ## Intended production Compose shape
 
@@ -44,8 +44,8 @@ published.
 1. Keep only SSH 22 from the owner's IP while provisioning.
 2. Build and locally validate the production Compose configuration before it
    reaches the host.
-3. Allocate and associate a stable Elastic IP, then create the DNS record for a
-   domain controlled by the owner.
+3. Update the owner-controlled DuckDNS record to the current EC2 public IP
+   after every stop/start and verify it resolves before using Caddy or CI SSH.
 4. Add AWS Security Group inbound TCP 80 and 443 from anywhere.
 5. Caddy obtains and renews the certificate; set the dashboard origin to the
    exact `https://` domain and enable secure cookies.
@@ -56,19 +56,20 @@ session security model requires secure cookies and HTTPS.
 
 ## Image, secret, and deployment boundary
 
-The future CI workflow produces explicit Docker Hub tags such as a Git commit
-SHA. The owner's Docker Hub namespace is `gialong1416`, with the intended
+The GitHub Actions production job produces explicit Docker Hub tags from a Git
+commit SHA after the quality gate and `production` environment approval. The
+owner's Docker Hub namespace is `gialong1416`, with the intended
 repositories `gialong1416/relayforge-backend` and
 `gialong1416/relayforge-gateway`. A manual deployment selects one tag and
 records it in the host deployment directory. Image values are safe to store in
 Compose configuration; runtime secrets are not.
 
 ```text
-Repository / CI
+Repository / CI + production environment approval
   -> test
   -> build backend and dashboard images
   -> push Docker Hub images tagged by Git SHA
-  -> operator SSHs to EC2
+  -> dedicated CI SSH account invokes the root-owned host release script
   -> pull selected tag
   -> start PostgreSQL and API; wait for API health/migrations
   -> start worker
@@ -160,9 +161,7 @@ replaced by `latest`.
 
 ## Deferred
 
-- CI image build/push and automated CD.
-- Elastic IP, domain/DNS, certificate issuance, and public HTTP/HTTPS rules.
-- Database backup/restore drill, external log shipping, and AWS SSM-based
-  administration.
+- Automatic backup scheduling, isolated restore, external log shipping, and
+  AWS SSM-based administration.
 - Multi-host orchestration, managed PostgreSQL, Kubernetes, and high
   availability.

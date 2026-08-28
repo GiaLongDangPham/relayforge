@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -67,3 +68,82 @@ jobs:
         run: docker build --build-arg VITE_API_ORIGIN=http://localhost:8080 --tag relayforge-frontend:ci frontend
       - name: Build demo receiver image without publishing
         run: docker build --tag relayforge-demo-receiver:ci demo-receiver
+
+  production-release:
+    name: Publish and deploy production release
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main' &&
+      vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    needs: [backend-tests, frontend-checks, container-build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment:
+      name: production
+    concurrency:
+      group: relayforge-production-deploy
+      cancel-in-progress: false
+    env:
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+      PRODUCTION_PUBLIC_ORIGIN: ${{ vars.PRODUCTION_PUBLIC_ORIGIN }}
+      EC2_HOST: ${{ vars.EC2_HOST }}
+      DEPLOY_SSH_USER: ${{ vars.DEPLOY_SSH_USER }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+      EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Derive immutable image tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+
+      - name: Verify production release configuration
+        run: |
+          test -n "$DOCKERHUB_USERNAME"
+          test -n "$PRODUCTION_PUBLIC_ORIGIN"
+          test -n "$EC2_HOST"
+          test -n "$DEPLOY_SSH_USER"
+          test -n "$DOCKERHUB_TOKEN"
+          test -n "$EC2_SSH_PRIVATE_KEY"
+          test -n "$EC2_KNOWN_HOSTS"
+          test "$PRODUCTION_PUBLIC_ORIGIN" = "https://gialong.duckdns.org"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub with the repository token
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and publish backend image
+        uses: docker/build-push-action@v7
+        with:
+          context: backend
+          push: true
+          tags: ${{ vars.DOCKERHUB_USERNAME }}/relayforge-backend:${{ env.IMAGE_TAG }}
+
+      - name: Build and publish gateway image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile.gateway
+          build-args: VITE_API_ORIGIN=${{ vars.PRODUCTION_PUBLIC_ORIGIN }}
+          push: true
+          tags: ${{ vars.DOCKERHUB_USERNAME }}/relayforge-gateway:${{ env.IMAGE_TAG }}
+
+      - name: Configure verified SSH client
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$EC2_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy immutable image tag on EC2
+        run: |
+          ssh -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            "$DEPLOY_SSH_USER@$EC2_HOST" \
+            "sudo /opt/relayforge/apply-production-release.sh '$IMAGE_TAG'"
