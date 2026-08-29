@@ -8,6 +8,7 @@ readonly DEPLOY_DIR="/opt/relayforge"
 readonly ENV_FILE="${DEPLOY_DIR}/.env.production"
 readonly COMPOSE_FILE="${DEPLOY_DIR}/compose.production.yml"
 readonly HEALTH_TIMEOUT_SECONDS=150
+readonly GATEWAY_TIMEOUT_SECONDS=60
 
 if [[ ${EUID} -ne 0 ]]; then
   echo "Run with sudo: sudo ${0} <immutable-git-sha-tag>" >&2
@@ -70,11 +71,42 @@ wait_for_healthy() {
   return 1
 }
 
-readonly PREVIOUS_TAG="$(env_value RELAYFORGE_IMAGE_TAG)"
+wait_for_gateway_https() {
+  local deadline=$((SECONDS + GATEWAY_TIMEOUT_SECONDS))
+
+  # Resolve the public hostname to loopback. This exercises Caddy's TLS/SNI and
+  # host routing without making the host's own readiness depend on AWS public
+  # IP hairpin routing or DuckDNS propagation.
+  while (( SECONDS < deadline )); do
+    if curl --fail --silent --connect-timeout 3 --max-time 5 \
+      --resolve "${DOMAIN}:443:127.0.0.1" \
+      "https://${DOMAIN}/" > /dev/null; then
+      return 0
+    fi
+    sleep 3
+  done
+
+  echo "Timed out waiting for gateway HTTPS on ${DOMAIN}." >&2
+  return 1
+}
+
 readonly DOMAIN="$(env_value RELAYFORGE_DOMAIN)"
+readonly PREVIOUS_TAG="$(env_value RELAYFORGE_IMAGE_TAG)"
 
 if [[ "${PREVIOUS_TAG}" == "${NEW_TAG}" ]]; then
-  echo "Production already selects ${NEW_TAG}; no release change was made."
+  if ! compose config --quiet; then
+    echo "Production Compose validation failed for selected tag ${NEW_TAG}." >&2
+    exit 1
+  fi
+  wait_for_healthy api
+  wait_for_healthy worker
+  if ! wait_for_gateway_https; then
+    compose ps gateway
+    compose logs --tail=80 gateway
+    exit 1
+  fi
+  compose ps api worker gateway
+  echo "Production already selects ${NEW_TAG}; running services were verified."
   exit 0
 fi
 
@@ -103,7 +135,11 @@ compose up -d --no-deps --force-recreate worker
 wait_for_healthy worker
 
 compose up -d --no-deps --force-recreate gateway
-curl --fail --silent --show-error --max-time 15 "https://${DOMAIN}/" > /dev/null
+if ! wait_for_gateway_https; then
+  compose ps gateway
+  compose logs --tail=80 gateway
+  exit 1
+fi
 
 compose ps api worker gateway
 echo "Production release ${NEW_TAG} is healthy. Previous tag was ${PREVIOUS_TAG}."

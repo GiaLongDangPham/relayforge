@@ -25,6 +25,7 @@ Creating GitHub secrets/environment protection, uploading/installing host script
 
 ## Verification evidence
 
-- `deploy/backup-production-postgres.sh` and `deploy/apply-production-release.sh` passed `bash -n` through Git Bash. They were not run against EC2 because installation and production mutation require the owner's SSH access.
+- `deploy/backup-production-postgres.sh` and `deploy/apply-production-release.sh` passed `bash -n` through Git Bash. The owner installed both as root-owned mode-700 scripts on EC2.
 - `.github/workflows/ci.yml` passed Python YAML parsing and `git diff --check`. The local `actionlint` binary is unavailable; an external lint container was deliberately not given repository access because the workspace contains an ignored production environment file.
-- ADR-006 and the runbook record the guarded release decision, dedicated SSH account, host-key verification, backup/rollback boundary, and DuckDNS recovery procedure. GitHub Environment secrets/variables and the EC2 installation remain pending owner setup.
+- The `relayforge-deploy` account has only the intended passwordless sudo permission. Its dedicated key successfully SSHed through `gialong.duckdns.org`; a same-tag invocation made no deployment change. The backup script produced and structurally validated the `d70776814883` PostgreSQL archive, checksum, and metadata file under `/opt/relayforge/backups`.
+- The GitHub Environment is configured and the first guarded release reached EC2: images tagged `a75ef093bc8d` were published and API, worker, and gateway were recreated. Its workflow reported failure only because the original script checked HTTPS before Caddy had started listening. The corrected root-owned script now waits for local TLS/SNI readiness; a same-tag invocation verified all three running production services. The correction remains uncommitted, so a subsequent source commit and successful workflow run are still required to close this task.
