@@ -1,13 +1,12 @@
 # Current Task
 
-Status: Completed
+Status: In progress
 
 ## Goal
 
-Complete Group 20: close RelayForge as a portfolio project with a concise
-repository entry point, evidence-based CV material, an interview playbook, and
-a short demo script. The work must represent accepted architecture and measured
-evidence accurately, without adding a feature merely for presentation.
+Correct the endpoint-configuration request used by the dashboard so a live
+owner can change an existing endpoint URL while preserving optimistic-version
+protection. This unblocks the requested production pause/resume demo data.
 
 ## Decisions
 
@@ -24,29 +23,21 @@ evidence accurately, without adding a feature merely for presentation.
 
 ## Out of scope
 
-New product features, dependencies, runtime tuning, production deployment,
-production load, credential rotation, managed observability, and repository
-hosting/publication decisions outside the existing codebase.
+New product features, dependencies, runtime tuning, credential rotation,
+managed observability, and unrelated portfolio documentation changes.
 
 ## Evidence required
 
-- A concise README explains the product, architecture, local run, public demo,
-  evidence, and honest limits.
-- A reusable guide contains CV bullets, design-decision interview questions,
-  and a short safe demo sequence tied to repository evidence.
-- Project status records Group 20 completion and points to the next action as
-  owner review/commit rather than speculative feature development.
+- A replace-endpoint request contains only the API contract fields: `name`,
+  `destinationUrl`, `eventTypes`, and current `version`.
+- Frontend checks pass and a local browser confirms the endpoint editor is
+  still reachable.
 
 ## Completion evidence
 
-- `README.md` is the recruiter/reviewer entry point: product summary,
-  architecture, measured local evidence, links, and explicit limitations.
-- `docs/PORTFOLIO_PLAYBOOK.md` supplies bounded CV claims, design-decision
-  interview answers, and a safe seven-minute demo sequence tied to evidence.
-- This group changed documentation only: it added no runtime behavior,
-  dependency, deployment, performance claim, or production operation.
+Pending.
 
 ## Next action
 
-Owner review, then explicitly choose whether to commit and push the Group 20
-documentation closeout.
+Run the narrow frontend check, review the small contract fix, then deploy the
+new immutable frontend image before resuming the live pause/resume scenario.

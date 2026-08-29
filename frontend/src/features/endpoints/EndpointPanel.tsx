@@ -27,7 +27,12 @@ export function EndpointPanel({ projectId }: { projectId: string }) {
 
   async function save(command: EndpointCommand) {
     if (activeEndpoint) {
-      await apiClient.replaceEndpoint(projectId, activeEndpoint.id, { ...command, version: activeEndpoint.version })
+      await apiClient.replaceEndpoint(projectId, activeEndpoint.id, {
+        name: command.name,
+        destinationUrl: command.destinationUrl,
+        eventTypes: command.eventTypes,
+        version: activeEndpoint.version,
+      })
       await refresh()
       return
     }
