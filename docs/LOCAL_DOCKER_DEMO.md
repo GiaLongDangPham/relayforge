@@ -128,3 +128,7 @@ The `--volumes` command is destructive: projects, credentials, sessions, endpoin
 ## Boundaries
 
 This stack is for local development and portfolio demonstration. It deliberately uses HTTP, non-secure cookies, an ignored `.env`, published database/receiver ports, and a local configuration endpoint on the receiver. Do not expose it to the public internet or reuse its settings for cloud deployment.
+
+For controlled retry, timeout, crash, and bounded-attempt evidence, use the
+[Failure and Recovery Runbook](FAILURE_RECOVERY_RUNBOOK.md). It uses the local
+receiver only and never changes EC2.

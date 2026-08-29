@@ -41,3 +41,8 @@ Console output is ECS JSON by default. Start with a safe `trace.id`, project UUI
 ## Local Compose commands
 
 Use the Group 12/13 local commands in [Local Docker Demo](LOCAL_DOCKER_DEMO.md). For live inspection, `docker compose logs -f api worker` and the two `/actuator/prometheus` URLs are sufficient. Do not run destructive database commands during diagnosis.
+
+For a repeatable local proof of the failure rows in this table, see the
+[Failure and Recovery Runbook](FAILURE_RECOVERY_RUNBOOK.md). Backup, isolated
+restore, image compatibility, and DuckDNS procedures are in the
+[Recovery Drill Runbook](RECOVERY_DRILL_RUNBOOK.md).
