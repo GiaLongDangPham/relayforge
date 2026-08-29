@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+scrape_configs:
+  - job_name: relayforge-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["api:8080"]
+
+  # The worker shares the receiver network namespace in local Compose. Its
+  # management-only servlet therefore remains reachable at receiver:8082 from
+  # another Compose service; no host or public management port is required.
+  - job_name: relayforge-worker
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["receiver:8082"]

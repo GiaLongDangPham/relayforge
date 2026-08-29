@@ -11,6 +11,7 @@ x-backend-environment: &backend-environment
   RELAYFORGE_SECURE_COOKIES: "false"
   RELAYFORGE_PRODUCTION: "false"
   RELAYFORGE_ENDPOINT_ALLOW_LOCAL_HTTP: "true"
+  JAVA_TOOL_OPTIONS: ${RELAYFORGE_JAVA_TOOL_OPTIONS:-}
 
 services:
   postgres:
@@ -88,5 +89,60 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["observability"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - relayforge-prometheus:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=2h
+    depends_on:
+      api:
+        condition: service_started
+      receiver:
+        condition: service_started
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    profiles: ["observability"]
+    ports:
+      - "3000:3000"
+    environment:
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+
+  k6:
+    image: grafana/k6:0.57.0
+    profiles: ["loadtest"]
+    environment:
+      K6_BASE_URL: http://api:8080
+      K6_PROJECT_ID: ${K6_PROJECT_ID:-}
+      K6_PUBLISHER_API_KEY: ${K6_PUBLISHER_API_KEY:-}
+      K6_EVENT_TYPE: ${K6_EVENT_TYPE:-performance.accepted}
+      K6_RUN_ID: ${K6_RUN_ID:-}
+    volumes:
+      - ./performance/k6:/scripts:ro
+      - ./performance/results:/results
+    entrypoint: ["k6"]
+    command: ["run", "--summary-export=/results/k6-summary.json", "/scripts/publish-events.js"]
+
 volumes:
   relayforge-postgres:
+  relayforge-prometheus:

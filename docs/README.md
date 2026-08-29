@@ -12,6 +12,8 @@ Start with [AGENTS.md](../AGENTS.md), [Agent Context](AGENT_CONTEXT.md), and the
 | Authentication, authorization, secrets, SSRF, redaction | [Security Baseline](SECURITY_BASELINE.md) |
 | Local Docker Compose demo and end-to-end smoke flow | [Local Docker Demo](LOCAL_DOCKER_DEMO.md) |
 | Operator health, metrics, logs, and failure diagnosis | [Operations Runbook](OPERATIONS_RUNBOOK.md) |
+| Local load testing, Prometheus/Grafana, JVM diagnostics, and measured tuning | [Performance Runbook](PERFORMANCE_RUNBOOK.md) |
+| Recorded local performance comparison point | [Performance Baseline](PERFORMANCE_BASELINE.md) |
 | Temporary EC2 Compose deployment, host boundary, production Compose/Caddy configuration, and manual rollout | [EC2 Deployment Baseline](EC2_DEPLOYMENT_BASELINE.md), then [ADR-005](adr/0005-single-ec2-compose-deployment.md) |
 | EC2 backup, guarded GitHub Actions release, rollback, and DuckDNS recovery | [Production Release Runbook](PRODUCTION_RELEASE_RUNBOOK.md), then [ADR-006](adr/0006-guarded-github-actions-ec2-release.md) |
 | Project progress and review handoff | [Project Status](../PROJECT_STATUS.md), [Phase 0 Handoff](PHASE_0_HANDOFF.md) |

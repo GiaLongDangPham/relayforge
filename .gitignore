@@ -2,3 +2,6 @@
 .vscode/
 .env
 deploy/.env.production
+performance/.loadtest.env
+performance/results/*
+!performance/results/.gitkeep

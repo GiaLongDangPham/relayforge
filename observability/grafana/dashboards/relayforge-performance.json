@@ -1,0 +1,94 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "relayforge-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "value", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "relayforge_delivery_backlog{state=\"ready\"}", "refId": "A"}],
+      "title": "Ready backlog",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "relayforge-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "relayforge_worker_permits_available", "refId": "A"}],
+      "title": "Worker permits available",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "relayforge-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 0},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(relayforge_delivery_dispatch_seconds_bucket[1m])))", "refId": "A"}],
+      "title": "Dispatch p95 (1m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "relayforge-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 0},
+      "id": 4,
+      "options": {"colorMode": "value", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/v1/projects/{projectId}/events\"}[1m])))", "refId": "A"}],
+      "title": "Publish API p95 (1m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "relayforge-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 7},
+      "id": 5,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (outcome) (rate(relayforge_delivery_attempts_total[1m]))", "legendFormat": "{{outcome}}", "refId": "A"}],
+      "title": "Delivery attempt rate by outcome",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "relayforge-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 7},
+      "id": 6,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (area) (jvm_memory_used_bytes{area=~\"heap|nonheap\"})", "legendFormat": "{{area}}", "refId": "A"}],
+      "title": "API JVM memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "relayforge-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 15},
+      "id": 7,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "rate(jvm_gc_pause_seconds_sum[1m])", "legendFormat": "GC pause rate", "refId": "A"}],
+      "title": "API JVM GC pause rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "relayforge-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 15},
+      "id": 8,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "hikaricp_connections_active", "legendFormat": "active", "refId": "A"}, {"expr": "hikaricp_connections_pending", "legendFormat": "pending", "refId": "B"}],
+      "title": "API Hikari connections",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 41,
+  "tags": ["relayforge", "performance"],
+  "templating": {"list": []},
+  "time": {"from": "now-15m", "to": "now"},
+  "timezone": "browser",
+  "title": "RelayForge performance",
+  "uid": "relayforge-performance",
+  "version": 1
+}

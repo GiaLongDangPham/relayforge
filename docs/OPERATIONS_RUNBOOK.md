@@ -2,7 +2,7 @@
 
 ## Scope
 
-This is a small Portfolio v1 operator runbook. It helps diagnose a local or temporary-cloud stack without editing PostgreSQL rows. It does not provide HA, alert thresholds, a managed Prometheus deployment, or a log-aggregation service.
+This is a small Portfolio v1 operator runbook. It helps diagnose a local or temporary-cloud stack without editing PostgreSQL rows. It does not provide HA, alert thresholds, a managed Prometheus deployment, or a log-aggregation service. A separate opt-in local Prometheus/Grafana profile for controlled benchmark observation is documented in the [Performance Runbook](PERFORMANCE_RUNBOOK.md); it does not change production.
 
 ## First checks
 

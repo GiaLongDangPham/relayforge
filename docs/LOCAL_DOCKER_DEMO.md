@@ -6,7 +6,9 @@ This runbook starts the complete local Portfolio v1 workflow. Docker Compose bui
 
 - Docker Desktop with Linux containers.
 - PowerShell 7 or Windows PowerShell 5.1 for the smoke script.
-- Host ports `5432`, `8080`, `8081`, `8082`, and `5173` available.
+- Host ports `5432`, `8080`, `8081`, `8082`, and `5173` available. The
+  optional local observability profile additionally uses `9090` (Prometheus)
+  and `3000` (Grafana).
 
 JDK, Maven, Node, and PostgreSQL do not need to be installed on the host for this Compose workflow.
 
@@ -51,6 +53,20 @@ Login with `RELAYFORGE_OWNER_LOGIN_NAME` and `RELAYFORGE_OWNER_PASSWORD` from th
 The demo endpoint URL is intentionally `http://localhost:8081/webhooks/success`. Worker mode shares the receiver container's network namespace, so this address is actual loopback from the dispatching process. RelayForge's accepted development-only loopback rule remains intact; it is not expanded to arbitrary Docker-private addresses.
 
 The host mapping for port `8082` belongs to the worker management server because it shares the receiver namespace. It exposes only health and Prometheus, never owner or publisher endpoints.
+
+## Optional local performance observability
+
+Start the local-only Prometheus/Grafana profile when following the
+[Performance Runbook](PERFORMANCE_RUNBOOK.md):
+
+```powershell
+docker compose --profile observability up --build -d
+```
+
+Prometheus scrapes API and worker management endpoints only over the internal
+Compose network. Grafana is available at `http://localhost:3000`; Prometheus
+targets are visible at `http://localhost:9090/targets`. Neither service is part
+of the EC2 production Compose file.
 
 ## Receiver modes
 
