@@ -17,6 +17,7 @@ Start with [AGENTS.md](../AGENTS.md), [Agent Context](AGENT_CONTEXT.md), and the
 | Local retry, timeout, crash, and exhaustion evidence | [Failure and Recovery Runbook](FAILURE_RECOVERY_RUNBOOK.md) |
 | Isolated restore, image-compatibility, rollback, and DuckDNS procedures | [Recovery Drill Runbook](RECOVERY_DRILL_RUNBOOK.md) |
 | Measured Group 18–19 failure and recovery evidence | [Resilience Evidence](RESILIENCE_EVIDENCE.md) |
+| Portfolio summary, CV bullets, interview questions, and demo script | [Portfolio Playbook](PORTFOLIO_PLAYBOOK.md) |
 | Temporary EC2 Compose deployment, host boundary, production Compose/Caddy configuration, and manual rollout | [EC2 Deployment Baseline](EC2_DEPLOYMENT_BASELINE.md), then [ADR-005](adr/0005-single-ec2-compose-deployment.md) |
 | EC2 backup, guarded GitHub Actions release, rollback, and DuckDNS recovery | [Production Release Runbook](PRODUCTION_RELEASE_RUNBOOK.md), then [ADR-006](adr/0006-guarded-github-actions-ec2-release.md) |
 | Project progress and review handoff | [Project Status](../PROJECT_STATUS.md), [Phase 0 Handoff](PHASE_0_HANDOFF.md) |
