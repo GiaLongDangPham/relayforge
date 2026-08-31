@@ -14,7 +14,7 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 2 - Advanced delivery controls.
-- Current slice: Phase 2A Slice 2 is complete. The current global-FIFO query made the small endpoint wait four complete claim waves in a deterministic PostgreSQL fixture; Slice 3 can now replace candidate selection and compare against that baseline.
+- Current slice: Phase 2A Slice 5 is complete. PostgreSQL selects candidates by endpoint allocation level; the recorded A=32/B=2 fixture changed from FIFO A 8/B 0 to work-conserving fair A 6/B 2 in the first wave. Concurrent claims returned eight distinct IDs and both deep-backlog endpoints made progress. A live PostgreSQL 17.10 plan fixture returned eight candidates in 2.703 ms, using the existing V8 pending and claimed indexes; no index migration is justified from that small local evidence. Phase 2B is next.
 - Repository state: Git repository on `main`; RelayForge backend foundation exists under `backend/` and the thin React/Vite owner dashboard exists under `frontend/`.
 - Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Apache HttpClient 5, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Spring Security with JDBC Spring Session, Lombok 1.18.46 as a compile-time processor, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. V2 creates `owner_accounts`, V3 adds technical Spring Session tables, V4 creates `projects`, V5 creates `project_api_keys`, V6 creates `webhook_endpoints` plus `endpoint_subscriptions`, V7 creates immutable `events` plus original `deliveries`, V8 adds partial claim/recovery indexes, V9 creates `delivery_attempts`, V10 creates `attempt_late_diagnostics`, V11 adds replay lineage, replay idempotency, and history query indexes, and V12 adds terminal-history retention indexes. Identity supports opt-in bootstrap and generic credential verification; API mode has completed browser authentication, owner-scoped configuration access, publisher event acceptance, safe owner history, and CSRF-protected manual replay. Worker mode now has durable claim/recovery/attempt-start contracts, signed and SSRF-pinned outbound HTTP dispatch, conditional finalization/retry, post-attempt `UNKNOWN` recovery, bounded polling through local permit admission, and fixed-delay bounded cleanup of expired complete terminal graphs.
 - Local environment note: the default terminal Java is JDK 21 while this project requires JDK 25; Maven verification currently selects `C:\Program Files\Java\jdk-25` explicitly.
@@ -211,6 +211,9 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-29 | Phase 1 Group 20 portfolio closeout | Added the root README plus a portfolio/CV/interview/demo playbook. Both link to the existing architecture, performance, resilience, and operations sources; they use controlled local evidence only and name the single-host, at-least-once, and observability limitations explicitly. No runtime behavior, dependency, deployment, or production test changed. |
 | 2026-08-31 | Phase 2A Slice 1 fair-dispatch contract | Accepted ADR-007 and aligned the delivery model/runtime defaults on endpoint-aware least-allocation selection. Two equally backlogged endpoints target 4/4 of eight new slots; one endpoint may burst to all eight; new work receives the next available opportunity without preempting active HTTP. The slice also records snapshot-skew limits, trade-offs, PostgreSQL test fixtures, noisy-neighbor measurements, and the broker/Redis evidence gate. No claim SQL, migration, dependency, or runtime behavior changed. |
 | 2026-08-31 | Phase 2A Slice 2 global-FIFO noisy-neighbor baseline | Added one focused PostgreSQL Testcontainers integration fixture: A has 32 earlier due deliveries, B has 2 later due deliveries, and capacity is 8. Normal claim/attempt-start/finalization waves selected A for waves 1–4; B first appeared in wave 5. This proves claim-order starvation potential under the current `ORDER BY due_at, id` query but intentionally does not claim elapsed latency, throughput, or capacity. `DeliveryClaimIntegrationTests` passed 4/4. |
+| 2026-08-31 | Phase 2A Slice 3 endpoint-fair claim selection | Replaced global FIFO candidate ordering with PostgreSQL per-endpoint pending ordinal plus committed `CLAIMED` allocation. The Slice 2 fixture now selects A 6/B 2 in its first eight-row wave; two deep backlogs split 4/4; one endpoint can still receive all eight; a newly backlogged endpoint receives the next free claim without active-work preemption. Added test cleanup because global scheduler state must not leak between fixtures. `DeliveryClaimIntegrationTests` passed 7/7; the rebuilt local worker reached readiness and the reloaded dashboard sign-in page had no console errors. No migration, index, broker, Redis, or performance claim was added. |
+| 2026-08-31 | Phase 2A Slice 4 concurrent fair-claim regression | Added one two-worker PostgreSQL concurrency fixture: two simultaneous four-capacity claims against deep A/B backlogs returned eight distinct delivery IDs and tokens, and both endpoints made progress. The narrow regression suite also retained endpoint-disable serialization, expired pre-attempt recovery, attempt-start, stale-token, and late-result behavior: 14 tests passed across claim, attempt-start, and finalization integration suites. Browser reload of the local sign-in page had no console errors. No runtime query, index, migration, or performance claim changed. |
+| 2026-08-31 | Phase 2A Slice 5 fair-query plan evidence | Extracted the live fair SQL template so a PostgreSQL 17.10 Testcontainers fixture can execute exactly that query under `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`. With two enabled endpoints and 128 due pending deliveries, capacity 8 returned eight rows in 2.703 ms (planning 0.464 ms) with root shared-hit blocks 3,987. The plan used `ix_deliveries_pending_due_at_id` for pending scans and `ix_deliveries_claimed_lease_expires_at_id` for claimed allocation. The recorded result is a small warm local fixture, not a production SLA; no V13 index migration, runtime behavior, or tuning change was accepted. Regression: query-plan plus fair-claim tests passed 9/9; local dashboard sign-in smoke had no console errors. |
 | 2026-08-27 | Dashboard UI refinement | Unified the React dashboard under one tokenized dark operational theme, corrected the project workspace’s width breakpoint and list-card stretching, and rebuilt Delivery operations as native dark-theme cards instead of its conflicting white surface. Added responsive one-column behavior, visible focus styling, reduced-motion handling, 44px base control targets, selected-state treatment, and safer long-value wrapping without changing API or delivery behavior. `npm run lint` and production build passed; the rebuilt Compose frontend was browser-checked across API-key, endpoint, and delivery panels at desktop and narrow widths with no horizontal overflow or console warnings/errors. |
 
 ## Advanced development roadmap
@@ -229,12 +232,20 @@ This file is the durable source of truth for project scope and progress. Update 
 3. Implement PostgreSQL-backed fair candidate selection while preserving
    bounded local permits, `SKIP LOCKED`, endpoint disable serialization,
    lease/token fencing, and commit-before-HTTP behavior.
+   **Complete with the existing V8 index; query-plan evidence remains.**
 4. Prove concurrent-worker fairness, burst utilization, new-backlog priority,
    crash recovery, stale-token rejection, and paused-backlog behavior with
    focused Testcontainers evidence.
+   **Complete: concurrent claim progress/no-duplication and the existing
+   bounded recovery, disable, attempt-start, stale-token, and late-result
+   evidence passed. Exact real-time fairness across every snapshot remains
+   intentionally outside the guarantee.**
 5. Inspect representative query plans and indexes with
    `EXPLAIN (ANALYZE, BUFFERS)`, then rerun the identical workload and record
    before/after evidence without claiming a production SLA.
+   **Complete for the current no-change decision: the live fair SQL used the
+   existing V8 pending/claimed indexes in the 128-row fixture. No optimization
+   was accepted, so there is no legitimate before/after comparison yet.**
 
 ### Phase 2B - Receiver-aware backpressure
 
@@ -289,9 +300,10 @@ consumption, retry/dead-letter semantics, cutover, reconciliation, and rollback.
 
 ## Next recommended slice
 
-Implement Phase 2A Slice 3: replace global-FIFO candidate selection with the
-ADR-007 endpoint-fair query, preserving existing claim/lease/disable invariants
-and the Slice 2 fixture. Continue to keep 5432, 8080, and 8082 private.
+Begin Phase 2B Slice 1: decide and document the bounded `Retry-After`
+interpretation for retryable receiver responses before changing retry code.
+Keep PostgreSQL as the timing authority and retain the equal-jitter fallback;
+do not add a circuit breaker in the same slice.
 
 ## Deferred until evidence justifies them
 

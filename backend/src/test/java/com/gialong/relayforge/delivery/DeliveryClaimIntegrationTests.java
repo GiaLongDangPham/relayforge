@@ -16,6 +16,7 @@ import com.gialong.relayforge.identity.api.OwnerBootstrap;
 import com.gialong.relayforge.identity.api.OwnerBootstrapResult;
 import com.gialong.relayforge.project.api.ProjectCatalog;
 import com.gialong.relayforge.project.api.ProjectDetails;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -83,6 +84,20 @@ class DeliveryClaimIntegrationTests {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @AfterEach
+    void clearDeliveryFixture() {
+        jdbcTemplate.update("delete from attempt_late_diagnostics");
+        jdbcTemplate.update("delete from delivery_attempts");
+        jdbcTemplate.update("delete from replay_requests");
+        jdbcTemplate.update("delete from deliveries");
+        jdbcTemplate.update("delete from endpoint_subscriptions");
+        jdbcTemplate.update("delete from webhook_endpoints");
+        jdbcTemplate.update("delete from events");
+        jdbcTemplate.update("delete from project_api_keys");
+        jdbcTemplate.update("delete from projects");
+        jdbcTemplate.update("delete from owner_accounts");
+    }
 
     @Test
     void claimsEnabledWorkWithoutPausedBacklogStarvationAndFencesConcurrentWorkers() throws Exception {
@@ -163,7 +178,7 @@ class DeliveryClaimIntegrationTests {
     }
 
     @Test
-    void recordsTheGlobalFifoNoisyNeighborBaselineBeforeFairDispatchChanges() {
+    void sharesTheFirstClaimWaveWithTheSmallHealthyBacklog() {
         UUID ownerId = bootstrap("claim.noisy-neighbor.owner").ownerId();
         ProjectDetails project = projectCatalog.create(ownerId, "Noisy-neighbor claim baseline");
         WebhookEndpointDetails noisyEndpoint = endpoint(
@@ -204,22 +219,122 @@ class DeliveryClaimIntegrationTests {
                 healthyEndpoint.id()
         );
 
-        for (int wave = 1; wave <= 4; wave++) {
-            List<ClaimedDelivery> claims = deliveryClaimer.claim(8, Duration.ofSeconds(15));
+        List<ClaimedDelivery> firstWave = deliveryClaimer.claim(8, Duration.ofSeconds(15));
 
-            assertThat(claims)
-                    .hasSize(8)
-                    .extracting(ClaimedDelivery::endpointId)
-                    .containsOnly(noisyEndpoint.id());
-            finalizeSuccessfully(claims);
+        assertThat(firstWave).hasSize(8);
+        assertThat(firstWave.stream().filter(claim -> claim.endpointId().equals(noisyEndpoint.id()))).hasSize(6);
+        assertThat(firstWave.stream().filter(claim -> claim.endpointId().equals(healthyEndpoint.id()))).hasSize(2);
+    }
+
+    @Test
+    void splitsDeepBacklogsEvenlyAcrossTwoEndpoints() {
+        UUID ownerId = bootstrap("claim.deep-backlog.owner").ownerId();
+        ProjectDetails project = projectCatalog.create(ownerId, "Deep backlog fairness");
+        WebhookEndpointDetails firstEndpoint = endpoint(ownerId, project.id(), "First receiver", "deep-backlog.first");
+        WebhookEndpointDetails secondEndpoint = endpoint(ownerId, project.id(), "Second receiver", "deep-backlog.second");
+
+        for (int index = 0; index < 8; index++) {
+            eventPublisher.publish(project.id(), "deep-first-" + index, "deep-backlog.first", "{\"sequence\":" + index + "}");
+            eventPublisher.publish(project.id(), "deep-second-" + index, "deep-backlog.second", "{\"sequence\":" + index + "}");
+        }
+        jdbcTemplate.update(
+                "update deliveries set due_at = CURRENT_TIMESTAMP - interval '60 seconds' where endpoint_id = ?",
+                firstEndpoint.id()
+        );
+        jdbcTemplate.update(
+                "update deliveries set due_at = CURRENT_TIMESTAMP - interval '30 seconds' where endpoint_id = ?",
+                secondEndpoint.id()
+        );
+
+        List<ClaimedDelivery> claims = deliveryClaimer.claim(8, Duration.ofSeconds(15));
+
+        assertThat(claims).hasSize(8);
+        assertThat(claims.stream().filter(claim -> claim.endpointId().equals(firstEndpoint.id()))).hasSize(4);
+        assertThat(claims.stream().filter(claim -> claim.endpointId().equals(secondEndpoint.id()))).hasSize(4);
+    }
+
+    @Test
+    void concurrentWorkersMakeProgressForBothDeepBacklogsWithoutDuplicateClaims() throws Exception {
+        UUID ownerId = bootstrap("claim.concurrent-fair.owner").ownerId();
+        ProjectDetails project = projectCatalog.create(ownerId, "Concurrent fair claims");
+        WebhookEndpointDetails firstEndpoint = endpoint(ownerId, project.id(), "First concurrent receiver", "concurrent.first");
+        WebhookEndpointDetails secondEndpoint = endpoint(ownerId, project.id(), "Second concurrent receiver", "concurrent.second");
+
+        for (int index = 0; index < 8; index++) {
+            eventPublisher.publish(project.id(), "concurrent-first-" + index, "concurrent.first", "{\"sequence\":" + index + "}");
+            eventPublisher.publish(project.id(), "concurrent-second-" + index, "concurrent.second", "{\"sequence\":" + index + "}");
+        }
+        jdbcTemplate.update(
+                "update deliveries set due_at = CURRENT_TIMESTAMP - interval '60 seconds' where endpoint_id = ?",
+                firstEndpoint.id()
+        );
+        jdbcTemplate.update(
+                "update deliveries set due_at = CURRENT_TIMESTAMP - interval '30 seconds' where endpoint_id = ?",
+                secondEndpoint.id()
+        );
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<List<ClaimedDelivery>> first = executor.submit(() -> concurrentClaim(ready, start, 4));
+            Future<List<ClaimedDelivery>> second = executor.submit(() -> concurrentClaim(ready, start, 4));
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<ClaimedDelivery> claims = new java.util.ArrayList<>();
+            claims.addAll(first.get(5, TimeUnit.SECONDS));
+            claims.addAll(second.get(5, TimeUnit.SECONDS));
+
+            assertThat(claims).hasSize(8);
+            assertThat(claims).extracting(ClaimedDelivery::deliveryId).doesNotHaveDuplicates();
+            assertThat(claims).extracting(ClaimedDelivery::claimToken).doesNotHaveDuplicates();
+            assertThat(claims.stream().filter(claim -> claim.endpointId().equals(firstEndpoint.id()))).isNotEmpty();
+            assertThat(claims.stream().filter(claim -> claim.endpointId().equals(secondEndpoint.id()))).isNotEmpty();
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    void letsOneEndpointUseEveryFreePermitWhenItIsTheOnlyBacklog() {
+        UUID ownerId = bootstrap("claim.burst.owner").ownerId();
+        ProjectDetails project = projectCatalog.create(ownerId, "Burst claim capacity");
+        WebhookEndpointDetails endpoint = endpoint(ownerId, project.id(), "Burst receiver", "burst.event");
+
+        for (int index = 0; index < 8; index++) {
+            eventPublisher.publish(project.id(), "burst-" + index, "burst.event", "{\"sequence\":" + index + "}");
         }
 
-        List<ClaimedDelivery> fifthWave = deliveryClaimer.claim(8, Duration.ofSeconds(15));
+        List<ClaimedDelivery> claims = deliveryClaimer.claim(8, Duration.ofSeconds(15));
 
-        assertThat(fifthWave)
-                .hasSize(2)
+        assertThat(claims)
+                .hasSize(8)
                 .extracting(ClaimedDelivery::endpointId)
-                .containsOnly(healthyEndpoint.id());
+                .containsOnly(endpoint.id());
+    }
+
+    @Test
+    void givesTheNextFreeClaimToANewlyBackloggedEndpoint() {
+        UUID ownerId = bootstrap("claim.new-backlog.owner").ownerId();
+        ProjectDetails project = projectCatalog.create(ownerId, "New backlog priority");
+        WebhookEndpointDetails busyEndpoint = endpoint(ownerId, project.id(), "Busy receiver", "busy.event");
+        WebhookEndpointDetails newEndpoint = endpoint(ownerId, project.id(), "New receiver", "new.event");
+
+        for (int index = 0; index < 9; index++) {
+            eventPublisher.publish(project.id(), "busy-" + index, "busy.event", "{\"sequence\":" + index + "}");
+        }
+        List<ClaimedDelivery> initialClaims = deliveryClaimer.claim(8, Duration.ofSeconds(15));
+        ClaimedDelivery completedClaim = initialClaims.getFirst();
+        finalizeSuccessfully(List.of(completedClaim));
+
+        eventPublisher.publish(project.id(), "new-backlog", "new.event", "{\"sequence\":0}");
+
+        List<ClaimedDelivery> nextClaim = deliveryClaimer.claim(1, Duration.ofSeconds(15));
+
+        assertThat(nextClaim).singleElement().extracting(ClaimedDelivery::endpointId).isEqualTo(newEndpoint.id());
     }
 
     @Test
@@ -259,11 +374,15 @@ class DeliveryClaimIntegrationTests {
     }
 
     private List<ClaimedDelivery> concurrentClaim(CountDownLatch ready, CountDownLatch start) throws Exception {
+        return concurrentClaim(ready, start, 1);
+    }
+
+    private List<ClaimedDelivery> concurrentClaim(CountDownLatch ready, CountDownLatch start, int capacity) throws Exception {
         ready.countDown();
         if (!start.await(5, TimeUnit.SECONDS)) {
             throw new IllegalStateException("concurrent claims did not start");
         }
-        return deliveryClaimer.claim(1, Duration.ofSeconds(15));
+        return deliveryClaimer.claim(capacity, Duration.ofSeconds(15));
     }
 
     private WebhookEndpointDetails endpoint(UUID ownerId, UUID projectId, String name, boolean enabled) {

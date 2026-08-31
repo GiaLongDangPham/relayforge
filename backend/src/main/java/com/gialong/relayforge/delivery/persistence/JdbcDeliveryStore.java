@@ -144,13 +144,38 @@ public class JdbcDeliveryStore implements DeliveryStore {
         List<Object> parameters = new ArrayList<>(endpointIds);
         parameters.add(capacity);
         return jdbcTemplate.query(
-                "select id, project_id, endpoint_id from public.deliveries "
-                        + "where state = 'PENDING' and due_at <= CURRENT_TIMESTAMP and attempt_count < 5 "
-                        + "and endpoint_id in (" + placeholders + ") "
-                        + "order by due_at, id limit ? for update skip locked",
+                fairClaimCandidateSql(placeholders),
                 this::mapClaimCandidate,
                 parameters.toArray()
         );
+    }
+
+    /**
+     * Rank due rows within an endpoint, then distribute new claims toward endpoints
+     * with the lowest committed {@code CLAIMED} allocation before global due-time ties.
+     *
+     * <p>Package-visible so the PostgreSQL plan fixture executes the exact runtime query.
+     */
+    static String fairClaimCandidateSql(String endpointPlaceholders) {
+        return "with current_endpoint_claims as ("
+                + "select endpoint_id, count(*) as claim_count from public.deliveries "
+                + "where state = 'CLAIMED' group by endpoint_id"
+                + "), ranked_due as materialized ("
+                + "select id, endpoint_id, due_at, row_number() over ("
+                + "partition by endpoint_id order by due_at, id"
+                + ") as endpoint_pending_ordinal from public.deliveries "
+                + "where state = 'PENDING' and due_at <= CURRENT_TIMESTAMP and attempt_count < 5 "
+                + "and endpoint_id in (" + endpointPlaceholders + ")"
+                + ") select delivery.id, delivery.project_id, delivery.endpoint_id "
+                + "from public.deliveries delivery "
+                + "join ranked_due ranked on ranked.id = delivery.id "
+                + "left join current_endpoint_claims current_claims "
+                + "on current_claims.endpoint_id = ranked.endpoint_id "
+                + "where delivery.state = 'PENDING' and delivery.due_at <= CURRENT_TIMESTAMP "
+                + "and delivery.attempt_count < 5 "
+                + "order by coalesce(current_claims.claim_count, 0) + ranked.endpoint_pending_ordinal, "
+                + "ranked.due_at, ranked.endpoint_id, delivery.id "
+                + "limit ? for update of delivery skip locked";
     }
 
     @Override

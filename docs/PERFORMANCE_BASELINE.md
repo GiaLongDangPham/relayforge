@@ -100,6 +100,49 @@ milliseconds because no real receiver is blocked in this test. The next slice
 will replace the candidate-selection rule under the same fixture, then compare
 claim distribution before considering query-plan or load evidence.
 
+### Slice 3 comparison: endpoint-fair selection
+
+ADR-007 replaced the candidate order with an endpoint allocation level:
+committed endpoint `CLAIMED` count plus one-based pending ordinal inside that
+endpoint. This was verified with the same PostgreSQL 17.10 Testcontainers
+fixture, not with a new timing benchmark.
+
+| Scenario | FIFO baseline | Endpoint-fair result |
+| --- | --- | --- |
+| A: 32 earlier due; B: 2 later due; capacity 8 | First wave: A 8 / B 0; B first in wave 5 | First wave: A 6 / B 2 |
+| A and B both have deep due backlog; capacity 8 | Global age order can favor older A rows | A 4 / B 4 |
+| Only A has due work; capacity 8 | A 8 | A 8 |
+| A owns 7 active claims and one A row is pending; B receives one due row | Not a fairness guarantee | The next claim selects B without cancelling A work |
+
+`DeliveryClaimIntegrationTests` passed 7/7 on 2026-08-31. The fixture keeps
+the normal claim, attempt-start, and finalization boundaries, and clears its
+test data after every scenario because the scheduler is intentionally global.
+It proves allocation behavior, not exact fairness under simultaneous claim
+snapshots, elapsed response latency, query cost, or production capacity.
+
+### Slice 5: fair candidate-query plan
+
+`FairClaimQueryPlanIntegrationTests` runs the same SQL template used by
+`JdbcDeliveryStore` under `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`. Its
+PostgreSQL 17.10 Testcontainers fixture has two enabled endpoints and 128 due
+pending deliveries (64 per endpoint); it requests eight candidates.
+
+| Observation | Recorded value |
+| --- | ---: |
+| Returned candidate rows | 8 |
+| Planning time | 0.464 ms |
+| Execution time | 2.703 ms |
+| Root shared-hit blocks | 3,987 |
+| Pending-row scans | `Index Scan` via `ix_deliveries_pending_due_at_id` |
+| Current-claim allocation | `Bitmap Index Scan` via `ix_deliveries_claimed_lease_expires_at_id` |
+
+The plan also includes windowing, sorting, a materialized due-row CTE, and a
+lock node: those are the expected costs of endpoint-fair ranking and
+`FOR UPDATE SKIP LOCKED`, not proof of a defect. The existing V8 indexes are
+therefore retained. This is a warm, local, 128-row fixture with no receiver
+traffic, database history volume, or lock contention; it is not a performance
+baseline, capacity claim, or justification to tune worker permits/pool sizes.
+
 ## References
 
 - [Performance Runbook](PERFORMANCE_RUNBOOK.md)
