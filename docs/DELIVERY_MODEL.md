@@ -103,6 +103,19 @@ This is not a fixed per-endpoint cap, a request-rate limit, or an ordering
 guarantee. The precise selection contract is recorded in
 [ADR-007](adr/0007-work-conserving-endpoint-fair-dispatch.md).
 
+### INV-14 - Receiver retry hints are bounded and advisory
+
+Only a retryable HTTP `429` or `503` response with exactly one valid
+`Retry-After` delta-seconds value may defer the next attempt. The effective
+delay is never less than the normal equal-jitter backoff and never more than
+the configured 300-second cap. Missing, repeated, malformed, HTTP-date, or
+ineligible hints leave normal backoff unchanged.
+
+The worker supplies a selected bounded duration; PostgreSQL computes the
+persisted due-time. A fifth retryable attempt remains `EXHAUSTED`. The exact
+accepted syntax and selection rule are recorded in
+[ADR-008](adr/0008-bounded-retry-after-scheduling.md).
+
 ## 4. Delivery state model
 
 ### 4.1 Persisted states
@@ -170,6 +183,9 @@ Exact SQL and indexes are deferred to the database-design slice.
 - A successful attempt makes the delivery `SUCCEEDED`.
 - A permanent failed attempt makes the delivery `FAILED_PERMANENT`.
 - A retryable failed attempt returns the delivery to `PENDING` with a later due-time when fewer than five attempts have started.
+- For eligible HTTP `429` and `503` responses, that later due-time may use the
+  bounded `Retry-After` selection rule; normal equal-jitter backoff remains
+  the fallback and lower bound.
 - A retryable or unknown fifth attempt makes the delivery `EXHAUSTED`.
 - An unknown earlier attempt returns the delivery to `PENDING` using retry backoff because duplicate delivery is safer than silently losing accepted work.
 - A late result submitted after the attempt already became `UNKNOWN` is stored as a separate diagnostic observation. It does not rewrite the attempt or apply to the delivery.
@@ -366,6 +382,13 @@ The implementation is not considered correct until tests demonstrate:
     without preempting active work;
 20. repeated concurrent claim opportunities do not starve a continuously
     eligible endpoint.
+21. only a single valid `Retry-After` delta-seconds field on HTTP `429` or
+    `503` may affect retry selection; malformed, repeated, HTTP-date, and
+    ineligible values retain normal backoff;
+22. the selected retry duration is the maximum of deterministic equal jitter
+    and the capped accepted hint, while PostgreSQL computes the due-time; and
+23. a fifth retryable HTTP response with any `Retry-After` value still becomes
+    `EXHAUSTED` without a sixth attempt.
 
 ## 11. Downstream decisions and remaining implementation work
 

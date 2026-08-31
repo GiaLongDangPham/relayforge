@@ -88,7 +88,19 @@ effectiveDelay = baseDelay / 2 + uniform(0, baseDelay / 2)
 
 The worker supplies the selected duration to persistence; the absolute due-time is PostgreSQL time plus that duration. Randomness must be injectable so tests can prove the lower and upper bounds deterministically.
 
-Portfolio v1 uses the same schedule for network errors, timeout, HTTP 408, 429, 5xx, and recovered `UNKNOWN` attempts. It does not honor `Retry-After` initially. Supporting that header later requires a bounded maximum, parsing rules, and tests showing it improves receiver interoperability without creating unbounded delays.
+Portfolio v1 uses the same schedule for network errors, timeout, HTTP 408,
+429, 5xx, and recovered `UNKNOWN` attempts. A receiver retry hint is an
+exception only for final HTTP `429` and `503` responses: exactly one valid
+`Retry-After` delta-seconds value is accepted, bounded to 300 seconds, and the
+selected delay is the maximum of equal jitter and that bounded value. Missing,
+repeated, malformed, HTTP-date, and ineligible header values use equal jitter
+alone. The worker supplies the selected duration and PostgreSQL computes its
+absolute due-time. A fifth retryable attempt still schedules nothing.
+
+The header value is advisory rather than a new source of truth. Future owner
+history may record only the effective delay and scheduling source, never the
+raw receiver-supplied header. See [ADR-008](adr/0008-bounded-retry-after-scheduling.md)
+for accepted syntax, cap, and trade-offs.
 
 The schedule is intentionally short enough for a portfolio demonstration but long enough to expose persisted scheduling, jitter, exhaustion, and backlog behavior. It is not claimed to be suitable for every webhook product.
 
@@ -178,6 +190,14 @@ Implementation must eventually prove:
 14. a controlled workload records the metrics required to tune polling, concurrency, timeouts, and leases;
 15. endpoint-fair selection proves equal-backlog sharing, single-endpoint burst,
     and next-free-slot progress for a newly backlogged endpoint.
+16. `Retry-After` parsing accepts one non-negative delta-seconds value with
+    optional whitespace, safely caps oversized values, and rejects repeated,
+    malformed, signed, decimal, and HTTP-date forms;
+17. only HTTP `429` and `503` may select a receiver hint, and the selected
+    duration is never lower than deterministic equal jitter or higher than the
+    300-second cap; and
+18. a retryable fifth HTTP response remains `EXHAUSTED` even when it includes
+    an otherwise valid `Retry-After` value.
 
 Tests should use short overridden durations where waiting on the real baseline would make the suite slow. The production defaults and the relationships between them still require configuration-binding tests.
 
@@ -190,7 +210,8 @@ Tests should use short overridden durations where waiting on the real baseline w
 - Circuit breaker; none is added without a demonstrated failure it improves beyond timeout, concurrency limit, and retry backoff.
 - Per-endpoint hard concurrency or request-rate limits; endpoint fairness shares
   new claim opportunities but does not enforce either limit.
-- `Retry-After` support and maximum accepted delay.
+- HTTP adapter/parser and persistence implementation details for the accepted
+  bounded `Retry-After` contract.
 - Environment-specific overrides after local and cloud measurements exist.
 
 These defaults may be revised through measured evidence, but revisions must preserve at-least-once semantics, token fencing, bounded attempts, PostgreSQL time authority, and the no-transaction-during-HTTP invariant.

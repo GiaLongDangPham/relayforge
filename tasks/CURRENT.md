@@ -4,52 +4,50 @@ Status: Complete
 
 ## Goal
 
-Capture repeatable PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)` evidence for the
-actual endpoint-fair claim candidate query, then decide whether the existing
-V8 claim indexes need a change.
+Accept the bounded `Retry-After` scheduling contract for Phase 2B before
+changing the worker's HTTP handling, retry persistence, or circuit-breaker
+state.
 
 ## Decisions
 
-- The query plan must be generated from the same SQL template used by
-  `JdbcDeliveryStore`, not a manually copied approximation.
-- The fixture uses two enabled endpoints with deep due backlogs and an
-  eight-row claim capacity. It proves the plan can find eight fair candidates;
-  it does not model production history volume or receiver latency.
-- A plan choice is interpreted in fixture context. A sequential scan on a
-  small, largely eligible table is not by itself an index defect.
+- Only retryable HTTP `429` and `503` responses may contribute a receiver
+  retry hint. Other retryable outcomes retain equal-jitter backoff alone.
+- Accept only one `Retry-After` `delay-seconds` value: non-negative decimal
+  seconds after HTTP optional-whitespace trimming. HTTP-date and ambiguous,
+  repeated, malformed, or negative values fall back to normal backoff.
+- The receiver hint is capped at 300 seconds. The selected retry delay is the
+  greater of the normal equal-jitter delay and the bounded hint, so a receiver
+  cannot make RelayForge retry sooner or postpone it without bound.
+- PostgreSQL remains the clock authority. The worker will eventually provide a
+  selected duration and source; persistence computes the absolute due-time.
+- Future owner history may retain only the effective selected delay and its
+  source (`BACKOFF` or `RETRY_AFTER`), never the raw response header.
 
 ## Out of scope
 
-No runtime query behavior change, index or migration change, forced planner
-setting, data-volume benchmark, load test, pool/permit tuning, broker/Redis,
-or unrelated refactoring.
+No HTTP parser/adapter, worker retry-code change, schema migration, history
+field, circuit breaker, metric, retry-policy customization, broker, Redis, or
+deployment change.
 
 ## Evidence required
 
-- A PostgreSQL integration test executes the live fair SQL under
-  `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` and verifies eight candidates are
-  planned/executed for the representative fixture.
-- The recorded summary identifies actual rows, execution time, shared blocks,
-  and scan/index nodes without treating one local result as an SLA.
-- Local dashboard smoke remains clean after code changes.
+- An accepted ADR, delivery model, and runtime defaults state the same
+  eligibility, syntax, cap, selection, time-authority, and fifth-attempt rule.
+- Status/context/index documentation identifies the next isolated slice.
 
 ## Completion evidence
 
-- Extracted the package-private fair SQL template so production claim code and
-  query-plan evidence execute the identical statement.
-- `FairClaimQueryPlanIntegrationTests` used PostgreSQL 17.10 Testcontainers,
-  two enabled endpoints, 128 due deliveries, and capacity 8. The plan returned
-  eight rows in 2.703 ms (planning 0.464 ms), with root shared-hit blocks
-  3,987; it used the existing V8 pending and claimed indexes.
-- The narrow regression command ran the plan fixture and
-  `DeliveryClaimIntegrationTests`: 9 tests, 0 failures, 0 errors.
-- Reloading `http://localhost:5173/` rendered the local sign-in page with no
-  browser-console errors. No service rebuild was required because this slice
-  changes the claim SQL extraction and test source only, not runtime behavior.
-- No V13 index migration or performance/tuning claim is justified by this
-  small warm local fixture.
+- ADR-008 defines eligible statuses, one-field delta-seconds syntax, the
+  300-second cap, `max(equal jitter, hint)` selection, PostgreSQL time
+  authority, safe future audit data, and the unchanged fifth-attempt boundary.
+- The delivery model and runtime defaults align on that same contract.
+- The documentation index, agent context, and project status now identify
+  Slice 2 as response-header capture and pure parsing only.
+- This is documentation-only work: no runtime source changed, so no Maven,
+  Docker, or browser acceptance run was needed.
 
 ## Next action
 
-Begin Phase 2B Slice 1: define the bounded `Retry-After` contract before
-changing retry scheduling code.
+Begin Phase 2B Slice 2: implement only response-header capture and pure
+`Retry-After` parsing, with focused unit tests for valid, invalid, repeated,
+date, overflow, and cap behavior.
