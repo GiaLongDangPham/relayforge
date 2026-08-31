@@ -172,7 +172,8 @@ The operator can determine whether the API and worker are healthy, inspect deliv
 - Redis, distributed cache, or distributed lock.
 - Multi-region delivery or disaster-recovery automation.
 - Kubernetes or microservices.
-- Billing, quotas, paid plans, or public SaaS onboarding.
+- Billing, paid plans, or public SaaS onboarding. The fixed durable
+  per-project daily publish quota in ADR-011 is the sole exception.
 - Public account registration, email verification, password reset, or project deactivation.
 - Signing-secret version history or zero-downtime secret rotation.
 - A custom domain as a prerequisite for deployment.

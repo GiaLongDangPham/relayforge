@@ -272,6 +272,14 @@ equivalent idempotent retries, so the limiter cannot be bypassed through a
 pre-admission database lookup. PostgreSQL remains the idempotency source of
 truth. The bounded defaults and verification obligations are in ADR-010.
 
+ADR-011 adds the separate durable control for new-event acceptance: PostgreSQL
+atomically enforces one fixed per-project UTC-day quota inside the publish
+transaction. Equivalent or conflicting idempotency retries do not consume it;
+an exhausted quota is `429 PUBLISH_QUOTA_EXCEEDED` with a positive retry wait
+to the next UTC day and rolls back the tentative event. The one usage row per
+project resets online at the next UTC day, so no scheduler or usage history is
+retained. It is not billing, a plan, or a cluster-wide rate limiter.
+
 ## 12. Secret and configuration custody
 
 - Local secrets come from ignored environment/configuration, never committed files.
@@ -323,7 +331,8 @@ Automated tests must eventually prove:
 - Cloud key provider, secret manager, IAM policy, and TLS termination.
 - API-key pepper rotation and digest-version migration.
 - Endpoint signing-secret rotation; explicitly absent in v1.
-- Cluster-wide rate limiting, persistent quotas, billing, and abuse automation.
+- Cluster-wide rate limiting, billing/plans, retained usage analytics, and
+  abuse automation.
 - CSP final directives after frontend assets and external dependencies are known.
 - Dependency/SBOM/container vulnerability scanning in the CI/cloud phase.
 

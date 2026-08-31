@@ -82,7 +82,7 @@ Core status/code mapping:
 | 404 | `RESOURCE_NOT_FOUND` |
 | 409 | `IDEMPOTENCY_CONFLICT`, `OPTIMISTIC_LOCK_CONFLICT`, `INVALID_STATE_TRANSITION` |
 | 413 | `PAYLOAD_TOO_LARGE` |
-| 429 | `RATE_LIMITED` for owner-login abuse; `PUBLISH_RATE_LIMITED` for publisher event admission |
+| 429 | `RATE_LIMITED` for owner-login abuse; `PUBLISH_RATE_LIMITED` for local publisher admission; `PUBLISH_QUOTA_EXCEEDED` for durable new-event quota |
 | 503 | `DEPENDENCY_UNAVAILABLE` when durable processing cannot proceed |
 
 ## 5. Pagination
@@ -308,6 +308,13 @@ bucket-empty request returns `429` with code `PUBLISH_RATE_LIMITED` and a
 positive whole-second `Retry-After`; it creates no event or delivery. A retry
 using the same idempotency key still consumes admission capacity and, once
 admitted, follows the unchanged idempotency behavior above.
+
+ADR-011 additionally applies a durable per-project UTC-day quota only when a
+*new* event wins idempotency insertion. The default is 10,000 events/day. An
+equivalent retry or `IDEMPOTENCY_CONFLICT` does not consume it. An exhausted
+quota returns `429` with code `PUBLISH_QUOTA_EXCEEDED` and a positive
+whole-second `Retry-After` until the next UTC day; it rolls back the tentative
+event and creates no delivery.
 
 ## 11. Event and delivery inspection
 

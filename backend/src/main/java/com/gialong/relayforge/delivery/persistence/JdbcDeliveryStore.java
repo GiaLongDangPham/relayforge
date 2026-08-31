@@ -23,6 +23,7 @@ import com.gialong.relayforge.delivery.application.EndpointCircuitStore;
 import com.gialong.relayforge.delivery.application.ExpiredStartedAttempt;
 import com.gialong.relayforge.delivery.application.NewEvent;
 import com.gialong.relayforge.delivery.application.PendingDelivery;
+import com.gialong.relayforge.delivery.application.PublisherQuotaReservation;
 import com.gialong.relayforge.delivery.application.StartedAttempt;
 import com.gialong.relayforge.delivery.application.StoredEvent;
 import com.gialong.relayforge.delivery.application.EventHistoryCursor;
@@ -93,6 +94,35 @@ public class JdbcDeliveryStore implements DeliveryStore, EndpointCircuitStore {
                 )
                 .stream()
                 .findFirst();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public PublisherQuotaReservation reserveNewEventQuota(UUID projectId, int dailyAcceptedEvents) {
+        return jdbcTemplate.queryForObject(
+                "with quota_window as ("
+                        + "select (current_timestamp at time zone 'UTC')::date as quota_day, "
+                        + "greatest(1, ceil(extract(epoch from ((date_trunc('day', current_timestamp at time zone 'UTC') "
+                        + "+ interval '1 day') at time zone 'UTC' - current_timestamp)))::bigint) as retry_after_seconds"
+                        + "), reservation as ("
+                        + "insert into public.project_publish_quota_usage (project_id, quota_day, accepted_event_count) "
+                        + "select ?, quota_day, 1 from quota_window "
+                        + "on conflict (project_id) do update set "
+                        + "quota_day = excluded.quota_day, "
+                        + "accepted_event_count = case "
+                        + "when project_publish_quota_usage.quota_day = excluded.quota_day "
+                        + "then project_publish_quota_usage.accepted_event_count + 1 else 1 end "
+                        + "where project_publish_quota_usage.quota_day <> excluded.quota_day "
+                        + "or project_publish_quota_usage.accepted_event_count < ? "
+                        + "returning accepted_event_count"
+                        + ") select exists(select 1 from reservation) as admitted, "
+                        + "(select retry_after_seconds from quota_window) as retry_after_seconds",
+                (resultSet, rowNumber) -> resultSet.getBoolean("admitted")
+                        ? PublisherQuotaReservation.admit()
+                        : PublisherQuotaReservation.reject(resultSet.getLong("retry_after_seconds")),
+                projectId,
+                dailyAcceptedEvents
+        );
     }
 
     @Override

@@ -26,6 +26,7 @@ All Part 2 tables belong to the `delivery` module.
 | Conceptual table | Responsibility |
 | --- | --- |
 | `events` | Immutable accepted event, payload, and publish-idempotency identity/fingerprint. |
+| `project_publish_quota_usage` | One current UTC-day durable new-event count per project; not a usage-history ledger. |
 | `deliveries` | One event-to-endpoint delivery intent, queue state, current claim, retry due-time, and replay lineage. |
 | `delivery_attempts` | One append-only numbered dispatch cycle and its immutable terminal observation. |
 | `attempt_late_diagnostics` | Optional stale-worker observation that arrived after its attempt became `UNKNOWN`. |
@@ -33,6 +34,7 @@ All Part 2 tables belong to the `delivery` module.
 
 ```text
 projects 1 -> many events
+projects 1 -> zero or one current project_publish_quota_usage row
 events 1 -> many deliveries
 webhook_endpoints 1 -> many deliveries
 deliveries 1 -> at most 5 delivery_attempts
@@ -73,6 +75,15 @@ No separate generic jobs table exists. The `deliveries` row is the durable work 
 ### 3.3 Immutability
 
 After commit, project, event type, payload, idempotency key, fingerprint, and acceptance time never change. Corrections create another event with another idempotency key.
+
+### 3.4 Current project publish-quota usage
+
+`project_publish_quota_usage` has primary key `project_id`, current `quota_day`
+(`date` in UTC), and positive `accepted_event_count`. It is delivery-owned
+admission state, not billing or an auditable daily history. A conditional
+PostgreSQL UPSERT either increments the current UTC day while it is below the
+configured global limit, resets it to one when its stored day is older, or
+reports rejection. Its one-row-per-project shape needs no reset scheduler.
 
 The 64 KiB limit is checked against accepted request bytes before JSON parsing/persistence so alternate JSON formatting cannot bypass the ingress bound. The stored `jsonb` value may have a different serialized byte size.
 
@@ -267,9 +278,11 @@ One `delivery` transaction:
 1. resolves `(project_id, idempotency_key)`;
 2. returns existing equivalent event or conflicts on different content;
 3. inserts the immutable event for a new key;
-4. reads enabled exact-subscription endpoint identities through the endpoint public contract;
-5. inserts the complete original delivery set, each initially `PENDING` and due at PostgreSQL time;
-6. commits before acknowledging acceptance.
+4. atomically reserves one current UTC-day project quota unit; a rejected
+   reservation rolls back the new event;
+5. reads enabled exact-subscription endpoint identities through the endpoint public contract;
+6. inserts the complete original delivery set, each initially `PENDING` and due at PostgreSQL time;
+7. commits before acknowledging acceptance.
 
 An event with zero matching endpoints commits with zero deliveries. No acknowledged event may contain only part of its selected delivery set.
 

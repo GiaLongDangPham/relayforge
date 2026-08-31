@@ -30,6 +30,8 @@ public interface DeliveryStore {
 
     Optional<StoredEvent> insertEventIfAbsent(NewEvent event);
 
+    PublisherQuotaReservation reserveNewEventQuota(UUID projectId, int dailyAcceptedEvents);
+
     Optional<StoredEvent> findEventByProjectAndIdempotencyKey(UUID projectId, String idempotencyKey);
 
     boolean eventHasEquivalentCommand(UUID eventId, String eventType, String payloadJson);

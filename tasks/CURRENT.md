@@ -4,49 +4,39 @@ Status: Complete
 
 ## Goal
 
-Implement ADR-010's bounded local publisher rate limiter in the API process.
+Implement the owner-approved minimum durable per-project UTC-day publish quota.
 
 ## Decisions
 
-- Apply only to `POST /api/v1/projects/{projectId}/events` after publisher API
-  key authentication and path-project authorization, and before request-body
-  reading or the publish transaction.
-- Keep PostgreSQL as the source of truth for event acceptance and idempotency.
-- Limit state is local, bounded, and reset by API-process restart; it is not a
-  cluster-wide quota or a durability guarantee.
-- ADR-010 accepts a project-wide token bucket with capacity 60, refill 30
-  requests/second, 15-minute idle expiry, and 10,000 retained-bucket maximum.
-- Each request reaching the limiter consumes one token, including a malformed
-  request or equivalent idempotent retry; no token is consumed before API-key
-  authentication and path-project authorization.
-- Expose only bounded outcome metrics and sanitized logs; never put project,
-  API-key, idempotency-key, or payload values into metric labels or log fields.
+- ADR-011 permits one global, validated 10,000-new-event default per project
+  per UTC day; it is not billing or a plan.
+- PostgreSQL owns one current usage row per project. A conditional UPSERT
+  increments it, resets it online on the next UTC day, or rejects atomically.
+- An equivalent idempotent replay and a conflict consume no durable quota;
+  only a new event consumes one unit, irrespective of its delivery fan-out.
 
 ## Out of scope
 
-Redis, a broker, database migrations, durable quotas/billing, invalid-
-credential abuse controls, custom retry policy, SSE, ordering, RBAC, or
-Kubernetes.
+Redis, billing/plans, owner-configurable quota tiers, retained usage analytics,
+distributed counters, custom retry policy, SSE, ordering, RBAC, or Kubernetes.
 
 ## Evidence required
 
-- Atomic admission preserves a maximum 60-request burst and per-project
-  isolation; refill, idle expiry, and the 10,000-bucket bound are covered.
-- Rejection happens before publisher work, returns the specified Problem
-  Details code and positive `Retry-After`, and records no event/delivery.
-- Runtime rebuild, API health, and dashboard availability succeed.
+- Concurrent unique publishes cannot exceed the configured quota; other
+  projects retain independent capacity.
+- A rejection returns `429 PUBLISH_QUOTA_EXCEEDED` with positive `Retry-After`
+  and rolls back the tentative event/delivery set.
 
 ## Completion evidence
 
-- `PublisherEventRateLimiterTests`, `PublisherEventRateLimitControllerTests`,
-  and `PublisherEventHttpIntegrationTests` passed 4/4 with PostgreSQL
-  Testcontainers.
-- `docker compose up --build -d api worker frontend` rebuilt/reloaded the
-  local stack; API health returned `UP` and `http://localhost:5173/` returned
-  HTTP 200. Codex browser automation could not initialize locally, so no
-  interactive console check was available.
+- `PublisherQuotaPropertiesTests` passed 2/2 and focused publisher
+  rate-limiter/controller regressions passed 5/5.
+- PostgreSQL Testcontainers publisher HTTP tests passed 4/4: quota exhaustion,
+  idempotent replay, rollback, project isolation, and 20 concurrent publishes.
+- Compose rebuilt API/worker/frontend, local Flyway reached V16, API health was
+  `UP`, and the dashboard sign-in screen loaded without browser console errors.
 
 ## Next action
 
-Owner review/commit. The next Phase 3 initiative should start only from a
-measured product or scale need; split it first if its proof burden is material.
+Owner review/commit. The next Phase 3 initiative is bounded retry-policy
+customization only if a concrete receiver/product need justifies it.

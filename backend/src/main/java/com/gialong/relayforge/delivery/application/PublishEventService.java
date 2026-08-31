@@ -6,6 +6,8 @@ import com.gialong.relayforge.delivery.api.publish.PublishIdempotencyConflictExc
 import com.gialong.relayforge.delivery.api.publish.EventPublisher;
 import com.gialong.relayforge.delivery.api.publish.PublishEventResult;
 import com.gialong.relayforge.delivery.api.publish.PublishIdempotencyConflictException;
+import com.gialong.relayforge.delivery.api.publish.PublishQuotaExceededException;
+import com.gialong.relayforge.delivery.api.publish.PublisherQuotaSettings;
 import com.gialong.relayforge.endpoint.api.EndpointRoutingQuery;
 import com.gialong.relayforge.endpoint.api.RoutingEndpoint;
 import org.springframework.stereotype.Service;
@@ -31,17 +33,20 @@ final class PublishEventService implements EventPublisher {
     private final EndpointRoutingQuery endpointRoutingQuery;
     private final PublishCommandFingerprint fingerprint;
     private final ObjectMapper objectMapper;
+    private final PublisherQuotaSettings publisherQuotaSettings;
     private final TransactionTemplate transaction;
 
     PublishEventService(
             DeliveryStore deliveryStore,
             EndpointRoutingQuery endpointRoutingQuery,
             ObjectMapper objectMapper,
+            PublisherQuotaSettings publisherQuotaSettings,
             PlatformTransactionManager transactionManager
     ) {
         this.deliveryStore = Objects.requireNonNull(deliveryStore, "deliveryStore must not be null");
         this.endpointRoutingQuery = Objects.requireNonNull(endpointRoutingQuery, "endpointRoutingQuery must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.publisherQuotaSettings = Objects.requireNonNull(publisherQuotaSettings, "publisherQuotaSettings must not be null");
         this.fingerprint = new PublishCommandFingerprint(this.objectMapper);
         this.transaction = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager must not be null"));
         this.transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
@@ -80,6 +85,13 @@ final class PublishEventService implements EventPublisher {
         Optional<StoredEvent> inserted = deliveryStore.insertEventIfAbsent(command);
         if (inserted.isPresent()) {
             StoredEvent event = inserted.orElseThrow();
+            PublisherQuotaReservation reservation = deliveryStore.reserveNewEventQuota(
+                    command.projectId(),
+                    publisherQuotaSettings.dailyAcceptedEvents()
+            );
+            if (!reservation.admitted()) {
+                throw new PublishQuotaExceededException(reservation.retryAfterSeconds());
+            }
             List<RoutingEndpoint> routes = endpointRoutingQuery.findEnabledForExactEventType(
                     command.projectId(),
                     command.eventType()

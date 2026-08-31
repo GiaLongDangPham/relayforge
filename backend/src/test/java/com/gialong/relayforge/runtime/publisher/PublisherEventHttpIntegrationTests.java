@@ -13,6 +13,7 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -108,6 +109,41 @@ class PublisherEventHttpIntegrationTests {
             assertThat(conflict.statusCode()).isEqualTo(409);
             assertThat(conflict.body()).contains("IDEMPOTENCY_CONFLICT").doesNotContain("4300");
 
+            HttpResponse<String> secondAccepted = publish(
+                    publisher,
+                    publishUri,
+                    apiKey.rawKey(),
+                    "invoice-124",
+                    "{\"eventType\":\"invoice.paid\",\"payload\":{\"invoiceId\":\"inv-124\"}}"
+            );
+            assertThat(secondAccepted.statusCode()).isEqualTo(202);
+
+            HttpResponse<String> quotaExceeded = publish(
+                    publisher,
+                    publishUri,
+                    apiKey.rawKey(),
+                    "invoice-125",
+                    "{\"eventType\":\"invoice.paid\",\"payload\":{\"invoiceId\":\"inv-125\"}}"
+            );
+            assertProblem(quotaExceeded, 429, "PUBLISH_QUOTA_EXCEEDED");
+            assertThat(quotaExceeded.headers().firstValue("Retry-After"))
+                    .hasValueSatisfying(value -> assertThat(Long.parseLong(value)).isPositive());
+            assertThat(context.getBean(JdbcTemplate.class).queryForObject(
+                    "select count(*) from public.events where project_id = ?",
+                    Integer.class,
+                    project.id()
+            )).isEqualTo(2);
+
+            HttpResponse<String> replayAfterQuota = publish(
+                    publisher,
+                    publishUri,
+                    apiKey.rawKey(),
+                    "invoice-123",
+                    "{\"payload\":{\"amount\":4200,\"invoiceId\":\"inv-123\"},\"eventType\":\"invoice.paid\"}"
+            );
+            assertThat(replayAfterQuota.statusCode()).isEqualTo(202);
+            assertThat(JSON.readTree(replayAfterQuota.body()).get("idempotentReplay").asBoolean()).isTrue();
+
             assertThat(publish(
                     publisher,
                     baseUri.resolve("/api/v1/projects/" + otherProject.id() + "/events"),
@@ -195,6 +231,54 @@ class PublisherEventHttpIntegrationTests {
         }
     }
 
+    @Test
+    void quotaAtomicallyBoundsConcurrentNewEventsWithoutAffectingAnotherProject() throws Exception {
+        try (ConfigurableApplicationContext context = startApplication()) {
+            OwnerBootstrap ownerBootstrap = context.getBean(OwnerBootstrap.class);
+            ProjectCatalog projectCatalog = context.getBean(ProjectCatalog.class);
+            ProjectApiKeyCatalog apiKeyCatalog = context.getBean(ProjectApiKeyCatalog.class);
+            UUID ownerId = bootstrap(ownerBootstrap).ownerId();
+            ProjectDetails project = projectCatalog.create(ownerId, "Quota project");
+            ProjectDetails otherProject = projectCatalog.create(ownerId, "Other quota project");
+            CreatedProjectApiKey apiKey = apiKeyCatalog.create(ownerId, project.id(), "Quota publisher").orElseThrow();
+            CreatedProjectApiKey otherApiKey = apiKeyCatalog.create(ownerId, otherProject.id(), "Other quota publisher").orElseThrow();
+            URI baseUri = baseUri(context);
+            URI publishUri = baseUri.resolve("/api/v1/projects/" + project.id() + "/events");
+            HttpClient publisher = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+
+            List<CompletableFuture<HttpResponse<String>>> publishes = new ArrayList<>();
+            for (int attempt = 0; attempt < 20; attempt++) {
+                publishes.add(publisher.sendAsync(
+                        publishRequest(
+                                publishUri,
+                                apiKey.rawKey(),
+                                "quota-" + attempt,
+                                "{\"eventType\":\"invoice.paid\",\"payload\":{\"sequence\":" + attempt + "}}"
+                        ),
+                        BodyHandlers.ofString()
+                ));
+            }
+            CompletableFuture.allOf(publishes.toArray(CompletableFuture[]::new)).join();
+            List<HttpResponse<String>> responses = publishes.stream().map(CompletableFuture::join).toList();
+            assertThat(responses).filteredOn(response -> response.statusCode() == 202).hasSize(2);
+            assertThat(responses).filteredOn(response -> response.statusCode() == 429).hasSize(18)
+                    .allSatisfy(response -> assertProblem(response, 429, "PUBLISH_QUOTA_EXCEEDED"));
+            assertThat(context.getBean(JdbcTemplate.class).queryForObject(
+                    "select count(*) from public.events where project_id = ?",
+                    Integer.class,
+                    project.id()
+            )).isEqualTo(2);
+
+            assertThat(publish(
+                    publisher,
+                    baseUri.resolve("/api/v1/projects/" + otherProject.id() + "/events"),
+                    otherApiKey.rawKey(),
+                    "other-project-first-event",
+                    "{\"eventType\":\"invoice.paid\",\"payload\":{}}"
+            )).satisfies(response -> assertThat(response.statusCode()).isEqualTo(202));
+        }
+    }
+
     private HttpResponse<String> publish(
             HttpClient client,
             URI uri,
@@ -269,6 +353,7 @@ class PublisherEventHttpIntegrationTests {
                         "spring.datasource.url", POSTGRES.getJdbcUrl(),
                         "spring.datasource.username", POSTGRES.getUsername(),
                         "spring.datasource.password", POSTGRES.getPassword(),
+                        "relayforge.publisher.quota.daily-accepted-events", "2",
                         "server.port", "0"
                 ))
                 .run();

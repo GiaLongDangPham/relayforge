@@ -1,6 +1,7 @@
 package com.gialong.relayforge.runtime.publisher;
 
 import com.gialong.relayforge.delivery.api.publish.PublishIdempotencyConflictException;
+import com.gialong.relayforge.delivery.api.publish.PublishQuotaExceededException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -63,6 +64,18 @@ final class PublisherEventExceptionHandler {
                         "PUBLISH_RATE_LIMITED",
                         "Publisher rate limited",
                         "The publisher event request is temporarily rate limited."
+                ));
+    }
+
+    @ExceptionHandler(PublishQuotaExceededException.class)
+    ResponseEntity<ProblemDetail> publisherQuotaExceeded(PublishQuotaExceededException exception) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(exception.retryAfterSeconds()))
+                .body(problem(
+                        HttpStatus.TOO_MANY_REQUESTS,
+                        "PUBLISH_QUOTA_EXCEEDED",
+                        "Publisher quota exceeded",
+                        "The project has reached its daily publisher event quota."
                 ));
     }
 
