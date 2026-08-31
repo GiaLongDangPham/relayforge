@@ -1,43 +1,53 @@
 # Current Task
 
-Status: In progress
+Status: Complete
 
 ## Goal
 
-Correct the endpoint-configuration request used by the dashboard so a live
-owner can change an existing endpoint URL while preserving optimistic-version
-protection. This unblocks the requested production pause/resume demo data.
+Record a repeatable noisy-neighbor baseline for the current global-FIFO claim
+selection before changing claim SQL or indexes.
 
 ## Decisions
 
-- The root README is an entry point and evidence map; detailed contracts stay
-  in their existing authoritative documents.
-- CV bullets may state only demonstrated behavior, measured local results, or
-  accepted implementation decisions. They must not claim production SLA,
-  capacity, exactly-once delivery, HA, or a managed database.
-- Interview answers explain why the project chose PostgreSQL, modular monolith,
-  local observability, and bounded worker processing rather than collecting
-  technology keywords.
-- The demo flow uses the already-verified local/public paths and never reveals
-  raw API keys, signing secrets, environment values, or private IP details.
+- The baseline intentionally preserves the existing `ORDER BY due_at, id`
+  global-FIFO behavior; it is evidence for a later comparison, not a defect
+  being fixed in this slice.
+- Fixture: endpoint A has 32 earlier due deliveries; endpoint B has two later
+  due deliveries; every claim opportunity has eight free permits.
+- The test drives normal attempt start/finalization with synthetic 204 evidence
+  so each completed A wave returns permits before the next claim.
+- Claim-wave delay is recorded, rather than an elapsed-time SLA: B first
+  becomes eligible for a claim only after four full A waves under FIFO.
 
 ## Out of scope
 
-New product features, dependencies, runtime tuning, credential rotation,
-managed observability, and unrelated portfolio documentation changes.
+Fair-selection SQL, migration/index changes, real slow-receiver load testing,
+`EXPLAIN` comparison, `Retry-After`, circuit breaker, secret rotation, event
+schema versioning, broker/Redis adoption, and unrelated refactoring.
 
 ## Evidence required
 
-- A replace-endpoint request contains only the API contract fields: `name`,
-  `destinationUrl`, `eventTypes`, and current `version`.
-- Frontend checks pass and a local browser confirms the endpoint editor is
-  still reachable.
+- A PostgreSQL Testcontainers fixture proves the first four eight-row waves
+  contain only A, and B first appears in wave five.
+- The fixture uses normal claim, attempt-start, and finalization boundaries;
+  it does not mutate delivery state to simulate completion.
+- The recorded baseline distinguishes claim-wave delay from an elapsed-time or
+  production-capacity statement.
 
 ## Completion evidence
 
-Pending.
+- Added `recordsTheGlobalFifoNoisyNeighborBaselineBeforeFairDispatchChanges` to
+  `DeliveryClaimIntegrationTests`.
+- On PostgreSQL 17.10 Testcontainers, A's 32 earlier due deliveries consumed
+  four full eight-claim waves; B's two deliveries first appeared in wave five.
+- The test uses normal claim, attempt-start, and conditional-finalization
+  boundaries with synthetic HTTP 204 observations; it does not directly mutate
+  delivery state to fake completion.
+- `mvnw.cmd -Dtest=DeliveryClaimIntegrationTests test` with JDK 25 passed:
+  4 tests, 0 failures, 0 errors.
+- This is a deterministic claim-order baseline, not a timing/capacity claim.
 
 ## Next action
 
-Run the narrow frontend check, review the small contract fix, then deploy the
-new immutable frontend image before resuming the live pause/resume scenario.
+Implement endpoint-fair candidate selection under ADR-007, preserving the
+same fixture for a direct before/after claim-distribution comparison.

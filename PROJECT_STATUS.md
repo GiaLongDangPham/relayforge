@@ -1,6 +1,6 @@
 # RelayForge Project Status
 
-Last updated: 2026-08-29
+Last updated: 2026-08-31
 
 This file is the durable source of truth for project scope and progress. Update it after every completed slice.
 
@@ -13,8 +13,8 @@ This file is the durable source of truth for project scope and progress. Update 
 
 ## Current position
 
-- Current phase: Phase 1 - Foundation.
-- Current slice: Group 20 is complete. The root README and portfolio playbook now connect accepted architecture, measured local performance/resilience evidence, CV claims, interview trade-offs, and a safe demo flow. This was documentation-only: it added no feature, dependency, runtime behavior, deployment, or production performance claim. Owner review/commit is the next action.
+- Current phase: Phase 2 - Advanced delivery controls.
+- Current slice: Phase 2A Slice 2 is complete. The current global-FIFO query made the small endpoint wait four complete claim waves in a deterministic PostgreSQL fixture; Slice 3 can now replace candidate selection and compare against that baseline.
 - Repository state: Git repository on `main`; RelayForge backend foundation exists under `backend/` and the thin React/Vite owner dashboard exists under `frontend/`.
 - Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Apache HttpClient 5, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Spring Security with JDBC Spring Session, Lombok 1.18.46 as a compile-time processor, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. V2 creates `owner_accounts`, V3 adds technical Spring Session tables, V4 creates `projects`, V5 creates `project_api_keys`, V6 creates `webhook_endpoints` plus `endpoint_subscriptions`, V7 creates immutable `events` plus original `deliveries`, V8 adds partial claim/recovery indexes, V9 creates `delivery_attempts`, V10 creates `attempt_late_diagnostics`, V11 adds replay lineage, replay idempotency, and history query indexes, and V12 adds terminal-history retention indexes. Identity supports opt-in bootstrap and generic credential verification; API mode has completed browser authentication, owner-scoped configuration access, publisher event acceptance, safe owner history, and CSRF-protected manual replay. Worker mode now has durable claim/recovery/attempt-start contracts, signed and SSRF-pinned outbound HTTP dispatch, conditional finalization/retry, post-attempt `UNKNOWN` recovery, bounded polling through local permit admission, and fixed-delay bounded cleanup of expired complete terminal graphs.
 - Local environment note: the default terminal Java is JDK 21 while this project requires JDK 25; Maven verification currently selects `C:\Program Files\Java\jdk-25` explicitly.
@@ -64,6 +64,9 @@ This file is the durable source of truth for project scope and progress. Update 
 | Delivery timing defaults | 2-second connect, 10-second dispatch, 15-second initial lease, 20-second attempt lease, 5-second recovery scan, and 20-second shutdown | Gives Portfolio v1 bounded, internally consistent starting values that can be tuned from metrics. |
 | Retry timing defaults | 5-second base, multiplier 4, 300-second cap, and equal jitter | Demonstrates persisted exponential backoff while keeping the portfolio workflow observable in a short session. |
 | Worker polling defaults | 8 local permits, claim only up to free permits, poll every 500 ms plus 0-100 ms jitter | Bounds local concurrency and avoids claimed-work prefetch while retaining responsive demo latency. |
+| Phase 2 scheduling direction | Non-preemptive, work-conserving endpoint fairness replaces a fixed low per-endpoint cap: competing backlogged endpoints share newly available claim capacity, while one endpoint may burst into idle capacity | Prevents endpoint starvation without leaving worker permits unused; an endpoint that becomes backlogged is favored at the next free claim opportunity rather than cancelling active HTTP work. |
+| Advanced delivery sequence | Fair dispatch first, then bounded `Retry-After`, a PostgreSQL-backed endpoint circuit breaker, versioned signing-secret rotation, and event-schema versioning | Each step solves a concrete receiver-reliability or security problem and can be tested without adding infrastructure for keyword count. |
+| Distributed-component gate | RabbitMQ, SQS, Kafka, or Redis requires measured PostgreSQL queue, rate-limit, or cache evidence plus a reviewed consistency/cutover decision | Fairness alone does not justify a second source of truth or solve the event/database dual-write boundary. |
 | Configuration identifiers | Application-generated UUIDv4 with PostgreSQL `uuid`; lifecycle timestamps use `timestamptz` and PostgreSQL time | Keeps identifiers opaque and timestamps unambiguous without another generator dependency. |
 | Configuration concurrency | Optimistic `bigint version` on mutable owner, project, and endpoint aggregates | Detects dashboard lost updates without confusing them with worker lease/token fencing. |
 | Secret persistence | Password hashes and API-key digests are nonrecoverable; endpoint signing secrets use encrypted envelopes with an external key reference | Signing needs plaintext recovery while authentication secrets must never be recoverable from persistence. |
@@ -206,20 +209,100 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-29 | Phase 1 Group 17 local performance baseline | Added opt-in local Prometheus 3.5.0/Grafana 12.0.2 Compose profiles, a provisioned viewer-only dashboard, ignored load-test fixture/result boundaries, a bounded k6 publisher workload, and repeatable JFR/thread-dump runbook steps. Prometheus configuration validation passed; both targets scraped `UP`; React and Grafana rendered after final restart. The clean `--no-deps` k6 run accepted 1,275 requests with 0% errors and passed all thresholds; worker metrics then reported 1,275 succeeded attempts, zero ready backlog, eight free permits, and zero pending Hikari connections. A local JFR artifact and non-disruptive thread dump were captured. No application tuning was accepted because this workload exposed no measured application bottleneck. |
 | 2026-08-29 | Phase 1 Groups 18–19 resilience drills | Added a local-only failure harness and runbook, plus isolated restore/image-compatibility and DuckDNS-readiness scripts. The final Group 18 evidence recorded 500 retry then success, `DISPATCH_TIMEOUT` then success, `UNKNOWN` after abrupt worker loss then success, and exactly five retryable failures ending in `EXHAUSTED`; no event/delivery identifiers become metric labels. Group 19 created/validated/restored a local custom archive (12 Flyway rows, one owner, 3,004 local events/deliveries) into a private temporary PostgreSQL container; `gialong1416/relayforge-backend:a75ef093bc8d` reached readiness against it. DuckDNS resolved 35.72.33.67 and HTTPS returned 200. No production restore, rollback, EC2 stop/start, DNS mutation, or image deployment occurred. |
 | 2026-08-29 | Phase 1 Group 20 portfolio closeout | Added the root README plus a portfolio/CV/interview/demo playbook. Both link to the existing architecture, performance, resilience, and operations sources; they use controlled local evidence only and name the single-host, at-least-once, and observability limitations explicitly. No runtime behavior, dependency, deployment, or production test changed. |
+| 2026-08-31 | Phase 2A Slice 1 fair-dispatch contract | Accepted ADR-007 and aligned the delivery model/runtime defaults on endpoint-aware least-allocation selection. Two equally backlogged endpoints target 4/4 of eight new slots; one endpoint may burst to all eight; new work receives the next available opportunity without preempting active HTTP. The slice also records snapshot-skew limits, trade-offs, PostgreSQL test fixtures, noisy-neighbor measurements, and the broker/Redis evidence gate. No claim SQL, migration, dependency, or runtime behavior changed. |
+| 2026-08-31 | Phase 2A Slice 2 global-FIFO noisy-neighbor baseline | Added one focused PostgreSQL Testcontainers integration fixture: A has 32 earlier due deliveries, B has 2 later due deliveries, and capacity is 8. Normal claim/attempt-start/finalization waves selected A for waves 1–4; B first appeared in wave 5. This proves claim-order starvation potential under the current `ORDER BY due_at, id` query but intentionally does not claim elapsed latency, throughput, or capacity. `DeliveryClaimIntegrationTests` passed 4/4. |
 | 2026-08-27 | Dashboard UI refinement | Unified the React dashboard under one tokenized dark operational theme, corrected the project workspace’s width breakpoint and list-card stretching, and rebuilt Delivery operations as native dark-theme cards instead of its conflicting white surface. Added responsive one-column behavior, visible focus styling, reduced-motion handling, 44px base control targets, selected-state treatment, and safer long-value wrapping without changing API or delivery behavior. `npm run lint` and production build passed; the rebuilt Compose frontend was browser-checked across API-key, endpoint, and delivery panels at desktop and narrow widths with no horizontal overflow or console warnings/errors. |
+
+## Advanced development roadmap
+
+### Phase 2A - Work-conserving fair dispatch
+
+1. Define the fairness contract: endpoint is the scheduling unit; active work
+   is non-preemptive; continuously backlogged endpoints share new capacity;
+   an endpoint may burst while competitors are idle; no ordering is promised.
+   **Complete in ADR-007.**
+2. Record a noisy-neighbor baseline with a large slow-endpoint backlog and a
+   small healthy-endpoint backlog, including time-to-first-attempt, claim
+   distribution, oldest-due age, claim latency, locks, and pool pressure.
+   **Claim-order fixture complete; timing/query-plan evidence remains after the
+   fair query exists.**
+3. Implement PostgreSQL-backed fair candidate selection while preserving
+   bounded local permits, `SKIP LOCKED`, endpoint disable serialization,
+   lease/token fencing, and commit-before-HTTP behavior.
+4. Prove concurrent-worker fairness, burst utilization, new-backlog priority,
+   crash recovery, stale-token rejection, and paused-backlog behavior with
+   focused Testcontainers evidence.
+5. Inspect representative query plans and indexes with
+   `EXPLAIN (ANALYZE, BUFFERS)`, then rerun the identical workload and record
+   before/after evidence without claiming a production SLA.
+
+### Phase 2B - Receiver-aware backpressure
+
+1. Support bounded, validated `Retry-After` scheduling for selected retryable
+   responses, falling back to the existing equal-jitter policy when absent or
+   invalid.
+2. Add a PostgreSQL-authoritative endpoint circuit breaker with explicit
+   `CLOSED`, `OPEN`, and single-probe `HALF_OPEN` behavior across workers.
+3. Expose bounded operational metrics and owner-visible safe state without
+   endpoint identifiers as Prometheus labels.
+
+### Phase 3 - Versioned signing-secret rotation
+
+Add prepare, one-time reveal, activate, overlap/grace, attempt-start version
+snapshot, and retire behavior while preserving encrypted storage and auditable
+attempt history.
+
+### Phase 4 - Event schema versioning
+
+Add immutable event-schema versions and publish-time validation so accepted
+events retain the exact contract version used, without payload transformations
+or user-supplied code.
+
+### Phase 5 - Evidence-gated product and scale controls
+
+These are review points, not a promise to install every technology:
+
+1. Add bounded publisher rate limiting and per-project quotas only when the
+   public-demo or multi-tenant threat model needs abuse isolation. Keep a local
+   limiter for one instance; consider Redis only when several API instances
+   require shared low-latency counters and PostgreSQL remains authoritative.
+2. Add bounded endpoint/project retry-policy customization only after
+   `Retry-After` and circuit-breaker behavior have stable safe limits.
+3. Replace REST polling with SSE only if measured dashboard delay or polling
+   load justifies a long-lived event channel; WebSocket is not needed for
+   one-way operational updates.
+4. Consider opt-in per-endpoint ordering only for a concrete receiver contract
+   that accepts head-of-line blocking and reduced throughput.
+5. Treat organization/RBAC as a separate product expansion with tenant-aware
+   authorization tests, not a delivery-engine refactor.
+6. Consider Kubernetes only after the deployment needs several independently
+   scaled services, self-healing replicas, or scheduling that one EC2 Compose
+   host cannot provide economically.
+
+### Queue technology decision gate
+
+Reconsider RabbitMQ, SQS, or Kafka only after fair PostgreSQL scheduling and
+reasonable query/index/batch/pool work still show unacceptable claim latency,
+oldest-due age, database pressure, or a real need for independent retained
+consumers. Any proposal must define outbox/atomic publication, duplicate-safe
+consumption, retry/dead-letter semantics, cutover, reconciliation, and rollback.
 
 ## Next recommended slice
 
-Owner-review the Group 20 closeout, then explicitly decide whether to commit and push it. The Portfolio v1 learning scope is complete; do not add another distributed-system component merely to extend the project. Continue to keep 5432, 8080, and 8082 private.
+Implement Phase 2A Slice 3: replace global-FIFO candidate selection with the
+ADR-007 endpoint-fair query, preserving existing claim/lease/disable invariants
+and the Slice 2 fixture. Continue to keep 5432, 8080, and 8082 private.
 
 ## Deferred until evidence justifies them
 
 - RabbitMQ, SQS, or Kafka.
-- Redis or distributed caching.
+- Redis or distributed caching without a measured multi-instance counter/cache
+  need.
 - SSE/WebSocket status updates.
 - Organization and complex RBAC.
 - Inbound webhook gateway.
-- Strict per-endpoint ordering.
+- Strict per-endpoint ordering without an explicit head-of-line-blocking product
+  requirement.
 - Kubernetes, microservices, multi-region, billing, and quota management.
 
 ## Change log

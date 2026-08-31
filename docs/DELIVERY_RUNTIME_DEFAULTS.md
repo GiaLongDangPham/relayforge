@@ -106,6 +106,13 @@ The permit limit is the concurrency contract regardless of whether implementatio
 
 A failed claim transaction releases every permit reserved for that call. A short claim returning `n` rows releases unused permits immediately and binds exactly one permit to each of the `n` returned claims. A bound permit is released in a local `finally` path only after that task has stopped all HTTP and state-transition work for its token; lease expiry alone does not release it while stale local work is still running.
 
+Claim capacity is shared by a work-conserving endpoint-fair selection policy;
+it is not divided into fixed endpoint reservations. With eight free permits and
+deep backlog on endpoints A and B, a fresh allocation targets 4/4. If B has no
+due work, A may use all eight. If B later becomes due while A occupies the
+permits, A is not preempted; B is preferred when capacity next becomes free.
+See [ADR-007](adr/0007-work-conserving-endpoint-fair-dispatch.md).
+
 ## 7. Graceful shutdown behavior
 
 On shutdown signal, a worker:
@@ -168,7 +175,9 @@ Implementation must eventually prove:
 11. unused permits are released after failed or short claim transactions;
 12. lease expiry does not release a permit while the stale local task still runs;
 13. shutdown prevents new claims and either finishes tasks within 20 seconds or leaves them recoverable by lease expiry;
-14. a controlled workload records the metrics required to tune polling, concurrency, timeouts, and leases.
+14. a controlled workload records the metrics required to tune polling, concurrency, timeouts, and leases;
+15. endpoint-fair selection proves equal-backlog sharing, single-endpoint burst,
+    and next-free-slot progress for a newly backlogged endpoint.
 
 Tests should use short overridden durations where waiting on the real baseline would make the suite slow. The production defaults and the relationships between them still require configuration-binding tests.
 
@@ -179,7 +188,8 @@ Tests should use short overridden durations where waiting on the real baseline w
 - Database schema, claim/recovery SQL, locks, isolation, indexes, and query plan.
 - API and worker connection-pool sizes.
 - Circuit breaker; none is added without a demonstrated failure it improves beyond timeout, concurrency limit, and retry backoff.
-- Per-endpoint concurrency or rate limits; v1 starts with one worker-wide bound.
+- Per-endpoint hard concurrency or request-rate limits; endpoint fairness shares
+  new claim opportunities but does not enforce either limit.
 - `Retry-After` support and maximum accepted delay.
 - Environment-specific overrides after local and cloud measurements exist.
 

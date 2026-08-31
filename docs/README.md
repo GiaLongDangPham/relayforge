@@ -6,7 +6,7 @@ Start with [AGENTS.md](../AGENTS.md), [Agent Context](AGENT_CONTEXT.md), and the
 | --- | --- |
 | Product scope and acceptance criteria | [Requirements](REQUIREMENTS.md) |
 | Architecture, modules, runtime modes, transactions | [Architecture Boundaries](ARCHITECTURE_BOUNDARIES.md), then relevant accepted [ADRs](adr/) |
-| Delivery, retries, leases, worker capacity, timing | [Delivery Model](DELIVERY_MODEL.md), [Runtime Defaults](DELIVERY_RUNTIME_DEFAULTS.md), [ADR-002](adr/0002-postgresql-backed-delivery-jobs.md) |
+| Delivery, retries, leases, worker capacity, timing, endpoint fairness | [Delivery Model](DELIVERY_MODEL.md), [Runtime Defaults](DELIVERY_RUNTIME_DEFAULTS.md), [ADR-002](adr/0002-postgresql-backed-delivery-jobs.md), [ADR-007](adr/0007-work-conserving-endpoint-fair-dispatch.md) |
 | Database/persistence | [Database Model Part 1](DATABASE_MODEL_PART1.md), [Part 2](DATABASE_MODEL_PART2.md) |
 | HTTP API and DTO boundaries | [API Contract](API_CONTRACT.md) |
 | Authentication, authorization, secrets, SSRF, redaction | [Security Baseline](SECURITY_BASELINE.md) |

@@ -1,8 +1,13 @@
 package com.gialong.relayforge.delivery;
 
 import com.gialong.relayforge.RelayForgeApplication;
+import com.gialong.relayforge.delivery.api.AttemptFinalizationResult;
 import com.gialong.relayforge.delivery.api.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.DeliveryAttemptFinalizer;
+import com.gialong.relayforge.delivery.api.DeliveryAttemptStarter;
 import com.gialong.relayforge.delivery.api.DeliveryClaimer;
+import com.gialong.relayforge.delivery.api.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.DispatchObservation;
 import com.gialong.relayforge.delivery.api.EventPublisher;
 import com.gialong.relayforge.endpoint.api.EndpointClaimEligibilityQuery;
 import com.gialong.relayforge.endpoint.api.WebhookEndpointCatalog;
@@ -63,6 +68,12 @@ class DeliveryClaimIntegrationTests {
 
     @Autowired
     private DeliveryClaimer deliveryClaimer;
+
+    @Autowired
+    private DeliveryAttemptStarter deliveryAttemptStarter;
+
+    @Autowired
+    private DeliveryAttemptFinalizer deliveryAttemptFinalizer;
 
     @Autowired
     private EndpointClaimEligibilityQuery endpointClaimEligibilityQuery;
@@ -152,6 +163,66 @@ class DeliveryClaimIntegrationTests {
     }
 
     @Test
+    void recordsTheGlobalFifoNoisyNeighborBaselineBeforeFairDispatchChanges() {
+        UUID ownerId = bootstrap("claim.noisy-neighbor.owner").ownerId();
+        ProjectDetails project = projectCatalog.create(ownerId, "Noisy-neighbor claim baseline");
+        WebhookEndpointDetails noisyEndpoint = endpoint(
+                ownerId,
+                project.id(),
+                "Slow backlog receiver",
+                "noisy-neighbor.slow"
+        );
+        WebhookEndpointDetails healthyEndpoint = endpoint(
+                ownerId,
+                project.id(),
+                "Healthy receiver",
+                "noisy-neighbor.healthy"
+        );
+
+        for (int index = 0; index < 32; index++) {
+            eventPublisher.publish(
+                    project.id(),
+                    "noisy-baseline-slow-" + index,
+                    "noisy-neighbor.slow",
+                    "{\"sequence\":" + index + "}"
+            );
+        }
+        for (int index = 0; index < 2; index++) {
+            eventPublisher.publish(
+                    project.id(),
+                    "noisy-baseline-healthy-" + index,
+                    "noisy-neighbor.healthy",
+                    "{\"sequence\":" + index + "}"
+            );
+        }
+        jdbcTemplate.update(
+                "update deliveries set due_at = CURRENT_TIMESTAMP - interval '60 seconds' where endpoint_id = ?",
+                noisyEndpoint.id()
+        );
+        jdbcTemplate.update(
+                "update deliveries set due_at = CURRENT_TIMESTAMP - interval '30 seconds' where endpoint_id = ?",
+                healthyEndpoint.id()
+        );
+
+        for (int wave = 1; wave <= 4; wave++) {
+            List<ClaimedDelivery> claims = deliveryClaimer.claim(8, Duration.ofSeconds(15));
+
+            assertThat(claims)
+                    .hasSize(8)
+                    .extracting(ClaimedDelivery::endpointId)
+                    .containsOnly(noisyEndpoint.id());
+            finalizeSuccessfully(claims);
+        }
+
+        List<ClaimedDelivery> fifthWave = deliveryClaimer.claim(8, Duration.ofSeconds(15));
+
+        assertThat(fifthWave)
+                .hasSize(2)
+                .extracting(ClaimedDelivery::endpointId)
+                .containsOnly(healthyEndpoint.id());
+    }
+
+    @Test
     void concurrentDisableWaitsForTheFinalEndpointEligibilityLock() throws Exception {
         UUID ownerId = bootstrap("claim.disable.owner").ownerId();
         ProjectDetails project = projectCatalog.create(ownerId, "Claim disable");
@@ -196,14 +267,44 @@ class DeliveryClaimIntegrationTests {
     }
 
     private WebhookEndpointDetails endpoint(UUID ownerId, UUID projectId, String name, boolean enabled) {
+        return endpoint(ownerId, projectId, name, "invoice.paid", enabled);
+    }
+
+    private WebhookEndpointDetails endpoint(UUID ownerId, UUID projectId, String name, String eventType) {
+        return endpoint(ownerId, projectId, name, eventType, true);
+    }
+
+    private WebhookEndpointDetails endpoint(
+            UUID ownerId,
+            UUID projectId,
+            String name,
+            String eventType,
+            boolean enabled
+    ) {
         return endpointCatalog.create(
                 ownerId,
                 projectId,
                 name,
                 "https://" + name.toLowerCase().replace(' ', '-') + ".example/webhooks",
-                List.of("invoice.paid"),
+                List.of(eventType),
                 enabled
         ).orElseThrow().endpoint();
+    }
+
+    private void finalizeSuccessfully(List<ClaimedDelivery> claims) {
+        for (ClaimedDelivery claim : claims) {
+            DispatchInstruction instruction = deliveryAttemptStarter.start(claim, Duration.ofSeconds(20)).orElseThrow();
+            try (DispatchObservation observation = DispatchObservation.httpResponse(
+                    DispatchObservation.Outcome.SUCCEEDED,
+                    204,
+                    Duration.ofMillis(1),
+                    new byte[0],
+                    false
+            )) {
+                assertThat(deliveryAttemptFinalizer.finalizeAttempt(instruction, observation))
+                        .isEqualTo(AttemptFinalizationResult.FINALIZED);
+            }
+        }
     }
 
     private OwnerBootstrapResult bootstrap(String loginName) {

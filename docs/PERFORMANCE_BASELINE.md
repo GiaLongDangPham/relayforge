@@ -77,6 +77,29 @@ errors during startup. The final run removed that interference with
 optimization. Repeat this exact workload before and after any future tuning
 change, then compare the same metrics and diagnostic context.
 
+## Phase 2A claim-order baseline: noisy neighbor
+
+This focused PostgreSQL integration fixture establishes the behavioral baseline
+for the pre-fairness global-FIFO claim query. It is deliberately not a k6 run,
+an elapsed-time benchmark, or a production-capacity claim.
+
+| Item | Recorded value |
+| --- | --- |
+| Fixture | Endpoint A: 32 due deliveries at `now - 60 s`; endpoint B: 2 due deliveries at `now - 30 s` |
+| Claim capacity | 8 free permits per wave |
+| Completion simulation | Normal claim, attempt-start, and conditional finalization using a synthetic HTTP 204 observation |
+| Current selection | Global `ORDER BY due_at, id` FIFO |
+| Waves 1–4 | 8 A deliveries each; 32 A deliveries total |
+| First B claim | Wave 5, after the earlier A backlog was drained |
+| Verification | `DeliveryClaimIntegrationTests`: 4 tests passed with PostgreSQL 17.10 Testcontainers on 2026-08-31 |
+
+The fixture makes the noisy-neighbor problem concrete: if A's attempts are
+slow, B receives no new claim until the earlier A backlog has consumed four
+complete eight-permit waves. It does not measure that waiting time in
+milliseconds because no real receiver is blocked in this test. The next slice
+will replace the candidate-selection rule under the same fixture, then compare
+claim distribution before considering query-plan or load evidence.
+
 ## References
 
 - [Performance Runbook](PERFORMANCE_RUNBOOK.md)

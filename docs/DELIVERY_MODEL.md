@@ -92,6 +92,17 @@ RelayForge does not use database state to claim exactly-once receiver behavior. 
 
 Due-time and lease-expiry comparisons use PostgreSQL time rather than independently sampled worker clocks. This avoids correctness depending on clock agreement between worker processes.
 
+### INV-13 - New claim capacity is endpoint-fair and work-conserving
+
+Fairness applies when selecting new claims, not by cancelling active work. Due
+endpoints with lower current claim allocation are preferred, while pending rows
+inside one endpoint retain due-time order. If competing endpoints do not have
+enough work, another endpoint may use every otherwise idle permit.
+
+This is not a fixed per-endpoint cap, a request-rate limit, or an ordering
+guarantee. The precise selection contract is recorded in
+[ADR-007](adr/0007-work-conserving-endpoint-fair-dispatch.md).
+
 ## 4. Delivery state model
 
 ### 4.1 Persisted states
@@ -222,6 +233,12 @@ No outbound network call occurs in this transaction.
 
 The initial endpoint snapshot only keeps paused rows from consuming a bounded claim batch. The final row-locked recheck is the correctness boundary: a concurrent disable either becomes visible before recheck and leaves the delivery `PENDING`, or waits until the claim commits.
 
+Candidate order is endpoint-fair rather than global FIFO. The transaction
+prefers the lowest endpoint allocation level, calculated from current
+`CLAIMED` count plus the pending row's ordinal within that endpoint. This lets
+one endpoint burst into idle capacity while ensuring a newly backlogged endpoint
+receives a future free slot without waiting for the first endpoint to drain.
+
 ### Step 2 - Revalidate before starting an attempt
 
 After claim commit, the worker may perform an advisory preflight check of current endpoint configuration:
@@ -341,7 +358,14 @@ The implementation is not considered correct until tests demonstrate:
 13. manual replay creates a separate linked delivery and is idempotent by replay key;
 14. due-time and lease-expiry behavior use PostgreSQL time;
 15. every transition out of `CLAIMED` invalidates the claim token and lease;
-16. terminal deliveries never re-enter automatic processing.
+16. terminal deliveries never re-enter automatic processing;
+17. two equally backlogged idle endpoints split an eight-row claim 4/4;
+18. one backlogged endpoint can consume all eight free permits when competitors
+    have no due work;
+19. a newly backlogged endpoint is preferred at the next free claim opportunity
+    without preempting active work;
+20. repeated concurrent claim opportunities do not starve a continuously
+    eligible endpoint.
 
 ## 11. Downstream decisions and remaining implementation work
 
