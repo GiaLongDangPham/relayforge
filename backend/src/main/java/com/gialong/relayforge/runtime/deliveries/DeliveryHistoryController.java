@@ -1,15 +1,25 @@
 package com.gialong.relayforge.runtime.deliveries;
+import com.gialong.relayforge.delivery.api.history.AttemptHistoryDetails;
+import com.gialong.relayforge.delivery.api.history.AttemptHistorySummary;
+import com.gialong.relayforge.delivery.api.history.DeliveryDisplayStatus;
+import com.gialong.relayforge.delivery.api.history.DeliveryHistory;
+import com.gialong.relayforge.delivery.api.history.DeliveryHistoryDetails;
+import com.gialong.relayforge.delivery.api.history.DeliveryHistoryPage;
+import com.gialong.relayforge.delivery.api.history.EventHistoryDetails;
+import com.gialong.relayforge.delivery.api.history.EventHistoryPage;
+import com.gialong.relayforge.delivery.api.replay.DeliveryReplayer;
+import com.gialong.relayforge.delivery.api.replay.ReplayDeliveryResult;
 
-import com.gialong.relayforge.delivery.api.AttemptHistoryDetails;
-import com.gialong.relayforge.delivery.api.AttemptHistorySummary;
-import com.gialong.relayforge.delivery.api.DeliveryDisplayStatus;
-import com.gialong.relayforge.delivery.api.DeliveryHistory;
-import com.gialong.relayforge.delivery.api.DeliveryHistoryDetails;
-import com.gialong.relayforge.delivery.api.DeliveryHistoryPage;
-import com.gialong.relayforge.delivery.api.DeliveryReplayer;
-import com.gialong.relayforge.delivery.api.EventHistoryDetails;
-import com.gialong.relayforge.delivery.api.EventHistoryPage;
-import com.gialong.relayforge.delivery.api.ReplayDeliveryResult;
+import com.gialong.relayforge.delivery.api.history.AttemptHistoryDetails;
+import com.gialong.relayforge.delivery.api.history.AttemptHistorySummary;
+import com.gialong.relayforge.delivery.api.history.DeliveryDisplayStatus;
+import com.gialong.relayforge.delivery.api.history.DeliveryHistory;
+import com.gialong.relayforge.delivery.api.history.DeliveryHistoryDetails;
+import com.gialong.relayforge.delivery.api.history.DeliveryHistoryPage;
+import com.gialong.relayforge.delivery.api.replay.DeliveryReplayer;
+import com.gialong.relayforge.delivery.api.history.EventHistoryDetails;
+import com.gialong.relayforge.delivery.api.history.EventHistoryPage;
+import com.gialong.relayforge.delivery.api.replay.ReplayDeliveryResult;
 import com.gialong.relayforge.identity.api.VerifiedOwner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
@@ -173,9 +183,9 @@ final class DeliveryHistoryController {
     }
 
     record EventHistoryResponse(
-            com.gialong.relayforge.delivery.api.EventHistorySummary event,
+            com.gialong.relayforge.delivery.api.history.EventHistorySummary event,
             JsonNode payload,
-            com.gialong.relayforge.delivery.api.EventDeliverySummary deliverySummary
+            com.gialong.relayforge.delivery.api.history.EventDeliverySummary deliverySummary
     ) {
     }
 }

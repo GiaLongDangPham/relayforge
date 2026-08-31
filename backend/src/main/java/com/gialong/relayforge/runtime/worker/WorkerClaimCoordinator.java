@@ -1,7 +1,9 @@
 package com.gialong.relayforge.runtime.worker;
+import com.gialong.relayforge.delivery.api.processing.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.processing.DeliveryClaimer;
 
-import com.gialong.relayforge.delivery.api.ClaimedDelivery;
-import com.gialong.relayforge.delivery.api.DeliveryClaimer;
+import com.gialong.relayforge.delivery.api.processing.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.processing.DeliveryClaimer;
 
 import java.util.List;
 import java.util.Objects;

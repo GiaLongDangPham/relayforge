@@ -1,7 +1,9 @@
 package com.gialong.relayforge.delivery.application;
+import com.gialong.relayforge.delivery.api.operations.RetentionCleanupResult;
+import com.gialong.relayforge.delivery.api.operations.TerminalHistoryRetention;
 
-import com.gialong.relayforge.delivery.api.RetentionCleanupResult;
-import com.gialong.relayforge.delivery.api.TerminalHistoryRetention;
+import com.gialong.relayforge.delivery.api.operations.RetentionCleanupResult;
+import com.gialong.relayforge.delivery.api.operations.TerminalHistoryRetention;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;

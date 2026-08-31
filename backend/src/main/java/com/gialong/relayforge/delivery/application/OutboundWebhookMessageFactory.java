@@ -1,8 +1,11 @@
 package com.gialong.relayforge.delivery.application;
+import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.processing.OutboundWebhookMessageSigner;
+import com.gialong.relayforge.delivery.api.processing.SignedOutboundWebhookMessage;
 
-import com.gialong.relayforge.delivery.api.DispatchInstruction;
-import com.gialong.relayforge.delivery.api.OutboundWebhookMessageSigner;
-import com.gialong.relayforge.delivery.api.SignedOutboundWebhookMessage;
+import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.processing.OutboundWebhookMessageSigner;
+import com.gialong.relayforge.delivery.api.processing.SignedOutboundWebhookMessage;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;

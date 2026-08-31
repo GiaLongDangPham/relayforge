@@ -1,6 +1,7 @@
 package com.gialong.relayforge.runtime.worker;
+import com.gialong.relayforge.delivery.api.processing.DispatchObservation;
 
-import com.gialong.relayforge.delivery.api.DispatchObservation;
+import com.gialong.relayforge.delivery.api.processing.DispatchObservation;
 
 import java.time.Duration;
 import java.util.Objects;

@@ -1,8 +1,9 @@
 package com.gialong.relayforge.runtime;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshotQuery;
 
 import com.gialong.relayforge.identity.api.OwnerBootstrap;
 import com.gialong.relayforge.identity.api.OwnerCredentialVerifier;
-import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshotQuery;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshotQuery;
 import com.gialong.relayforge.project.api.PublisherApiKeyVerifier;
 import com.gialong.relayforge.runtime.observability.DeliveryBacklogMetrics;
 import com.gialong.relayforge.runtime.observability.TraceIdFilter;

@@ -1,7 +1,9 @@
 package com.gialong.relayforge.delivery.application;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshot;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshotQuery;
 
-import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshot;
-import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshotQuery;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshot;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshotQuery;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;

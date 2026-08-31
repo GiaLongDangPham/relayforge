@@ -1,7 +1,9 @@
 package com.gialong.relayforge.delivery.application;
+import com.gialong.relayforge.delivery.api.processing.CircuitBreakerSettings;
+import com.gialong.relayforge.delivery.api.processing.DeliveryAttemptRecovery;
 
-import com.gialong.relayforge.delivery.api.CircuitBreakerSettings;
-import com.gialong.relayforge.delivery.api.DeliveryAttemptRecovery;
+import com.gialong.relayforge.delivery.api.processing.CircuitBreakerSettings;
+import com.gialong.relayforge.delivery.api.processing.DeliveryAttemptRecovery;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;

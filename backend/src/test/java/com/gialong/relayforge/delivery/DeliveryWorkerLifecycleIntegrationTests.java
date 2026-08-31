@@ -1,7 +1,8 @@
 package com.gialong.relayforge.delivery;
+import com.gialong.relayforge.delivery.api.publish.EventPublisher;
 
 import com.gialong.relayforge.RelayForgeApplication;
-import com.gialong.relayforge.delivery.api.EventPublisher;
+import com.gialong.relayforge.delivery.api.publish.EventPublisher;
 import com.gialong.relayforge.endpoint.api.WebhookEndpointCatalog;
 import com.gialong.relayforge.identity.api.OwnerBootstrap;
 import com.gialong.relayforge.identity.api.OwnerBootstrapResult;

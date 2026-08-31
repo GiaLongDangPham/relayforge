@@ -1,6 +1,7 @@
 package com.gialong.relayforge.delivery.application;
+import com.gialong.relayforge.delivery.api.history.DeliveryDisplayStatus;
 
-import com.gialong.relayforge.delivery.api.DeliveryDisplayStatus;
+import com.gialong.relayforge.delivery.api.history.DeliveryDisplayStatus;
 
 import java.nio.ByteBuffer;
 import java.time.DateTimeException;

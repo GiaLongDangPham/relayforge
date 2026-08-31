@@ -1,8 +1,11 @@
 package com.gialong.relayforge.delivery.application;
+import com.gialong.relayforge.delivery.api.processing.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.processing.DeliveryAttemptStarter;
+import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
 
-import com.gialong.relayforge.delivery.api.ClaimedDelivery;
-import com.gialong.relayforge.delivery.api.DeliveryAttemptStarter;
-import com.gialong.relayforge.delivery.api.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.processing.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.processing.DeliveryAttemptStarter;
+import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
 import com.gialong.relayforge.endpoint.api.EndpointAttemptSnapshot;
 import com.gialong.relayforge.endpoint.api.EndpointAttemptSnapshotQuery;
 import org.springframework.stereotype.Service;

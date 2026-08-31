@@ -1,9 +1,13 @@
 package com.gialong.relayforge.runtime.worker;
+import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.processing.DispatchObservation;
+import com.gialong.relayforge.delivery.api.processing.OutboundWebhookMessageSigner;
+import com.gialong.relayforge.delivery.api.processing.SignedOutboundWebhookMessage;
 
-import com.gialong.relayforge.delivery.api.DispatchInstruction;
-import com.gialong.relayforge.delivery.api.DispatchObservation;
-import com.gialong.relayforge.delivery.api.OutboundWebhookMessageSigner;
-import com.gialong.relayforge.delivery.api.SignedOutboundWebhookMessage;
+import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.processing.DispatchObservation;
+import com.gialong.relayforge.delivery.api.processing.OutboundWebhookMessageSigner;
+import com.gialong.relayforge.delivery.api.processing.SignedOutboundWebhookMessage;
 import com.gialong.relayforge.endpoint.api.EndpointAttemptSnapshot;
 import com.gialong.relayforge.endpoint.api.EndpointSigningMaterial;
 import com.sun.net.httpserver.HttpExchange;

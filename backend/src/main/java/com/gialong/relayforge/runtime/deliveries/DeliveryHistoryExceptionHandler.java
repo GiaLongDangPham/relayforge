@@ -1,7 +1,9 @@
 package com.gialong.relayforge.runtime.deliveries;
+import com.gialong.relayforge.delivery.api.replay.ReplayIdempotencyConflictException;
+import com.gialong.relayforge.delivery.api.replay.ReplayInvalidStateException;
 
-import com.gialong.relayforge.delivery.api.ReplayIdempotencyConflictException;
-import com.gialong.relayforge.delivery.api.ReplayInvalidStateException;
+import com.gialong.relayforge.delivery.api.replay.ReplayIdempotencyConflictException;
+import com.gialong.relayforge.delivery.api.replay.ReplayInvalidStateException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;

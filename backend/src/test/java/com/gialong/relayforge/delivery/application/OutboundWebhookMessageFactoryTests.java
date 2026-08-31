@@ -1,7 +1,9 @@
 package com.gialong.relayforge.delivery.application;
+import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.processing.SignedOutboundWebhookMessage;
 
-import com.gialong.relayforge.delivery.api.DispatchInstruction;
-import com.gialong.relayforge.delivery.api.SignedOutboundWebhookMessage;
+import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.processing.SignedOutboundWebhookMessage;
 import com.gialong.relayforge.endpoint.api.EndpointAttemptSnapshot;
 import com.gialong.relayforge.endpoint.api.EndpointSigningMaterial;
 import org.junit.jupiter.api.Test;

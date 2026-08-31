@@ -1,8 +1,11 @@
 package com.gialong.relayforge.runtime.worker;
+import com.gialong.relayforge.delivery.api.operations.RetentionCleanupResult;
+import com.gialong.relayforge.delivery.api.processing.AttemptFinalizationResult;
+import com.gialong.relayforge.delivery.api.processing.DispatchObservation;
 
-import com.gialong.relayforge.delivery.api.AttemptFinalizationResult;
-import com.gialong.relayforge.delivery.api.DispatchObservation;
-import com.gialong.relayforge.delivery.api.RetentionCleanupResult;
+import com.gialong.relayforge.delivery.api.processing.AttemptFinalizationResult;
+import com.gialong.relayforge.delivery.api.processing.DispatchObservation;
+import com.gialong.relayforge.delivery.api.operations.RetentionCleanupResult;
 
 /** Bounded, instance-local worker signals. Persistent delivery history remains the system of record. */
 public interface WorkerOperationalMetrics {

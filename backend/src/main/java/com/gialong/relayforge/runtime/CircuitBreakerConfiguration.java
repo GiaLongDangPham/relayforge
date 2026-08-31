@@ -1,6 +1,7 @@
 package com.gialong.relayforge.runtime;
+import com.gialong.relayforge.delivery.api.processing.CircuitBreakerSettings;
 
-import com.gialong.relayforge.delivery.api.CircuitBreakerSettings;
+import com.gialong.relayforge.delivery.api.processing.CircuitBreakerSettings;
 import com.gialong.relayforge.runtime.worker.CircuitBreakerProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;

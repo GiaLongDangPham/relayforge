@@ -1,7 +1,9 @@
 package com.gialong.relayforge.runtime.publisher;
+import com.gialong.relayforge.delivery.api.publish.EventPublisher;
+import com.gialong.relayforge.delivery.api.publish.PublishEventResult;
 
-import com.gialong.relayforge.delivery.api.EventPublisher;
-import com.gialong.relayforge.delivery.api.PublishEventResult;
+import com.gialong.relayforge.delivery.api.publish.EventPublisher;
+import com.gialong.relayforge.delivery.api.publish.PublishEventResult;
 import com.gialong.relayforge.project.api.VerifiedPublisherProject;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

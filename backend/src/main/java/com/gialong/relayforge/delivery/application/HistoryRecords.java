@@ -1,9 +1,12 @@
 package com.gialong.relayforge.delivery.application;
+import com.gialong.relayforge.delivery.api.history.AttemptHistoryStatus;
+import com.gialong.relayforge.delivery.api.history.AttemptHistorySummary;
+import com.gialong.relayforge.delivery.api.history.DeliveryStoredState;
 
-import com.gialong.relayforge.delivery.api.AttemptHistoryStatus;
-import com.gialong.relayforge.delivery.api.AttemptHistorySummary;
-import com.gialong.relayforge.delivery.api.DeliveryStoredState;
-import com.gialong.relayforge.delivery.api.EventDeliverySummary;
+import com.gialong.relayforge.delivery.api.history.AttemptHistoryStatus;
+import com.gialong.relayforge.delivery.api.history.AttemptHistorySummary;
+import com.gialong.relayforge.delivery.api.history.DeliveryStoredState;
+import com.gialong.relayforge.delivery.api.history.EventDeliverySummary;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -107,7 +110,7 @@ public final class HistoryRecords {
     }
 }
 
-    public record ReplayResult(ReplayOutcome outcome, com.gialong.relayforge.delivery.api.ReplayDeliveryResult replay) {
+    public record ReplayResult(ReplayOutcome outcome, com.gialong.relayforge.delivery.api.replay.ReplayDeliveryResult replay) {
 
         public ReplayResult {
         Objects.requireNonNull(outcome, "outcome must not be null");

@@ -1,7 +1,9 @@
 package com.gialong.relayforge.delivery.application;
+import com.gialong.relayforge.delivery.api.processing.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.processing.DeliveryClaimer;
 
-import com.gialong.relayforge.delivery.api.ClaimedDelivery;
-import com.gialong.relayforge.delivery.api.DeliveryClaimer;
+import com.gialong.relayforge.delivery.api.processing.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.processing.DeliveryClaimer;
 import com.gialong.relayforge.endpoint.api.EndpointClaimEligibilityQuery;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;

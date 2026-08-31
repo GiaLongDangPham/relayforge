@@ -1,7 +1,9 @@
 package com.gialong.relayforge.runtime.worker;
+import com.gialong.relayforge.delivery.api.operations.RetentionCleanupResult;
+import com.gialong.relayforge.delivery.api.operations.TerminalHistoryRetention;
 
-import com.gialong.relayforge.delivery.api.RetentionCleanupResult;
-import com.gialong.relayforge.delivery.api.TerminalHistoryRetention;
+import com.gialong.relayforge.delivery.api.operations.RetentionCleanupResult;
+import com.gialong.relayforge.delivery.api.operations.TerminalHistoryRetention;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;

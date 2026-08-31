@@ -1,6 +1,7 @@
 package com.gialong.relayforge.runtime.publisher;
+import com.gialong.relayforge.delivery.api.publish.PublishIdempotencyConflictException;
 
-import com.gialong.relayforge.delivery.api.PublishIdempotencyConflictException;
+import com.gialong.relayforge.delivery.api.publish.PublishIdempotencyConflictException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;

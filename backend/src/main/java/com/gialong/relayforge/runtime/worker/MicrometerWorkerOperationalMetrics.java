@@ -1,8 +1,11 @@
 package com.gialong.relayforge.runtime.worker;
+import com.gialong.relayforge.delivery.api.operations.RetentionCleanupResult;
+import com.gialong.relayforge.delivery.api.processing.AttemptFinalizationResult;
+import com.gialong.relayforge.delivery.api.processing.DispatchObservation;
 
-import com.gialong.relayforge.delivery.api.AttemptFinalizationResult;
-import com.gialong.relayforge.delivery.api.DispatchObservation;
-import com.gialong.relayforge.delivery.api.RetentionCleanupResult;
+import com.gialong.relayforge.delivery.api.processing.AttemptFinalizationResult;
+import com.gialong.relayforge.delivery.api.processing.DispatchObservation;
+import com.gialong.relayforge.delivery.api.operations.RetentionCleanupResult;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;

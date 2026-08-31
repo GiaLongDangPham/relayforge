@@ -1,13 +1,21 @@
 package com.gialong.relayforge.delivery.application;
+import com.gialong.relayforge.delivery.api.history.AttemptHistorySummary;
+import com.gialong.relayforge.delivery.api.history.DeliveryDisplayStatus;
+import com.gialong.relayforge.delivery.api.history.EventDeliverySummary;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshot;
+import com.gialong.relayforge.delivery.api.operations.RetentionCleanupResult;
+import com.gialong.relayforge.delivery.api.processing.CircuitBreakerSettings;
+import com.gialong.relayforge.delivery.api.processing.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
 
-import com.gialong.relayforge.delivery.api.CircuitBreakerSettings;
-import com.gialong.relayforge.delivery.api.ClaimedDelivery;
-import com.gialong.relayforge.delivery.api.DeliveryDisplayStatus;
-import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshot;
-import com.gialong.relayforge.delivery.api.DispatchInstruction;
-import com.gialong.relayforge.delivery.api.AttemptHistorySummary;
-import com.gialong.relayforge.delivery.api.EventDeliverySummary;
-import com.gialong.relayforge.delivery.api.RetentionCleanupResult;
+import com.gialong.relayforge.delivery.api.processing.CircuitBreakerSettings;
+import com.gialong.relayforge.delivery.api.processing.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.history.DeliveryDisplayStatus;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshot;
+import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.history.AttemptHistorySummary;
+import com.gialong.relayforge.delivery.api.history.EventDeliverySummary;
+import com.gialong.relayforge.delivery.api.operations.RetentionCleanupResult;
 
 import java.time.Duration;
 import java.util.Collection;

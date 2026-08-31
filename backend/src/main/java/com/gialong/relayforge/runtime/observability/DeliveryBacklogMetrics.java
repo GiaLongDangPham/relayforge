@@ -1,7 +1,9 @@
 package com.gialong.relayforge.runtime.observability;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshot;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshotQuery;
 
-import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshot;
-import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshotQuery;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshot;
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshotQuery;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;

@@ -1,7 +1,8 @@
 package com.gialong.relayforge.runtime;
+import com.gialong.relayforge.delivery.api.processing.OutboundWebhookDispatcher;
 
 import com.gialong.relayforge.RelayForgeApplication;
-import com.gialong.relayforge.delivery.api.OutboundWebhookDispatcher;
+import com.gialong.relayforge.delivery.api.processing.OutboundWebhookDispatcher;
 import com.gialong.relayforge.runtime.security.OwnerAuthenticationProvider;
 import com.gialong.relayforge.runtime.worker.WorkerClaimCoordinator;
 import com.gialong.relayforge.runtime.worker.DeliveryWorkerLoop;
