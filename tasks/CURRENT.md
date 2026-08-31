@@ -4,50 +4,49 @@ Status: Complete
 
 ## Goal
 
-Accept the bounded `Retry-After` scheduling contract for Phase 2B before
-changing the worker's HTTP handling, retry persistence, or circuit-breaker
-state.
+Complete Phase 2B receiver-aware backpressure without introducing a second
+queue, Redis, broker, owner UI, or custom retry policy.
 
 ## Decisions
 
-- Only retryable HTTP `429` and `503` responses may contribute a receiver
-  retry hint. Other retryable outcomes retain equal-jitter backoff alone.
-- Accept only one `Retry-After` `delay-seconds` value: non-negative decimal
-  seconds after HTTP optional-whitespace trimming. HTTP-date and ambiguous,
-  repeated, malformed, or negative values fall back to normal backoff.
-- The receiver hint is capped at 300 seconds. The selected retry delay is the
-  greater of the normal equal-jitter delay and the bounded hint, so a receiver
-  cannot make RelayForge retry sooner or postpone it without bound.
-- PostgreSQL remains the clock authority. The worker will eventually provide a
-  selected duration and source; persistence computes the absolute due-time.
-- Future owner history may retain only the effective selected delay and its
-  source (`BACKOFF` or `RETRY_AFTER`), never the raw response header.
+- V13 records only the bounded effective retry delay/source; PostgreSQL still
+  computes due time.
+- V14/V15 persist delivery-owned circuit state. A missing row remains
+  semantically `CLOSED`, while a closed sub-threshold failure streak is valid.
+- PostgreSQL owns fair normal/probe admission and all cooldown comparisons.
+  A cooldown-expired endpoint gets one token-fenced `HALF_OPEN` probe.
+- Conditional delivery finalization and post-attempt `UNKNOWN` recovery update
+  the matching circuit in their existing short transactions.
 
 ## Out of scope
 
-No HTTP parser/adapter, worker retry-code change, schema migration, history
-field, circuit breaker, metric, retry-policy customization, broker, Redis, or
-deployment change.
+Circuit metrics and owner-visible safe state, versioned signing-secret
+rotation, event-schema versions, custom retry policy, broker, Redis, endpoint
+rate limit, or deployment change.
 
 ## Evidence required
 
-- An accepted ADR, delivery model, and runtime defaults state the same
-  eligibility, syntax, cap, selection, time-authority, and fifth-attempt rule.
-- Status/context/index documentation identifies the next isolated slice.
+- PostgreSQL Testcontainers proves a three-failure open circuit cannot consume
+  capacity needed by a healthy endpoint.
+- Concurrent workers prove exactly one cooldown-expired `HALF_OPEN` probe.
+- Probe success closes/resets the circuit; expired probe recovery reopens it
+  without leaving a fence.
+- Architecture checks prove runtime composition uses only delivery public API.
 
 ## Completion evidence
 
-- ADR-008 defines eligible statuses, one-field delta-seconds syntax, the
-  300-second cap, `max(equal jitter, hint)` selection, PostgreSQL time
-  authority, safe future audit data, and the unchanged fifth-attempt boundary.
-- The delivery model and runtime defaults align on that same contract.
-- The documentation index, agent context, and project status now identify
-  Slice 2 as response-header capture and pure parsing only.
-- This is documentation-only work: no runtime source changed, so no Maven,
-  Docker, or browser acceptance run was needed.
+- V15 corrects V14's closed-state constraint discovered by Testcontainers:
+  closed circuits must retain streaks one and two before the third failure opens.
+- Claim SQL joins durable circuit state, atomically fences a single probe, and
+  treats a lost claim race as no claim rather than a worker failure.
+- Finalization/recovery changes the circuit only after its conditional delivery
+  mutation succeeded, preserving token/lease fencing and the no-DB-transaction
+  during HTTP invariant.
+- Final clean Maven verification passed 131/131 tests. The rebuilt local
+  API/worker reached health, and the dashboard sign-in smoke had no console
+  warnings or errors.
 
 ## Next action
 
-Begin Phase 2B Slice 2: implement only response-header capture and pure
-`Retry-After` parsing, with focused unit tests for valid, invalid, repeated,
-date, overflow, and cap behavior.
+Owner review/commit. The next implementation phase is versioned
+signing-secret rotation; start with its contract/ADR rather than code.

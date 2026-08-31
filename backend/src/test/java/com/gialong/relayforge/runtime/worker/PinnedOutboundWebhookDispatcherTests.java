@@ -93,7 +93,10 @@ class PinnedOutboundWebhookDispatcherTests {
     void boundsResponsePreviewAndClassifiesFiveHundredAsRetryable() throws Exception {
         byte[] oversizedResponse = new byte[8 * 1024 + 1];
         Arrays.fill(oversizedResponse, (byte) 'x');
-        HttpServer server = startOnSecondLoopback(exchange -> respond(exchange, 503, oversizedResponse));
+        HttpServer server = startOnSecondLoopback(exchange -> {
+            exchange.getResponseHeaders().set("Retry-After", " \t45\t ");
+            respond(exchange, 503, oversizedResponse);
+        });
         try (PinnedOutboundWebhookDispatcher dispatcher = dispatcher(
                 host -> new InetAddress[]{InetAddress.getByName("127.0.0.2")},
                 Duration.ofSeconds(2)
@@ -101,6 +104,7 @@ class PinnedOutboundWebhookDispatcherTests {
              DispatchObservation observation = dispatcher.dispatch(instruction)) {
             assertThat(observation.outcome()).isEqualTo(DispatchObservation.Outcome.RETRYABLE_FAILURE);
             assertThat(observation.httpStatus()).hasValue(503);
+            assertThat(observation.retryAfterDelay()).contains(Duration.ofSeconds(45));
             assertThat(observation.responsePreview()).hasSize(8 * 1024);
             assertThat(observation.responseTruncated()).isTrue();
         } finally {

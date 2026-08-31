@@ -88,8 +88,8 @@ class PostgreSqlFoundationTests {
         var currentMigration = flyway.info().current();
 
         assertThat(currentMigration).isNotNull();
-        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("12");
-        assertThat(currentMigration.getDescription()).isEqualTo("add terminal history retention indexes");
+        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("15");
+        assertThat(currentMigration.getDescription()).isEqualTo("allow closed circuit failure streak");
 
         Integer successfulMigrations = jdbcTemplate.queryForObject(
                 "select count(*) from flyway_schema_history where success",
@@ -102,11 +102,12 @@ class PostgreSqlFoundationTests {
                 String.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(12);
+        assertThat(successfulMigrations).isEqualTo(15);
         assertThat(tables).containsExactly(
                 "attempt_late_diagnostics",
                 "deliveries",
                 "delivery_attempts",
+                "endpoint_circuit_breakers",
                 "endpoint_subscriptions",
                 "events",
                 "owner_accounts",
@@ -308,6 +309,43 @@ class PostgreSqlFoundationTests {
                         + "and indexname = 'ix_endpoint_subscriptions_event_type_endpoint_id'",
                 String.class
         )).containsExactly("ix_endpoint_subscriptions_event_type_endpoint_id");
+    }
+
+    @Test
+    void enforcesEndpointCircuitBreakerStateShape() {
+        UUID ownerId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        UUID endpointId = UUID.randomUUID();
+        insertOwner(ownerId, "circuit_owner", "$2a$12$valid-looking-test-hash");
+        jdbcTemplate.update("insert into projects (id, owner_id, name) values (?, ?, ?)", projectId, ownerId, "Circuit test");
+        jdbcTemplate.update(
+                "insert into webhook_endpoints (id, project_id, name, destination_url, enabled, "
+                        + "signing_secret_ciphertext, encryption_key_reference) values (?, ?, ?, ?, true, ?, ?)",
+                endpointId, projectId, "Circuit receiver", "https://receiver.example/circuit", new byte[]{1}, "test-key-v1"
+        );
+
+        Map<String, Object> closed = jdbcTemplate.queryForMap(
+                "insert into endpoint_circuit_breakers (endpoint_id) values (?) "
+                        + "returning state, consecutive_qualifying_failures, open_until, probe_delivery_id, probe_claim_token, updated_at",
+                endpointId
+        );
+        assertThat(closed).containsEntry("state", "CLOSED")
+                .containsEntry("open_until", null)
+                .containsEntry("probe_delivery_id", null)
+                .containsEntry("probe_claim_token", null);
+        assertThat(((Number) closed.get("consecutive_qualifying_failures")).intValue()).isZero();
+        assertThat(closed.get("updated_at")).isNotNull();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "update endpoint_circuit_breakers set state = 'OPEN', open_until = CURRENT_TIMESTAMP "
+                        + "where endpoint_id = ?",
+                endpointId
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "update endpoint_circuit_breakers set state = 'HALF_OPEN', consecutive_qualifying_failures = 3 "
+                        + "where endpoint_id = ?",
+                endpointId
+        )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

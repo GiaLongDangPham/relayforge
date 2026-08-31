@@ -190,6 +190,26 @@ Exact SQL and indexes are deferred to the database-design slice.
 - An unknown earlier attempt returns the delivery to `PENDING` using retry backoff because duplicate delivery is safer than silently losing accepted work.
 - A late result submitted after the attempt already became `UNKNOWN` is stored as a separate diagnostic observation. It does not rewrite the attempt or apply to the delivery.
 
+### 5.3 Endpoint circuit-breaker outcome
+
+The delivery runtime also keeps a durable circuit state per endpoint. It is
+not a delivery state and does not alter an accepted event, routing snapshot,
+attempt number, or per-delivery retry schedule.
+
+- `CLOSED` endpoints accept normal fair claims. Three consecutive qualifying
+  receiver failures (`408`, `429`, `5xx`, timeout, or network/connect failure)
+  open the endpoint for a PostgreSQL-time cooldown.
+- `OPEN` excludes all normal claims for that endpoint without bulk-rewriting
+  its pending deliveries. Once its cooldown expires, exactly one due delivery
+  can become a durable `HALF_OPEN` probe.
+- A successful or definitive nonqualifying probe closes and resets the circuit;
+  a qualifying or recovered `UNKNOWN` probe reopens it. `UNKNOWN` outside a
+  probe neither increments nor resets a closed failure streak.
+
+The breaker reduces pressure on one receiver; it does not promise strict
+ordering, rate limiting, or exactly-once delivery. The complete state,
+fencing, and transition contract is [ADR-009](adr/0009-postgresql-endpoint-circuit-breaker.md).
+
 ## 6. Claim, send, and completion lifecycle
 
 ### 6.0 End-to-end decision tree
@@ -255,6 +275,11 @@ prefers the lowest endpoint allocation level, calculated from current
 one endpoint burst into idle capacity while ensuring a newly backlogged endpoint
 receives a future free slot without waiting for the first endpoint to drain.
 
+Circuit state is a second claim-eligibility guard. `OPEN` and `HALF_OPEN`
+endpoints contribute no normal candidates. An expired `OPEN` endpoint may
+contribute one fenced probe candidate through the same endpoint-fair capacity
+rule; it does not bypass local permits or preempt active work.
+
 ### Step 2 - Revalidate before starting an attempt
 
 After claim commit, the worker may perform an advisory preflight check of current endpoint configuration:
@@ -293,7 +318,7 @@ The system accepts that lease expiry or database unavailability can make this ou
 
 In another short transaction, the worker records the observed attempt result and applies the corresponding delivery transition only if the delivery is still `CLAIMED`, its claim token is current, and its lease is unexpired according to PostgreSQL time.
 
-Attempt finalization, the accepted delivery transition, and token/lease invalidation commit atomically. This applies to success, permanent failure, retry scheduling, and exhaustion. The pre-start endpoint release in Step 3 follows the same conditional token/lease invalidation rule but has no attempt to finalize. If state, token, or lease validation fails, the observed result cannot alter delivery state and may be stored only as a separate late diagnostic.
+Attempt finalization, the accepted delivery transition, and token/lease invalidation commit atomically. This applies to success, permanent failure, retry scheduling, and exhaustion. A qualifying result also conditionally updates the endpoint circuit in this same short transaction; a half-open result must match its durable probe fence. The pre-start endpoint release in Step 3 follows the same conditional token/lease invalidation rule but has no attempt to finalize. If state, token, or lease validation fails, the observed result cannot alter delivery state and may be stored only as a separate late diagnostic.
 
 ## 7. Lease recovery
 
@@ -303,6 +328,9 @@ A recovery worker finds `CLAIMED` deliveries whose lease expired according to Po
 
 - No attempt budget was consumed.
 - Atomically clear the expired token and lease and return the delivery to `PENDING`.
+- If it was the endpoint's half-open probe, atomically clear its probe fence and
+  return the circuit to immediately probe-eligible `OPEN`; no receiver failure
+  is inferred.
 - It may be claimed again immediately if its endpoint remains enabled.
 
 ### 7.2 Claim expired after attempt start
@@ -310,6 +338,8 @@ A recovery worker finds `CLAIMED` deliveries whose lease expired according to Po
 - Atomically mark the unfinished attempt `UNKNOWN`, invalidate the expired token and lease, and apply the recovery delivery transition.
 - If fewer than five attempts started, return the delivery to `PENDING` with retry backoff.
 - If it was the fifth attempt, move the delivery to `EXHAUSTED`.
+- If it was the endpoint's half-open probe, reopen the circuit for a fresh
+  cooldown because no later probe may remain stuck behind an ambiguous one.
 
 Recovery never assumes the receiver did not process an unknown attempt.
 
@@ -389,6 +419,18 @@ The implementation is not considered correct until tests demonstrate:
     and the capped accepted hint, while PostgreSQL computes the due-time; and
 23. a fifth retryable HTTP response with any `Retry-After` value still becomes
     `EXHAUSTED` without a sixth attempt.
+24. three concurrent qualifying endpoint failures open the circuit exactly
+    once without corrupting its consecutive-failure state;
+25. `OPEN` endpoint work is not normally claimed while other healthy endpoints
+    can continue to use free fair capacity;
+26. a cooldown-expired endpoint has at most one durable half-open probe across
+    concurrent workers;
+27. a successful/nonqualifying probe closes the circuit, while qualifying and
+    recovered-`UNKNOWN` probes reopen it with PostgreSQL time;
+28. a pre-attempt probe release clears its fence without consuming attempt
+    budget; and
+29. circuit state does not bypass endpoint disablement, token/lease fencing,
+    retry scheduling, or fifth-attempt exhaustion.
 
 ## 11. Downstream decisions and remaining implementation work
 

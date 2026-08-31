@@ -66,6 +66,10 @@ relayforge:
     polling-jitter: 100ms
     recovery-interval: 5s
     finalization-minimum-remaining: 1s
+    circuit-breaker:
+      consecutive-failure-threshold: 3
+      open-cooldown: 30s
+      half-open-probe-limit: 1
     outbound:
       connection-timeout: 2s
       dispatch-deadline: 10s

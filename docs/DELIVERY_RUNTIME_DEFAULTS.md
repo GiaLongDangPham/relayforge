@@ -104,6 +104,25 @@ for accepted syntax, cap, and trade-offs.
 
 The schedule is intentionally short enough for a portfolio demonstration but long enough to expose persisted scheduling, jitter, exhaustion, and backlog behavior. It is not claimed to be suitable for every webhook product.
 
+### 5.1 Endpoint circuit-breaker defaults
+
+Circuit breaking is receiver-wide admission control layered above
+per-delivery retry. It uses PostgreSQL time and durable state; it is not a
+worker-local cache or a rate limiter.
+
+| Setting | Initial default | Reason | Failure risk and tuning signal |
+| --- | --- | --- | --- |
+| Consecutive qualifying-failure threshold | 3 | Avoids endpoint-wide suppression after one transient error while reacting to a sustained receiver failure in a short demo. | Too low hides useful work after isolated failures; too high sends too much work to a failing receiver. Inspect breaker openings and per-state outcome counts. |
+| `OPEN` cooldown | 30 seconds | Gives a receiver a bounded quiet period and makes the recovery probe visible without delaying a demo for minutes. | Too short creates repeated recovery pressure; too long retains due work after a receiver recovers. Inspect open duration and oldest due age. |
+| `HALF_OPEN` probe limit | 1 per endpoint | Prevents a recovery burst across multiple workers. | More probes improve sampling but can overload a recovering receiver; zero prevents recovery. |
+
+Qualifying failures are HTTP `408`, `429`, `5xx`, dispatch timeout, and
+network/connect failures. A definitive nonqualifying result or success resets
+a closed streak. `UNKNOWN` leaves a closed streak unchanged, but an `UNKNOWN`
+half-open probe reopens the circuit because its probe ownership must not remain
+stuck. The complete durable state and transaction rules are in
+[ADR-009](adr/0009-postgresql-endpoint-circuit-breaker.md).
+
 ## 6. Polling, claim capacity, and local concurrency
 
 | Setting | Initial default | Reason | Failure risk and tuning signal |
@@ -151,7 +170,9 @@ Startup must reject configuration that violates any of these rules:
 7. worker concurrency and maximum claim capacity are positive;
 8. claim capacity never exceeds the permits reserved for that claim call;
 9. retry base delays are positive and strictly increasing;
-10. jitter never produces a negative delay or a delay above its base delay.
+10. jitter never produces a negative delay or a delay above its base delay;
+11. circuit threshold, cooldown, and half-open probe limit are positive; and
+12. breaker state comparisons and cooldown timestamps use PostgreSQL time.
 
 The 5-second claim-to-start threshold is an operational warning, not permission to wait five seconds deliberately. Because a permit is reserved before claim, normal processing should cross the attempt-start boundary immediately after claim commit.
 
@@ -197,7 +218,10 @@ Implementation must eventually prove:
     duration is never lower than deterministic equal jitter or higher than the
     300-second cap; and
 18. a retryable fifth HTTP response remains `EXHAUSTED` even when it includes
-    an otherwise valid `Retry-After` value.
+    an otherwise valid `Retry-After` value;
+19. three qualifying failures open one endpoint while a healthy endpoint stays
+    eligible for fair claims; and
+20. only one cooldown-expired endpoint probe may be `HALF_OPEN` across workers.
 
 Tests should use short overridden durations where waiting on the real baseline would make the suite slow. The production defaults and the relationships between them still require configuration-binding tests.
 
@@ -207,7 +231,10 @@ Tests should use short overridden durations where waiting on the real baseline w
 - Java concurrency mechanism and HTTP-client implementation.
 - Database schema, claim/recovery SQL, locks, isolation, indexes, and query plan.
 - API and worker connection-pool sizes.
-- Circuit breaker; none is added without a demonstrated failure it improves beyond timeout, concurrency limit, and retry backoff.
+- Circuit-breaker metrics and owner-visible safe state. V14/V15 provide the
+  restrictive state schema and Phase 2B Slice 6 implements its normal/probe
+  claim and conditional finalization/recovery transitions; the small local
+  query-plan fixture accepted no extra breaker index.
 - Per-endpoint hard concurrency or request-rate limits; endpoint fairness shares
   new claim opportunities but does not enforce either limit.
 - HTTP adapter/parser and persistence implementation details for the accepted

@@ -33,29 +33,38 @@ final class RetryDelayPolicy {
     CompletionDecision forObserved(AttemptCompletion completion, int attemptNumber) {
         Objects.requireNonNull(completion, "completion must not be null");
         return switch (completion.status()) {
-            case SUCCEEDED -> new CompletionDecision(AttemptStatus.SUCCEEDED, DeliveryState.SUCCEEDED, null);
+            case SUCCEEDED -> new CompletionDecision(AttemptStatus.SUCCEEDED, DeliveryState.SUCCEEDED, null, null);
             case PERMANENT_FAILURE -> new CompletionDecision(
                     AttemptStatus.PERMANENT_FAILURE,
                     DeliveryState.FAILED_PERMANENT,
+                    null,
                     null
             );
-            case RETRYABLE_FAILURE -> retryable(AttemptStatus.RETRYABLE_FAILURE, attemptNumber);
+            case RETRYABLE_FAILURE -> retryable(
+                    AttemptStatus.RETRYABLE_FAILURE,
+                    attemptNumber,
+                    completion.retryAfterDelay().orElse(null)
+            );
             case UNKNOWN -> throw new IllegalArgumentException("UNKNOWN is reserved for lease recovery");
         };
     }
 
     CompletionDecision forUnknownRecovery(int attemptNumber) {
-        return retryable(AttemptStatus.UNKNOWN, attemptNumber);
+        return retryable(AttemptStatus.UNKNOWN, attemptNumber, null);
     }
 
-    private CompletionDecision retryable(AttemptStatus status, int attemptNumber) {
+    private CompletionDecision retryable(AttemptStatus status, int attemptNumber, Duration retryAfterDelay) {
         if (attemptNumber < 1 || attemptNumber > 5) {
             throw new IllegalArgumentException("attemptNumber must be between one and five");
         }
         if (attemptNumber == 5) {
-            return new CompletionDecision(status, DeliveryState.EXHAUSTED, null);
+            return new CompletionDecision(status, DeliveryState.EXHAUSTED, null, null);
         }
-        return new CompletionDecision(status, DeliveryState.PENDING, equalJitter(BASE_DELAYS[attemptNumber - 1]));
+        Duration backoff = equalJitter(BASE_DELAYS[attemptNumber - 1]);
+        if (retryAfterDelay != null && retryAfterDelay.compareTo(backoff) > 0) {
+            return new CompletionDecision(status, DeliveryState.PENDING, retryAfterDelay, RetryScheduleSource.RETRY_AFTER);
+        }
+        return new CompletionDecision(status, DeliveryState.PENDING, backoff, RetryScheduleSource.BACKOFF);
     }
 
     private Duration equalJitter(Duration baseDelay) {

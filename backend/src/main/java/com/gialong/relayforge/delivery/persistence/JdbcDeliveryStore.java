@@ -5,6 +5,10 @@ import com.gialong.relayforge.delivery.application.ClaimCandidate;
 import com.gialong.relayforge.delivery.application.AttemptStartCandidate;
 import com.gialong.relayforge.delivery.application.AttemptCompletion;
 import com.gialong.relayforge.delivery.application.CompletionDecision;
+import com.gialong.relayforge.delivery.api.CircuitBreakerSettings;
+import com.gialong.relayforge.delivery.application.EndpointCircuit;
+import com.gialong.relayforge.delivery.application.EndpointCircuitState;
+import com.gialong.relayforge.delivery.application.EndpointCircuitStore;
 import com.gialong.relayforge.delivery.application.ExpiredStartedAttempt;
 import com.gialong.relayforge.delivery.application.NewEvent;
 import com.gialong.relayforge.delivery.application.PendingDelivery;
@@ -48,7 +52,7 @@ import java.util.UUID;
  */
 @Repository
 @RequiredArgsConstructor
-public class JdbcDeliveryStore implements DeliveryStore {
+public class JdbcDeliveryStore implements DeliveryStore, EndpointCircuitStore {
 
     private static final String EVENT_COLUMNS = "id, project_id, event_type, accepted_at";
     private static final String HISTORY_DELIVERY_COLUMNS = "delivery.id, delivery.event_id, delivery.endpoint_id, "
@@ -161,18 +165,23 @@ public class JdbcDeliveryStore implements DeliveryStore {
                 + "select endpoint_id, count(*) as claim_count from public.deliveries "
                 + "where state = 'CLAIMED' group by endpoint_id"
                 + "), ranked_due as materialized ("
-                + "select id, endpoint_id, due_at, row_number() over ("
-                + "partition by endpoint_id order by due_at, id"
-                + ") as endpoint_pending_ordinal from public.deliveries "
-                + "where state = 'PENDING' and due_at <= CURRENT_TIMESTAMP and attempt_count < 5 "
-                + "and endpoint_id in (" + endpointPlaceholders + ")"
-                + ") select delivery.id, delivery.project_id, delivery.endpoint_id "
+                + "select delivery.id, delivery.endpoint_id, delivery.due_at, circuit.state as circuit_state, "
+                + "row_number() over (partition by delivery.endpoint_id order by delivery.due_at, delivery.id) "
+                + "as endpoint_pending_ordinal from public.deliveries delivery "
+                + "left join public.endpoint_circuit_breakers circuit on circuit.endpoint_id = delivery.endpoint_id "
+                + "where delivery.state = 'PENDING' and delivery.due_at <= CURRENT_TIMESTAMP "
+                + "and delivery.attempt_count < 5 and delivery.endpoint_id in (" + endpointPlaceholders + ") "
+                + "and (circuit.endpoint_id is null or circuit.state = 'CLOSED' "
+                + "or (circuit.state = 'OPEN' and circuit.open_until <= CURRENT_TIMESTAMP))"
+                + ") select delivery.id, delivery.project_id, delivery.endpoint_id, "
+                + "(ranked.circuit_state = 'OPEN') as half_open_probe "
                 + "from public.deliveries delivery "
                 + "join ranked_due ranked on ranked.id = delivery.id "
                 + "left join current_endpoint_claims current_claims "
                 + "on current_claims.endpoint_id = ranked.endpoint_id "
                 + "where delivery.state = 'PENDING' and delivery.due_at <= CURRENT_TIMESTAMP "
                 + "and delivery.attempt_count < 5 "
+                + "and (ranked.circuit_state is distinct from 'OPEN' or ranked.endpoint_pending_ordinal = 1) "
                 + "order by coalesce(current_claims.claim_count, 0) + ranked.endpoint_pending_ordinal, "
                 + "ranked.due_at, ranked.endpoint_id, delivery.id "
                 + "limit ? for update of delivery skip locked";
@@ -180,13 +189,26 @@ public class JdbcDeliveryStore implements DeliveryStore {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public ClaimedDelivery claim(ClaimCandidate candidate, UUID claimToken, Duration initialLease) {
+    public Optional<ClaimedDelivery> claim(ClaimCandidate candidate, UUID claimToken, Duration initialLease) {
+        return candidate.halfOpenProbe()
+                ? claimHalfOpenProbe(candidate, claimToken, initialLease)
+                : claimNormal(candidate, claimToken, initialLease);
+    }
+
+    private Optional<ClaimedDelivery> claimNormal(
+            ClaimCandidate candidate,
+            UUID claimToken,
+            Duration initialLease
+    ) {
         return jdbcTemplate.query(
-                        "update public.deliveries set state = 'CLAIMED', due_at = null, claim_token = ?, "
+                        "update public.deliveries delivery set state = 'CLAIMED', due_at = null, claim_token = ?, "
                                 + "lease_expires_at = CURRENT_TIMESTAMP + (? * interval '1 millisecond'), "
-                                + "updated_at = CURRENT_TIMESTAMP "
-                                + "where id = ? and project_id = ? and endpoint_id = ? and state = 'PENDING' "
-                                + "returning id, project_id, endpoint_id, claim_token, lease_expires_at",
+                                + "updated_at = CURRENT_TIMESTAMP where delivery.id = ? and delivery.project_id = ? "
+                                + "and delivery.endpoint_id = ? and delivery.state = 'PENDING' "
+                                + "and not exists (select 1 from public.endpoint_circuit_breakers circuit "
+                                + "where circuit.endpoint_id = delivery.endpoint_id and circuit.state <> 'CLOSED') "
+                                + "returning delivery.id, delivery.project_id, delivery.endpoint_id, delivery.claim_token, "
+                                + "delivery.lease_expires_at",
                         this::mapClaimedDelivery,
                         claimToken,
                         initialLease.toMillis(),
@@ -195,8 +217,62 @@ public class JdbcDeliveryStore implements DeliveryStore {
                         candidate.endpointId()
                 )
                 .stream()
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("locked candidate could not be claimed"));
+                .findFirst();
+    }
+
+    private Optional<ClaimedDelivery> claimHalfOpenProbe(
+            ClaimCandidate candidate,
+            UUID claimToken,
+            Duration initialLease
+    ) {
+        return jdbcTemplate.query(
+                        "with locked_circuit as materialized ("
+                                + "select endpoint_id from public.endpoint_circuit_breakers where endpoint_id = ? "
+                                + "and state = 'OPEN' and open_until <= CURRENT_TIMESTAMP for update"
+                                + "), claimed as ("
+                                + "update public.deliveries delivery set state = 'CLAIMED', due_at = null, claim_token = ?, "
+                                + "lease_expires_at = CURRENT_TIMESTAMP + (? * interval '1 millisecond'), "
+                                + "updated_at = CURRENT_TIMESTAMP from locked_circuit circuit "
+                                + "where delivery.id = ? and delivery.project_id = ? and delivery.endpoint_id = circuit.endpoint_id "
+                                + "and delivery.state = 'PENDING' returning delivery.id, delivery.project_id, "
+                                + "delivery.endpoint_id, delivery.claim_token, delivery.lease_expires_at"
+                                + "), probed as ("
+                                + "update public.endpoint_circuit_breakers circuit set state = 'HALF_OPEN', open_until = null, "
+                                + "probe_delivery_id = claimed.id, probe_claim_token = claimed.claim_token, "
+                                + "updated_at = CURRENT_TIMESTAMP from claimed where circuit.endpoint_id = claimed.endpoint_id "
+                                + "and circuit.state = 'OPEN' returning circuit.endpoint_id"
+                                + ") select claimed.id, claimed.project_id, claimed.endpoint_id, claimed.claim_token, "
+                                + "claimed.lease_expires_at from claimed join probed on probed.endpoint_id = claimed.endpoint_id",
+                        this::mapClaimedDelivery,
+                        candidate.endpointId(),
+                        claimToken,
+                        initialLease.toMillis(),
+                        candidate.deliveryId(),
+                        candidate.projectId()
+                )
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Optional<EndpointCircuit> findByEndpointId(UUID endpointId) {
+        return jdbcTemplate.query(
+                        "select endpoint_id, state, consecutive_qualifying_failures, open_until, probe_delivery_id, "
+                                + "probe_claim_token, updated_at from public.endpoint_circuit_breakers where endpoint_id = ?",
+                        (resultSet, rowNumber) -> new EndpointCircuit(
+                                resultSet.getObject("endpoint_id", UUID.class),
+                                EndpointCircuitState.valueOf(resultSet.getString("state")),
+                                resultSet.getInt("consecutive_qualifying_failures"),
+                                instant(resultSet, "open_until"),
+                                resultSet.getObject("probe_delivery_id", UUID.class),
+                                resultSet.getObject("probe_claim_token", UUID.class),
+                                instant(resultSet, "updated_at")
+                        ),
+                        endpointId
+                )
+                .stream()
+                .findFirst();
     }
 
     @Override
@@ -204,16 +280,24 @@ public class JdbcDeliveryStore implements DeliveryStore {
     public int recoverExpiredPreAttemptClaims(int capacity) {
         return jdbcTemplate.query(
                 "with expired as ("
-                        + "select id, claim_token from public.deliveries "
+                        + "select id, endpoint_id, claim_token from public.deliveries "
                         + "where state = 'CLAIMED' and lease_expires_at <= CURRENT_TIMESTAMP "
                         + "and not exists (select 1 from public.delivery_attempts attempt "
                         + "where attempt.delivery_id = deliveries.id and attempt.status = 'STARTED') "
                         + "order by lease_expires_at, id limit ? for update skip locked"
-                        + ") "
+                        + "), recovered as ("
                         + "update public.deliveries delivery set state = 'PENDING', due_at = CURRENT_TIMESTAMP, "
                         + "claim_token = null, lease_expires_at = null, updated_at = CURRENT_TIMESTAMP "
                         + "from expired where delivery.id = expired.id and delivery.claim_token = expired.claim_token "
-                        + "returning delivery.id",
+                        + "returning delivery.id, expired.endpoint_id, expired.claim_token"
+                        + "), released_probe as ("
+                        + "update public.endpoint_circuit_breakers circuit set state = 'OPEN', "
+                        + "open_until = CURRENT_TIMESTAMP, probe_delivery_id = null, probe_claim_token = null, "
+                        + "updated_at = CURRENT_TIMESTAMP from recovered "
+                        + "where circuit.endpoint_id = recovered.endpoint_id and circuit.state = 'HALF_OPEN' "
+                        + "and circuit.probe_delivery_id = recovered.id "
+                        + "and circuit.probe_claim_token = recovered.claim_token returning circuit.endpoint_id"
+                        + ") select id from recovered",
                 (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
                 capacity
         ).size();
@@ -476,7 +560,8 @@ public class JdbcDeliveryStore implements DeliveryStore {
                         + "for update of delivery, attempt"
                         + "), finalized_attempt as ("
                         + "update public.delivery_attempts attempt set status = ?, finished_at = CURRENT_TIMESTAMP, "
-                        + "http_status = ?, failure_code = ?, latency_ms = ?, response_preview = ?, response_truncated = ? "
+                        + "http_status = ?, failure_code = ?, latency_ms = ?, retry_delay_ms = ?, "
+                        + "retry_schedule_source = ?, response_preview = ?, response_truncated = ? "
                         + "from locked where attempt.id = locked.attempt_id and attempt.status = 'STARTED' "
                         + "returning attempt.id"
                         + ") update public.deliveries delivery set state = ?, "
@@ -495,6 +580,8 @@ public class JdbcDeliveryStore implements DeliveryStore {
                 completion.httpStatus(),
                 completion.failureCode(),
                 completion.latencyMilliseconds(),
+                decision.retryDelay() == null ? null : Math.toIntExact(decision.retryDelay().toMillis()),
+                decision.retryScheduleSource() == null ? null : decision.retryScheduleSource().name(),
                 completion.responsePreview(),
                 completion.responseTruncated(),
                 decision.deliveryState().name(),
@@ -502,6 +589,68 @@ public class JdbcDeliveryStore implements DeliveryStore {
                 retryDelayMilliseconds,
                 terminal
         ).isEmpty();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void applyCircuitAfterObservedFinalization(
+            DispatchInstruction instruction,
+            boolean qualifyingFailure,
+            CircuitBreakerSettings settings
+    ) {
+        UUID endpointId = instruction.endpointId();
+        if (qualifyingFailure) {
+            jdbcTemplate.update(
+                    "insert into public.endpoint_circuit_breakers as circuit "
+                            + "(endpoint_id, state, consecutive_qualifying_failures, open_until) "
+                            + "values (?, case when ? = 1 then 'OPEN' else 'CLOSED' end, 1, "
+                            + "case when ? = 1 then CURRENT_TIMESTAMP + (? * interval '1 millisecond') else null end) "
+                            + "on conflict (endpoint_id) do update set "
+                            + "state = case when circuit.state = 'HALF_OPEN' and circuit.probe_delivery_id = ? "
+                            + "and circuit.probe_claim_token = ? then 'OPEN' "
+                            + "when circuit.state = 'CLOSED' and circuit.consecutive_qualifying_failures + 1 >= ? then 'OPEN' "
+                            + "else 'CLOSED' end, "
+                            + "consecutive_qualifying_failures = case when circuit.state = 'HALF_OPEN' "
+                            + "and circuit.probe_delivery_id = ? and circuit.probe_claim_token = ? then ? "
+                            + "when circuit.state = 'CLOSED' then circuit.consecutive_qualifying_failures + 1 "
+                            + "else circuit.consecutive_qualifying_failures end, "
+                            + "open_until = case when circuit.state = 'HALF_OPEN' and circuit.probe_delivery_id = ? "
+                            + "and circuit.probe_claim_token = ? then CURRENT_TIMESTAMP + (? * interval '1 millisecond') "
+                            + "when circuit.state = 'CLOSED' and circuit.consecutive_qualifying_failures + 1 >= ? "
+                            + "then CURRENT_TIMESTAMP + (? * interval '1 millisecond') else null end, "
+                            + "probe_delivery_id = null, probe_claim_token = null, updated_at = CURRENT_TIMESTAMP "
+                            + "where circuit.state = 'CLOSED' or (circuit.state = 'HALF_OPEN' "
+                            + "and circuit.probe_delivery_id = ? and circuit.probe_claim_token = ?)",
+                    endpointId,
+                    settings.consecutiveFailureThreshold(),
+                    settings.consecutiveFailureThreshold(),
+                    settings.openCooldown().toMillis(),
+                    instruction.deliveryId(),
+                    instruction.claimToken(),
+                    settings.consecutiveFailureThreshold(),
+                    instruction.deliveryId(),
+                    instruction.claimToken(),
+                    settings.consecutiveFailureThreshold(),
+                    instruction.deliveryId(),
+                    instruction.claimToken(),
+                    settings.openCooldown().toMillis(),
+                    settings.consecutiveFailureThreshold(),
+                    settings.openCooldown().toMillis(),
+                    instruction.deliveryId(),
+                    instruction.claimToken()
+            );
+            return;
+        }
+        jdbcTemplate.update(
+                "update public.endpoint_circuit_breakers circuit set state = 'CLOSED', "
+                        + "consecutive_qualifying_failures = 0, open_until = null, probe_delivery_id = null, "
+                        + "probe_claim_token = null, updated_at = CURRENT_TIMESTAMP where circuit.endpoint_id = ? "
+                        + "and (circuit.state = 'CLOSED' or (circuit.state = 'HALF_OPEN' "
+                        + "and circuit.probe_delivery_id = ? and circuit.probe_claim_token = ?))",
+                endpointId,
+                instruction.deliveryId(),
+                instruction.claimToken()
+        );
     }
 
     @Override
@@ -590,7 +739,8 @@ public class JdbcDeliveryStore implements DeliveryStore {
                         + "for update of delivery, attempt"
                         + "), finalized_attempt as ("
                         + "update public.delivery_attempts attempt set status = 'UNKNOWN', finished_at = CURRENT_TIMESTAMP, "
-                        + "http_status = null, failure_code = null, latency_ms = null, response_preview = null, "
+                        + "http_status = null, failure_code = null, latency_ms = null, retry_delay_ms = ?, "
+                        + "retry_schedule_source = ?, response_preview = null, "
                         + "response_truncated = false from locked "
                         + "where attempt.id = locked.attempt_id and attempt.status = 'STARTED' returning attempt.id"
                         + ") update public.deliveries delivery set state = ?, "
@@ -604,11 +754,31 @@ public class JdbcDeliveryStore implements DeliveryStore {
                 expiredAttempt.attemptNumber(),
                 expiredAttempt.attemptId(),
                 expiredAttempt.attemptNumber(),
+                decision.retryDelay() == null ? null : Math.toIntExact(decision.retryDelay().toMillis()),
+                decision.retryScheduleSource() == null ? null : decision.retryScheduleSource().name(),
                 decision.deliveryState().name(),
                 pending,
                 retryDelayMilliseconds,
                 terminal
         ).isEmpty();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void reopenCircuitForRecoveredHalfOpenProbe(
+            ExpiredStartedAttempt expiredAttempt,
+            CircuitBreakerSettings settings
+    ) {
+        jdbcTemplate.update(
+                "update public.endpoint_circuit_breakers circuit set state = 'OPEN', "
+                        + "open_until = CURRENT_TIMESTAMP + (? * interval '1 millisecond'), "
+                        + "probe_delivery_id = null, probe_claim_token = null, updated_at = CURRENT_TIMESTAMP "
+                        + "where circuit.state = 'HALF_OPEN' and circuit.probe_delivery_id = ? "
+                        + "and circuit.probe_claim_token = ?",
+                settings.openCooldown().toMillis(),
+                expiredAttempt.deliveryId(),
+                expiredAttempt.claimToken()
+        );
     }
 
     @Override
@@ -1079,7 +1249,8 @@ public class JdbcDeliveryStore implements DeliveryStore {
         return new ClaimCandidate(
                 resultSet.getObject("id", UUID.class),
                 resultSet.getObject("project_id", UUID.class),
-                resultSet.getObject("endpoint_id", UUID.class)
+                resultSet.getObject("endpoint_id", UUID.class),
+                resultSet.getBoolean("half_open_probe")
         );
     }
 

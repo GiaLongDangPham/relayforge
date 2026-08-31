@@ -29,6 +29,7 @@ public final class DispatchObservation implements AutoCloseable {
     private final Integer httpStatus;
     private final FailureCode failureCode;
     private final Duration duration;
+    private final Duration retryAfterDelay;
     private final boolean responseTruncated;
     private byte[] responsePreview;
     private boolean closed;
@@ -38,6 +39,7 @@ public final class DispatchObservation implements AutoCloseable {
             Integer httpStatus,
             FailureCode failureCode,
             Duration duration,
+            Duration retryAfterDelay,
             byte[] responsePreview,
             boolean responseTruncated
     ) {
@@ -45,6 +47,7 @@ public final class DispatchObservation implements AutoCloseable {
         this.httpStatus = httpStatus;
         this.failureCode = failureCode;
         this.duration = requireNonNegative(duration);
+        this.retryAfterDelay = retryAfterDelay;
         this.responsePreview = Arrays.copyOf(
                 Objects.requireNonNull(responsePreview, "responsePreview must not be null"),
                 responsePreview.length
@@ -58,6 +61,17 @@ public final class DispatchObservation implements AutoCloseable {
             Duration duration,
             byte[] responsePreview,
             boolean responseTruncated
+    ) {
+        return httpResponse(outcome, httpStatus, duration, responsePreview, responseTruncated, Optional.empty());
+    }
+
+    public static DispatchObservation httpResponse(
+            Outcome outcome,
+            int httpStatus,
+            Duration duration,
+            byte[] responsePreview,
+            boolean responseTruncated,
+            Optional<Duration> retryAfterDelay
     ) {
         if (httpStatus < 100 || httpStatus > 599) {
             throw new IllegalArgumentException("httpStatus must be between 100 and 599");
@@ -74,7 +88,20 @@ public final class DispatchObservation implements AutoCloseable {
         if (outcome == Outcome.PERMANENT_FAILURE && (successfulStatus || retryableStatus)) {
             throw new IllegalArgumentException("successful or retryable responses cannot be permanent failures");
         }
-        return new DispatchObservation(outcome, httpStatus, null, duration, responsePreview, responseTruncated);
+        Duration validatedRetryAfterDelay = requireRetryAfterDelay(retryAfterDelay);
+        if (validatedRetryAfterDelay != null
+                && (outcome != Outcome.RETRYABLE_FAILURE || (httpStatus != 429 && httpStatus != 503))) {
+            throw new IllegalArgumentException("Retry-After is supported only for retryable HTTP 429 or 503 responses");
+        }
+        return new DispatchObservation(
+                outcome,
+                httpStatus,
+                null,
+                duration,
+                validatedRetryAfterDelay,
+                responsePreview,
+                responseTruncated
+        );
     }
 
     public static DispatchObservation failure(Outcome outcome, FailureCode failureCode, Duration duration) {
@@ -96,6 +123,7 @@ public final class DispatchObservation implements AutoCloseable {
                 null,
                 Objects.requireNonNull(failureCode, "failureCode must not be null"),
                 duration,
+                null,
                 new byte[0],
                 false
         );
@@ -115,6 +143,10 @@ public final class DispatchObservation implements AutoCloseable {
 
     public Duration duration() {
         return duration;
+    }
+
+    public Optional<Duration> retryAfterDelay() {
+        return Optional.ofNullable(retryAfterDelay);
     }
 
     public boolean responseTruncated() {
@@ -147,6 +179,18 @@ public final class DispatchObservation implements AutoCloseable {
             throw new IllegalArgumentException("duration must not be negative");
         }
         return required;
+    }
+
+    private static Duration requireRetryAfterDelay(Optional<Duration> value) {
+        Optional<Duration> required = Objects.requireNonNull(value, "retryAfterDelay must not be null");
+        if (required.isEmpty()) {
+            return null;
+        }
+        Duration delay = requireNonNegative(required.get());
+        if (delay.compareTo(RetryAfterHint.MAX_DELAY) > 0) {
+            throw new IllegalArgumentException("retryAfterDelay must not exceed 300 seconds");
+        }
+        return delay;
     }
 
     private void ensureOpen() {

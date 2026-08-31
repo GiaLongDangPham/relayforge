@@ -76,6 +76,11 @@ public final class DispatchInstruction implements AutoCloseable {
         return attemptId;
     }
 
+    /** Endpoint identity retained in the immutable attempt snapshot, safe for delivery-state transitions. */
+    public UUID endpointId() {
+        return endpointSnapshot.endpointId();
+    }
+
     public UUID claimToken() {
         return claimToken;
     }

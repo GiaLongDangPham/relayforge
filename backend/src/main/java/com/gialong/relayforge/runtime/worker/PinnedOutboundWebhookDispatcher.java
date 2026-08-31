@@ -4,6 +4,7 @@ import com.gialong.relayforge.delivery.api.DispatchInstruction;
 import com.gialong.relayforge.delivery.api.DispatchObservation;
 import com.gialong.relayforge.delivery.api.OutboundWebhookDispatcher;
 import com.gialong.relayforge.delivery.api.OutboundWebhookMessageSigner;
+import com.gialong.relayforge.delivery.api.RetryAfterHint;
 import com.gialong.relayforge.delivery.api.SignedOutboundWebhookMessage;
 import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.config.RequestConfig;
@@ -24,6 +25,7 @@ import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ExecutionException;
@@ -200,12 +202,14 @@ public final class PinnedOutboundWebhookDispatcher implements OutboundWebhookDis
             request.setEntity(new ByteArrayEntity(body, ContentType.APPLICATION_JSON));
             return client.execute(request, response -> {
                 ResponsePreview preview = readPreview(response.getEntity());
+                int httpStatus = response.getCode();
                 return DispatchObservation.httpResponse(
-                        classify(response.getCode()),
-                        response.getCode(),
+                        classify(httpStatus),
+                        httpStatus,
                         deadline.elapsed(),
                         preview.bytes(),
-                        preview.truncated()
+                        preview.truncated(),
+                        RetryAfterHint.parse(httpStatus, retryAfterValues(response.getHeaders("Retry-After")))
                 );
             });
         } finally {
@@ -262,6 +266,10 @@ public final class PinnedOutboundWebhookDispatcher implements OutboundWebhookDis
 
     private static Duration min(Duration first, Duration second) {
         return first.compareTo(second) <= 0 ? first : second;
+    }
+
+    private static List<String> retryAfterValues(org.apache.hc.core5.http.Header[] headers) {
+        return Arrays.stream(headers).map(org.apache.hc.core5.http.Header::getValue).toList();
     }
 
     @Override

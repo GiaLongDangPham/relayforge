@@ -1,18 +1,19 @@
 package com.gialong.relayforge.delivery.application;
 
+import com.gialong.relayforge.delivery.api.CircuitBreakerSettings;
 import com.gialong.relayforge.delivery.api.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.DeliveryDisplayStatus;
+import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshot;
 import com.gialong.relayforge.delivery.api.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.AttemptHistorySummary;
+import com.gialong.relayforge.delivery.api.EventDeliverySummary;
+import com.gialong.relayforge.delivery.api.RetentionCleanupResult;
 
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import com.gialong.relayforge.delivery.api.DeliveryDisplayStatus;
-import com.gialong.relayforge.delivery.api.AttemptHistorySummary;
-import com.gialong.relayforge.delivery.api.EventDeliverySummary;
-import com.gialong.relayforge.delivery.api.DeliveryOperationalSnapshot;
-import com.gialong.relayforge.delivery.api.RetentionCleanupResult;
 
 /**
  * Persistence boundary for immutable event acceptance, delivery work, and durable attempt-start state.
@@ -31,7 +32,11 @@ public interface DeliveryStore {
 
     List<ClaimCandidate> lockDuePendingForEnabledEndpoints(Collection<UUID> enabledEndpointIds, int capacity);
 
-    ClaimedDelivery claim(ClaimCandidate candidate, UUID claimToken, Duration initialLease);
+    Optional<ClaimedDelivery> claim(
+            ClaimCandidate candidate,
+            UUID claimToken,
+            Duration initialLease
+    );
 
     int recoverExpiredPreAttemptClaims(int capacity);
 
@@ -53,6 +58,12 @@ public interface DeliveryStore {
             CompletionDecision decision
     );
 
+    void applyCircuitAfterObservedFinalization(
+            DispatchInstruction instruction,
+            boolean qualifyingFailure,
+            CircuitBreakerSettings settings
+    );
+
     boolean hasCurrentLease(DispatchInstruction instruction, Duration minimumRemaining);
 
     boolean recordLateDiagnostic(DispatchInstruction instruction, AttemptCompletion completion, UUID diagnosticId);
@@ -62,6 +73,11 @@ public interface DeliveryStore {
     boolean recoverExpiredStartedAttempt(
             ExpiredStartedAttempt expiredAttempt,
             CompletionDecision decision
+    );
+
+    void reopenCircuitForRecoveredHalfOpenProbe(
+            ExpiredStartedAttempt expiredAttempt,
+            CircuitBreakerSettings settings
     );
 
     DeliveryOperationalSnapshot currentOperationalSnapshot();

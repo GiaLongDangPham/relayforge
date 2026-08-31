@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -151,6 +152,11 @@ class DeliveryAttemptFinalizationIntegrationTests {
                     instruction.attemptId()
             )).isEqualTo("UNKNOWN");
             assertThat(jdbcTemplate.queryForObject(
+                    "select retry_schedule_source from delivery_attempts where id = ?",
+                    String.class,
+                    instruction.attemptId()
+            )).isEqualTo("BACKOFF");
+            assertThat(jdbcTemplate.queryForObject(
                     "select observed_status from attempt_late_diagnostics where attempt_id = ?",
                     String.class,
                     instruction.attemptId()
@@ -187,6 +193,39 @@ class DeliveryAttemptFinalizationIntegrationTests {
                     String.class,
                     instruction.attemptId()
             )).isEqualTo("STARTED");
+        }
+    }
+
+    @Test
+    void persistsReceiverSelectedRetryAndCalculatesDueTimeWithPostgresTime() {
+        ProjectDetails project = projectWithEndpoint("finalization.retry-after.owner");
+        try (DispatchInstruction instruction = start(project.id(), "finalization-retry-after");
+             DispatchObservation observation = DispatchObservation.httpResponse(
+                     DispatchObservation.Outcome.RETRYABLE_FAILURE,
+                     429,
+                     Duration.ofMillis(12),
+                     new byte[0],
+                     false,
+                     Optional.of(Duration.ofSeconds(45))
+             )) {
+
+            assertThat(finalizer.finalizeAttempt(instruction, observation)).isEqualTo(AttemptFinalizationResult.FINALIZED);
+
+            Map<String, Object> attempt = jdbcTemplate.queryForMap(
+                    "select retry_delay_ms, retry_schedule_source from delivery_attempts where id = ?",
+                    instruction.attemptId()
+            );
+            Long persistedGapMilliseconds = jdbcTemplate.queryForObject(
+                    "select round(extract(epoch from (delivery.due_at - attempt.finished_at)) * 1000)::bigint "
+                            + "from deliveries delivery join delivery_attempts attempt on attempt.delivery_id = delivery.id "
+                            + "where delivery.id = ? and attempt.id = ?",
+                    Long.class,
+                    instruction.deliveryId(),
+                    instruction.attemptId()
+            );
+            assertThat(attempt).containsEntry("retry_delay_ms", 45000)
+                    .containsEntry("retry_schedule_source", "RETRY_AFTER");
+            assertThat(persistedGapMilliseconds).isEqualTo(45000L);
         }
     }
 

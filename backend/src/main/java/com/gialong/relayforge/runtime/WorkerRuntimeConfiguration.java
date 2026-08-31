@@ -29,7 +29,11 @@ import java.time.Duration;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(prefix = "relayforge", name = "runtime", havingValue = "worker")
-@EnableConfigurationProperties({WorkerProperties.class, OutboundDispatchProperties.class, RetentionProperties.class})
+@EnableConfigurationProperties({
+        WorkerProperties.class,
+        OutboundDispatchProperties.class,
+        RetentionProperties.class
+})
 class WorkerRuntimeConfiguration {
 
     @Bean

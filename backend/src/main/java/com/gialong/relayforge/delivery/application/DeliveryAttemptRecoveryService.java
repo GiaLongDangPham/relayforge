@@ -1,5 +1,6 @@
 package com.gialong.relayforge.delivery.application;
 
+import com.gialong.relayforge.delivery.api.CircuitBreakerSettings;
 import com.gialong.relayforge.delivery.api.DeliveryAttemptRecovery;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -17,15 +18,21 @@ final class DeliveryAttemptRecoveryService implements DeliveryAttemptRecovery {
 
     private final DeliveryStore deliveryStore;
     private final RetryDelayPolicy retryDelayPolicy;
+    private final CircuitBreakerSettings circuitBreakerSettings;
     private final TransactionTemplate transaction;
 
     DeliveryAttemptRecoveryService(
             DeliveryStore deliveryStore,
             RetryDelayPolicy retryDelayPolicy,
+            CircuitBreakerSettings circuitBreakerSettings,
             PlatformTransactionManager transactionManager
     ) {
         this.deliveryStore = Objects.requireNonNull(deliveryStore, "deliveryStore must not be null");
         this.retryDelayPolicy = Objects.requireNonNull(retryDelayPolicy, "retryDelayPolicy must not be null");
+        this.circuitBreakerSettings = Objects.requireNonNull(
+                circuitBreakerSettings,
+                "circuitBreakerSettings must not be null"
+        );
         this.transaction = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager must not be null"));
         this.transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
@@ -47,6 +54,7 @@ final class DeliveryAttemptRecoveryService implements DeliveryAttemptRecovery {
         for (ExpiredStartedAttempt expiredAttempt : expiredAttempts) {
             CompletionDecision decision = retryDelayPolicy.forUnknownRecovery(expiredAttempt.attemptNumber());
             if (deliveryStore.recoverExpiredStartedAttempt(expiredAttempt, decision)) {
+                deliveryStore.reopenCircuitForRecoveredHalfOpenProbe(expiredAttempt, circuitBreakerSettings);
                 recovered++;
             }
         }

@@ -2,6 +2,7 @@ package com.gialong.relayforge.delivery.application;
 
 import com.gialong.relayforge.delivery.api.DispatchObservation;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
@@ -16,6 +17,7 @@ public final class AttemptCompletion implements AutoCloseable {
     private final Integer httpStatus;
     private final String failureCode;
     private final int latencyMilliseconds;
+    private final Duration retryAfterDelay;
     private final boolean responseTruncated;
     private byte[] responsePreview;
     private boolean closed;
@@ -25,6 +27,7 @@ public final class AttemptCompletion implements AutoCloseable {
             Integer httpStatus,
             String failureCode,
             int latencyMilliseconds,
+            Duration retryAfterDelay,
             byte[] responsePreview,
             boolean responseTruncated
     ) {
@@ -35,6 +38,7 @@ public final class AttemptCompletion implements AutoCloseable {
             throw new IllegalArgumentException("latencyMilliseconds must not be negative");
         }
         this.latencyMilliseconds = latencyMilliseconds;
+        this.retryAfterDelay = retryAfterDelay;
         this.responsePreview = Arrays.copyOf(
                 Objects.requireNonNull(responsePreview, "responsePreview must not be null"),
                 responsePreview.length
@@ -56,6 +60,7 @@ public final class AttemptCompletion implements AutoCloseable {
                 observedHttpStatus.isPresent() ? observedHttpStatus.getAsInt() : null,
                 observedFailureCode.map(Enum::name).orElse(null),
                 Math.toIntExact(requiredObservation.duration().toMillis()),
+                requiredObservation.retryAfterDelay().orElse(null),
                 requiredObservation.responsePreview(),
                 requiredObservation.responseTruncated()
         );
@@ -75,6 +80,10 @@ public final class AttemptCompletion implements AutoCloseable {
 
     public int latencyMilliseconds() {
         return latencyMilliseconds;
+    }
+
+    public Optional<Duration> retryAfterDelay() {
+        return Optional.ofNullable(retryAfterDelay);
     }
 
     public boolean responseTruncated() {

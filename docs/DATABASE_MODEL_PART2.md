@@ -154,6 +154,8 @@ Additional rules:
 | `http_status` | `smallint` | Nullable observed HTTP status. |
 | `failure_code` | `varchar(64)` | Nullable bounded internal classification such as timeout, network, blocked destination, or response class. |
 | `latency_ms` | `integer` | Nullable nonnegative local observed dispatch duration. |
+| `retry_delay_ms` | `integer` | Nullable positive effective delay only when this terminal attempt returned its delivery to retry `PENDING`. |
+| `retry_schedule_source` | `varchar(32)` | Nullable paired bounded value: `BACKOFF` or `RETRY_AFTER`; records the input that selected the effective delay, never the raw receiver header. |
 | `response_preview` | `bytea` | Nullable first at most 8 KiB of response body bytes. |
 | `response_truncated` | `boolean` | Required; true when additional response bytes were omitted. |
 
@@ -168,10 +170,47 @@ Additional rules:
 - HTTP 408, 429, 5xx, network errors, and timeout map to `RETRYABLE_FAILURE`.
 - Other HTTP 4xx and a security-blocked destination map to `PERMANENT_FAILURE`; blocked destination has no HTTP status.
 - Lease recovery maps an unfinished `STARTED` attempt to `UNKNOWN`.
+- A retrying terminal attempt persists both a positive effective delay and its
+  source, or neither. `RETRY_AFTER` is allowed only for a retryable HTTP
+  response whose accepted bounded hint strictly exceeded equal-jitter backoff;
+  `UNKNOWN` recovery uses `BACKOFF`. Terminal/exhausted outcomes store neither.
+- `deliveries.due_at` is still computed from PostgreSQL time in the same
+  conditional finalization transaction; the stored delay is audit evidence,
+  not a second scheduling clock.
 - A destination fingerprint is audit evidence, not a dispatch source. The exact URL exists only in the committed in-memory dispatch instruction; after a crash the attempt becomes `UNKNOWN` rather than being resumed.
 - Response preview is sensitive owner-visible diagnostic data. It is bounded, never logged, and excluded from list responses by default.
 
 The URL fingerprint uses a versioned preimage and SHA-256 over the exact stored URL bytes selected at attempt start. Fingerprint versioning prevents an algorithm change from making historical values ambiguous.
+
+### 5.3 Future endpoint circuit state
+
+V14 adds the delivery-owned `endpoint_circuit_breakers` relation keyed by
+endpoint ID. It is intentionally not part of the owner-managed
+`webhook_endpoints` aggregate: a worker must update receiver-health state
+without changing endpoint configuration or its optimistic version.
+
+| Column | Conceptual PostgreSQL type | Rule |
+| --- | --- | --- |
+| `endpoint_id` | `uuid` | Primary key and foreign-key identity of the protected endpoint. A missing row means `CLOSED` with zero failures. |
+| `state` | `varchar(32)` | `CLOSED`, `OPEN`, or `HALF_OPEN`. |
+| `consecutive_qualifying_failures` | `integer` | Nonnegative failure streak; `CLOSED` may retain a sub-threshold streak, while `OPEN` and `HALF_OPEN` retain threshold-crossing evidence. |
+| `open_until` | `timestamptz` | Required for `OPEN`; PostgreSQL-time cooldown boundary. |
+| `probe_delivery_id` | `uuid` | Required only for `HALF_OPEN`; the one delivery allowed to test recovery. |
+| `probe_claim_token` | `uuid` | Required only for `HALF_OPEN`; fences that probe to the current delivery claim. |
+| `updated_at` | `timestamptz` | Required PostgreSQL transition time. |
+
+V14 creates the restrictive relation, while V15 corrects the state shape so
+`CLOSED` can retain a zero, one, or two-failure streak without cooldown/probe
+data. Together they enforce `CLOSED`/`OPEN`/`HALF_OPEN` shapes, nonnegative
+failure counts, endpoint/probe-delivery references, and PostgreSQL timestamps.
+`HALF_OPEN` has both probe fields and no normal claims; other states have
+neither. Phase 2B Slice 6 implements the [ADR-009](adr/0009-postgresql-endpoint-circuit-breaker.md)
+transition rules: fair candidate selection excludes unexpired `OPEN` and every
+`HALF_OPEN` circuit; the conditional claim transaction turns one eligible
+`OPEN` candidate into its fenced `HALF_OPEN` probe; conditional attempt
+finalization updates delivery/attempt state and the circuit atomically; and
+post-attempt `UNKNOWN` recovery reopens only the matching probe. PostgreSQL
+time controls every cooldown comparison and extension.
 
 ## 6. `attempt_late_diagnostics`
 
@@ -298,6 +337,21 @@ Group 7 adds V9 `delivery_attempts`: restrictive delivery ownership, unique `(de
 
 Group 10 adds V11 physical replay support. A partial unique `(event_id, endpoint_id)` index applies only to original rows with a null replay parent, while a project/event/endpoint/self-reference tuple prevents replay identity drift. `replay_requests` has project-scoped key uniqueness and a deferred lineage foreign key to the exact replay child, allowing the transaction to reserve the idempotency command before it inserts that child. V11 also adds the project delivery and project/event delivery keyset indexes used by owner history; they are query-shape support, not performance claims.
 
+Phase 2B Slice 3 adds V13 retry-schedule audit columns to `delivery_attempts`.
+They have positive-delay, paired-nullability, bounded-source, and terminal
+status constraints. The finalization/recovery SQL continues to use
+`CURRENT_TIMESTAMP + selected milliseconds` for `deliveries.due_at`; it stores
+the selected delay/source beside the immutable terminal attempt observation,
+not the raw `Retry-After` field.
+
+Phase 2B Slice 5 adds V14 `endpoint_circuit_breakers`; V15 corrects its
+closed-state streak constraint. Its primary key is `endpoint_id`; a missing row
+still means `CLOSED`. Phase 2B Slice 6 joins that relation into the fair claim
+candidate query and uses the primary-key circuit lookup plus existing V8
+pending/claimed delivery indexes. A 128-row PostgreSQL 17.10 local
+`EXPLAIN (ANALYZE, BUFFERS)` fixture found no evidence for a new breaker index;
+this is a small warm fixture, not a production capacity claim.
+
 Group 14 adds V12 retention indexes and the bounded PostgreSQL-time cleanup described in section 9. It deletes records only after the complete graph lock/recheck. Retention has no configuration-table cascade and no owner-facing deletion API.
 
 ## 11. Required future test evidence
@@ -321,6 +375,14 @@ PostgreSQL Testcontainers tests prove or must eventually prove:
 15. blocked receiver flow holds no database transaction during HTTP;
 16. retention removes a complete expired terminal replay graph (including attempts, late diagnostics, and replay idempotency) and an expired no-route event while preserving configuration; it never deletes nonterminal work or a graph with a pending replay child;
 17. cursor queries have no duplicate/omitted rows when multiple records share the same timestamp.
+18. an eligible receiver hint can select a persisted bounded retry delay/source
+    while PostgreSQL computes the matching due-time; shorter/equal hints and
+    unknown recovery retain `BACKOFF`, and exhaustion stores no retry data.
+19. three qualifying failures open one endpoint while a healthy endpoint still
+    receives available fair-claim capacity; and
+20. concurrent workers create exactly one cooldown-expired `HALF_OPEN` probe,
+    whose success closes the circuit and whose expired `UNKNOWN` attempt
+    reopens it without leaving a probe fence.
 
 ## 12. Decisions deferred to implementation slices
 

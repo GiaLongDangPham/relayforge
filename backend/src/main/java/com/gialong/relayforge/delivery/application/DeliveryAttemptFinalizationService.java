@@ -1,5 +1,6 @@
 package com.gialong.relayforge.delivery.application;
 
+import com.gialong.relayforge.delivery.api.CircuitBreakerSettings;
 import com.gialong.relayforge.delivery.api.AttemptFinalizationResult;
 import com.gialong.relayforge.delivery.api.DeliveryAttemptFinalizer;
 import com.gialong.relayforge.delivery.api.DispatchInstruction;
@@ -20,15 +21,23 @@ final class DeliveryAttemptFinalizationService implements DeliveryAttemptFinaliz
 
     private final DeliveryStore deliveryStore;
     private final RetryDelayPolicy retryDelayPolicy;
+    private final CircuitBreakerSettings circuitBreakerSettings;
+    private final CircuitBreakerPolicy circuitBreakerPolicy;
     private final TransactionTemplate transaction;
 
     DeliveryAttemptFinalizationService(
             DeliveryStore deliveryStore,
             RetryDelayPolicy retryDelayPolicy,
+            CircuitBreakerSettings circuitBreakerSettings,
             PlatformTransactionManager transactionManager
     ) {
         this.deliveryStore = Objects.requireNonNull(deliveryStore, "deliveryStore must not be null");
         this.retryDelayPolicy = Objects.requireNonNull(retryDelayPolicy, "retryDelayPolicy must not be null");
+        this.circuitBreakerSettings = Objects.requireNonNull(
+                circuitBreakerSettings,
+                "circuitBreakerSettings must not be null"
+        );
+        this.circuitBreakerPolicy = new CircuitBreakerPolicy();
         this.transaction = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager must not be null"));
         this.transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
@@ -38,8 +47,14 @@ final class DeliveryAttemptFinalizationService implements DeliveryAttemptFinaliz
         DispatchInstruction requiredInstruction = Objects.requireNonNull(instruction, "instruction must not be null");
         try (AttemptCompletion completion = AttemptCompletion.observed(observation)) {
             CompletionDecision decision = retryDelayPolicy.forObserved(completion, requiredInstruction.attemptNumber());
+            boolean qualifyingFailure = circuitBreakerPolicy.isQualifying(observation);
             return Objects.requireNonNull(
-                    transaction.execute(status -> finalizeInTransaction(requiredInstruction, completion, decision)),
+                    transaction.execute(status -> finalizeInTransaction(
+                            requiredInstruction,
+                            completion,
+                            decision,
+                            qualifyingFailure
+                    )),
                     "finalization transaction returned no result"
             );
         }
@@ -60,9 +75,15 @@ final class DeliveryAttemptFinalizationService implements DeliveryAttemptFinaliz
     private AttemptFinalizationResult finalizeInTransaction(
             DispatchInstruction instruction,
             AttemptCompletion completion,
-            CompletionDecision decision
+            CompletionDecision decision,
+            boolean qualifyingFailure
     ) {
         if (deliveryStore.finalizeCurrentAttempt(instruction, completion, decision)) {
+            deliveryStore.applyCircuitAfterObservedFinalization(
+                    instruction,
+                    qualifyingFailure,
+                    circuitBreakerSettings
+            );
             return AttemptFinalizationResult.FINALIZED;
         }
         return deliveryStore.recordLateDiagnostic(instruction, completion, java.util.UUID.randomUUID())

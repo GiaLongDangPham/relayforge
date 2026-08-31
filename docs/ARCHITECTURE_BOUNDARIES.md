@@ -163,11 +163,11 @@ Transaction boundaries belong to module application use cases, not controllers, 
 | Project or API-key mutation | `project` | One short project-owned transaction. Raw generated API-key material exists only at the creation boundary. |
 | Endpoint mutation | `endpoint` | One short endpoint-owned transaction after project authorization. |
 | Publish event | `delivery` | One transaction covers idempotency resolution, immutable event persistence, endpoint routing-snapshot read, and creation of the complete delivery set. |
-| Claim due deliveries | `delivery` | One short transaction locks candidate delivery rows, checks endpoint enabled state in one batch through the endpoint public contract, and changes only eligible rows to `CLAIMED`; it commits before outbound work. |
+| Claim due deliveries | `delivery` | One short transaction locks fair candidate delivery rows, checks endpoint enabled state in one batch through the endpoint public contract, excludes unavailable endpoint circuits, and changes only eligible rows to `CLAIMED`; a cooldown-expired `OPEN` circuit atomically fences exactly one `HALF_OPEN` probe. It commits before outbound work. |
 | Start attempt | `delivery` | One short transaction validates claim/lease/budget, reads the endpoint attempt snapshot through its public contract, creates `STARTED`, and extends the lease once. |
 | Validate destination and send HTTP | `delivery` worker orchestration through outbound ports | No database transaction is open. |
-| Finalize attempt | `delivery` | One short conditional transaction atomically finalizes attempt and delivery state and invalidates token/lease. |
-| Recover expired claim | `delivery` | One short conditional transaction uses PostgreSQL time and the expired current token. |
+| Finalize attempt | `delivery` | One short conditional transaction atomically finalizes attempt/delivery state, invalidates token/lease, and applies the matching receiver-evidence circuit transition. |
+| Recover expired claim | `delivery` | One short conditional transaction uses PostgreSQL time and the expired current token; recovery of a matching `HALF_OPEN` started probe reopens its circuit without deciding an HTTP outcome. |
 | Replay exhausted delivery | `delivery` | One transaction resolves replay idempotency and creates one linked delivery with a fresh budget. |
 | Retain expired terminal history | `delivery` worker orchestration | One short `READ COMMITTED` transaction per candidate graph locks all deliveries with `SKIP LOCKED`, then its event, rechecks complete terminal eligibility, then deletes dependent operational history before replay leaves and the event. |
 | Inspect owner delivery history | `delivery` | One short read-only transaction verifies project ownership, reads delivery history, and obtains only safe current endpoint metadata through its public query contract. |

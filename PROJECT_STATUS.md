@@ -14,7 +14,7 @@ This file is the durable source of truth for project scope and progress. Update 
 ## Current position
 
 - Current phase: Phase 2 - Advanced delivery controls.
-- Current slice: Phase 2B Slice 1 is complete. ADR-008 accepts a bounded receiver `Retry-After` contract: only one valid delta-seconds hint on retryable HTTP `429`/`503` is eligible, it is capped at 300 seconds, and the selected delay is `max(equal jitter, hint)`. PostgreSQL remains due-time authority, invalid/ineligible values retain normal backoff, and a fifth retryable attempt still becomes `EXHAUSTED`. Slice 2 next adds only response-header capture and parsing; no runtime behavior has changed yet.
+- Current slice: Phase 2B is complete. Bounded `Retry-After` parsing/persistence keeps PostgreSQL due-time authority; V14/V15 persist endpoint circuit state; fair claim SQL excludes unavailable circuits and atomically fences one cooldown-expired `HALF_OPEN` probe; conditional finalization and `UNKNOWN` recovery transition the matching circuit in the same short transaction as delivery state. Three qualifying receiver failures open one endpoint without idling healthy capacity. Metrics and owner-visible circuit state remain intentionally deferred.
 - Repository state: Git repository on `main`; RelayForge backend foundation exists under `backend/` and the thin React/Vite owner dashboard exists under `frontend/`.
 - Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Apache HttpClient 5, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Spring Security with JDBC Spring Session, Lombok 1.18.46 as a compile-time processor, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. V2 creates `owner_accounts`, V3 adds technical Spring Session tables, V4 creates `projects`, V5 creates `project_api_keys`, V6 creates `webhook_endpoints` plus `endpoint_subscriptions`, V7 creates immutable `events` plus original `deliveries`, V8 adds partial claim/recovery indexes, V9 creates `delivery_attempts`, V10 creates `attempt_late_diagnostics`, V11 adds replay lineage, replay idempotency, and history query indexes, and V12 adds terminal-history retention indexes. Identity supports opt-in bootstrap and generic credential verification; API mode has completed browser authentication, owner-scoped configuration access, publisher event acceptance, safe owner history, and CSRF-protected manual replay. Worker mode now has durable claim/recovery/attempt-start contracts, signed and SSRF-pinned outbound HTTP dispatch, conditional finalization/retry, post-attempt `UNKNOWN` recovery, bounded polling through local permit admission, and fixed-delay bounded cleanup of expired complete terminal graphs.
 - Local environment note: the default terminal Java is JDK 21 while this project requires JDK 25; Maven verification currently selects `C:\Program Files\Java\jdk-25` explicitly.
@@ -63,7 +63,7 @@ This file is the durable source of truth for project scope and progress. Update 
 | Worker capacity admission | Reserve local dispatch permits before claim; return at most the reserved capacity and hold one permit until each local claim task stops | Prevents unbounded local prefetch and avoids releasing capacity merely because a stale task's lease expired. |
 | Delivery timing defaults | 2-second connect, 10-second dispatch, 15-second initial lease, 20-second attempt lease, 5-second recovery scan, and 20-second shutdown | Gives Portfolio v1 bounded, internally consistent starting values that can be tuned from metrics. |
 | Retry timing defaults | 5-second base, multiplier 4, 300-second cap, and equal jitter | Demonstrates persisted exponential backoff while keeping the portfolio workflow observable in a short session. |
-| Receiver `Retry-After` | Honor exactly one valid non-negative delta-seconds field only on retryable HTTP `429`/`503`; cap it at 300 seconds and select `max(equal jitter, hint)` | Respects explicit receiver overload signals without allowing receiver clocks or arbitrary values to weaken bounded PostgreSQL-authoritative retry scheduling. |
+| Receiver `Retry-After` | Honor exactly one valid non-negative delta-seconds field only on retryable HTTP `429`/`503`; cap it at 300 seconds, select `max(equal jitter, hint)`, and record only the effective delay/source | Respects explicit receiver overload signals without allowing receiver clocks, raw header data, or arbitrary values to weaken bounded PostgreSQL-authoritative retry scheduling. |
 | Worker polling defaults | 8 local permits, claim only up to free permits, poll every 500 ms plus 0-100 ms jitter | Bounds local concurrency and avoids claimed-work prefetch while retaining responsive demo latency. |
 | Phase 2 scheduling direction | Non-preemptive, work-conserving endpoint fairness replaces a fixed low per-endpoint cap: competing backlogged endpoints share newly available claim capacity, while one endpoint may burst into idle capacity | Prevents endpoint starvation without leaving worker permits unused; an endpoint that becomes backlogged is favored at the next free claim opportunity rather than cancelling active HTTP work. |
 | Advanced delivery sequence | Fair dispatch first, then bounded `Retry-After`, a PostgreSQL-backed endpoint circuit breaker, versioned signing-secret rotation, and event-schema versioning | Each step solves a concrete receiver-reliability or security problem and can be tested without adding infrastructure for keyword count. |
@@ -216,6 +216,11 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-31 | Phase 2A Slice 4 concurrent fair-claim regression | Added one two-worker PostgreSQL concurrency fixture: two simultaneous four-capacity claims against deep A/B backlogs returned eight distinct delivery IDs and tokens, and both endpoints made progress. The narrow regression suite also retained endpoint-disable serialization, expired pre-attempt recovery, attempt-start, stale-token, and late-result behavior: 14 tests passed across claim, attempt-start, and finalization integration suites. Browser reload of the local sign-in page had no console errors. No runtime query, index, migration, or performance claim changed. |
 | 2026-08-31 | Phase 2A Slice 5 fair-query plan evidence | Extracted the live fair SQL template so a PostgreSQL 17.10 Testcontainers fixture can execute exactly that query under `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`. With two enabled endpoints and 128 due pending deliveries, capacity 8 returned eight rows in 2.703 ms (planning 0.464 ms) with root shared-hit blocks 3,987. The plan used `ix_deliveries_pending_due_at_id` for pending scans and `ix_deliveries_claimed_lease_expires_at_id` for claimed allocation. The recorded result is a small warm local fixture, not a production SLA; no V13 index migration, runtime behavior, or tuning change was accepted. Regression: query-plan plus fair-claim tests passed 9/9; local dashboard sign-in smoke had no console errors. |
 | 2026-08-31 | Phase 2B Slice 1 bounded `Retry-After` contract | Accepted ADR-008: only a single valid non-negative delta-seconds `Retry-After` field on retryable HTTP `429`/`503` is eligible; it is safely capped at 300 seconds and effective retry delay is `max(equal jitter, hint)`. PostgreSQL remains due-time authority; raw headers are not stored; malformed/repeated/date/ineligible values retain normal backoff; and attempt five still exhausts. This documentation-only slice adds no parser, worker behavior, migration, circuit breaker, metric, or runtime change. |
+| 2026-08-31 | Phase 2B Slice 2 `Retry-After` capture and parsing | Added `RetryAfterHint`, a pure delivery public-boundary parser that accepts exactly one OWS-trimmed non-negative ASCII delta-seconds value only for HTTP `429`/`503`, safely caps it at 300 seconds, and returns no raw receiver value. Apache's pinned worker adapter passes this bounded optional duration into `DispatchObservation`; the observation rejects ineligible/cap-violating direct input. No retry policy, finalization, due-time, migration, history, metric, or circuit breaker changed. `RetryAfterHintTests`, dispatcher tests, and retry-policy regression passed 10/10. Rebuilt local API/worker reached health and the dashboard sign-in smoke had no console errors. |
+| 2026-08-31 | Phase 2B Slice 3 effective retry schedule persistence | Added V13 retry-schedule audit fields on `delivery_attempts`, with paired positive delay/source and status constraints. `RetryDelayPolicy` now selects the greater of equal jitter and the bounded receiver hint for attempts 1-4; a strictly larger hint records `RETRY_AFTER`, otherwise `BACKOFF`. Conditional finalization persists only that safe effective audit data while PostgreSQL computes `due_at`; recovery is `BACKOFF`, and attempt five/terminal outcomes have neither field. Focused parser/adapter/policy checks passed 11/11; PostgreSQL Testcontainers finalization/recovery evidence passed 4/4 after V1-V13; local API/worker health and dashboard sign-in smoke passed without console errors. |
+| 2026-08-31 | Phase 2B Slice 4 endpoint circuit-breaker contract | Accepted ADR-009: delivery-owned PostgreSQL circuit state has `CLOSED`, `OPEN`, and one token-fenced `HALF_OPEN` probe. Three consecutive qualifying receiver failures open an endpoint for 30 seconds; normal claims are excluded while a cooldown-expired endpoint can compete for one fair permit-bound probe. Finalization/recovery transitions the circuit atomically with delivery state; a probe success/nonqualifying result closes it, while qualifying/`UNKNOWN` probe outcomes reopen it. The contract preserves retry scheduling, endpoint disablement, at-least-once semantics, and PostgreSQL time. Documentation-only verification: `git diff --check` passed; no runtime behavior changed. |
+| 2026-08-31 | Phase 2B Slice 5 circuit persistence and contracts | Added V14 `endpoint_circuit_breakers` with constrained `CLOSED`/`OPEN`/`HALF_OPEN` shapes, endpoint and probe-delivery foreign keys, PostgreSQL timestamps, and no speculative query index. Added separate validated worker circuit defaults (three failures, 30-second cooldown, one probe), immutable delivery-owned state/read contracts, and a pure qualifying-observation classifier. No claim, finalization, recovery, metric, API, or UI workflow calls these contracts yet. Focused policy/configuration tests passed 4/4; PostgreSQL foundation tests passed 22/22 after V1-V14. Rebuilt local API/worker plus frontend; API health and dashboard sign-in smoke were clean. |
+| 2026-08-31 | Phase 2B Slice 6 circuit-breaker transactional behavior | Activated ADR-009 without adding a broker, Redis, cache, metric, or UI. Fair candidate SQL now excludes unexpired `OPEN`/all `HALF_OPEN` circuits and atomically changes exactly one cooldown-expired candidate into a token-fenced probe. Conditional finalization changes delivery/attempt state before applying the matching circuit transition in the same transaction; expired started probe recovery reopens only its matching fence. Testcontainers exposed an important migration defect: `CLOSED` must retain one/two-failure streaks, so V15 replaces V14's overly strict constraint safely. The final clean full Maven suite passed 131/131 after ArchUnit required the circuit settings contract to move from delivery internals to public API. The focused PostgreSQL circuit/claim/finalization/query-plan set passed 15/15; the plan returned eight candidates in 2.646 ms (planning 0.594 ms) on a small warm 128-row local fixture and accepted no new index. Rebuilt local API/worker reached health; the reloaded dashboard sign-in page had no console warnings/errors. |
 | 2026-08-27 | Dashboard UI refinement | Unified the React dashboard under one tokenized dark operational theme, corrected the project workspace’s width breakpoint and list-card stretching, and rebuilt Delivery operations as native dark-theme cards instead of its conflicting white surface. Added responsive one-column behavior, visible focus styling, reduced-motion handling, 44px base control targets, selected-state treatment, and safer long-value wrapping without changing API or delivery behavior. `npm run lint` and production build passed; the rebuilt Compose frontend was browser-checked across API-key, endpoint, and delivery panels at desktop and narrow widths with no horizontal overflow or console warnings/errors. |
 
 ## Advanced development roadmap
@@ -257,13 +262,27 @@ This file is the durable source of truth for project scope and progress. Update 
    behavior changed.**
 2. Capture and parse the relevant response header with no retry-scheduling or
    persistence change; prove valid, invalid, repeated, date, overflow, and
-   capped values in focused tests.
+   capped values in focused tests. **Complete: parsed data is bounded in
+   `DispatchObservation`; 10 focused tests passed.**
 3. Persist the selected effective delay/source and compute due-time with
    PostgreSQL; retain equal-jitter fallback and the fifth-attempt boundary.
-4. Add a PostgreSQL-authoritative endpoint circuit breaker with explicit
-   `CLOSED`, `OPEN`, and single-probe `HALF_OPEN` behavior across workers.
-5. Expose bounded operational metrics and owner-visible safe state without
-   endpoint identifiers as Prometheus labels.
+   **Complete: V13 stores only paired positive effective data; 11 focused
+   unit/adapter checks and 4 PostgreSQL integration checks passed.**
+4. Define a PostgreSQL-authoritative endpoint circuit-breaker contract with
+   explicit `CLOSED`, `OPEN`, and single-probe `HALF_OPEN` behavior across
+   workers before adding its state/schema/runtime transition. **Complete in
+   ADR-009; no runtime behavior changed.**
+5. Add the circuit-state schema, bounded configuration, and application/
+   persistence contracts without yet changing claim selection or owner UI.
+   **Complete: V14 plus focused 4/4 policy/configuration and 22/22
+   PostgreSQL foundation evidence.**
+6. Add breaker-aware claim/finalization/recovery behavior with PostgreSQL
+   concurrency tests. **Complete: normal claims exclude unavailable circuits;
+   one cooldown-expired claim atomically becomes a token-fenced probe;
+   conditional finalization/recovery changes the matching circuit with delivery
+   state. Testcontainers proves the three-failure threshold, healthy-capacity
+   progress, one cross-worker probe, probe success close, and unknown-probe
+   reopen. Bounded metrics and owner-visible safe state remain deferred.**
 
 ### Phase 3 - Versioned signing-secret rotation
 
@@ -308,10 +327,10 @@ consumption, retry/dead-letter semantics, cutover, reconciliation, and rollback.
 
 ## Next recommended slice
 
-Begin Phase 2B Slice 2: capture the outbound HTTP response's `Retry-After`
-fields and parse the accepted delta-seconds form in a pure, focused component.
-Do not schedule a retry, alter persistence, add history fields, or introduce a
-circuit breaker in that slice.
+Owner review/commit the completed Phase 2B work. Then begin Phase 3 Slice 1:
+define the versioned signing-secret rotation contract/ADR before schema or
+runtime changes. Do not add Redis, a broker, custom retry policy, or endpoint
+rate limiting as part of that decision.
 
 ## Deferred until evidence justifies them
 

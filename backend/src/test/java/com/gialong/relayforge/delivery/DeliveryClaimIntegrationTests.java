@@ -87,6 +87,7 @@ class DeliveryClaimIntegrationTests {
 
     @AfterEach
     void clearDeliveryFixture() {
+        jdbcTemplate.update("delete from endpoint_circuit_breakers");
         jdbcTemplate.update("delete from attempt_late_diagnostics");
         jdbcTemplate.update("delete from delivery_attempts");
         jdbcTemplate.update("delete from replay_requests");
