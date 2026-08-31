@@ -27,9 +27,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static java.net.http.HttpRequest.BodyPublishers;
 import static java.net.http.HttpResponse.BodyHandlers;
@@ -160,6 +162,28 @@ class PublisherEventHttpIntegrationTests {
                     "{\"eventType\":\"invoice.paid\",\"payload\":{},\"unexpected\":true}"
             )).satisfies(response -> assertProblem(response, 400, "VALIDATION_FAILED"));
 
+            List<CompletableFuture<HttpResponse<String>>> rateLimitBurst = new ArrayList<>();
+            for (int attempt = 0; attempt < 100; attempt++) {
+                rateLimitBurst.add(publisher.sendAsync(
+                        publishRequest(
+                                publishUri,
+                                apiKey.rawKey(),
+                                "rate-limit-" + attempt,
+                                "{\"eventType\":"
+                        ),
+                        BodyHandlers.ofString()
+                ));
+            }
+            CompletableFuture.allOf(rateLimitBurst.toArray(CompletableFuture[]::new)).join();
+            HttpResponse<String> rateLimited = rateLimitBurst.stream()
+                    .map(CompletableFuture::join)
+                    .filter(response -> response.statusCode() == 429)
+                    .findFirst()
+                    .orElse(null);
+            assertThat(rateLimited).isNotNull();
+            assertProblem(rateLimited, 429, "PUBLISH_RATE_LIMITED");
+            assertThat(rateLimited.headers().firstValue("Retry-After")).contains("1");
+
             apiKeyCatalog.revoke(ownerId, project.id(), apiKey.apiKey().id()).orElseThrow();
             assertThat(publish(
                     publisher,
@@ -178,6 +202,15 @@ class PublisherEventHttpIntegrationTests {
             String idempotencyKey,
             String body
     ) throws Exception {
+        return client.send(publishRequest(uri, rawKey, idempotencyKey, body), BodyHandlers.ofString());
+    }
+
+    private HttpRequest publishRequest(
+            URI uri,
+            String rawKey,
+            String idempotencyKey,
+            String body
+    ) {
         HttpRequest.Builder request = HttpRequest.newBuilder(uri)
                 .header("Content-Type", "application/json")
                 .POST(BodyPublishers.ofString(body));
@@ -187,7 +220,7 @@ class PublisherEventHttpIntegrationTests {
         if (rawKey != null) {
             request.header("Authorization", "Bearer " + rawKey);
         }
-        return client.send(request.build(), BodyHandlers.ofString());
+        return request.build();
     }
 
     private static void assertProblem(HttpResponse<String> response, int status, String code) {

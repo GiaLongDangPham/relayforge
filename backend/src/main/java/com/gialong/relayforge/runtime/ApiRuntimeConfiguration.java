@@ -1,18 +1,18 @@
 package com.gialong.relayforge.runtime;
-import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshotQuery;
 
+import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshotQuery;
 import com.gialong.relayforge.identity.api.OwnerBootstrap;
 import com.gialong.relayforge.identity.api.OwnerCredentialVerifier;
-import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshotQuery;
 import com.gialong.relayforge.project.api.PublisherApiKeyVerifier;
 import com.gialong.relayforge.runtime.observability.DeliveryBacklogMetrics;
 import com.gialong.relayforge.runtime.observability.TraceIdFilter;
-import io.micrometer.core.instrument.MeterRegistry;
 import com.gialong.relayforge.runtime.publisher.PublisherApiKeyAuthenticationFilter;
+import com.gialong.relayforge.runtime.publisher.PublisherEventRateLimiter;
 import com.gialong.relayforge.runtime.security.OwnerAuthenticationProvider;
 import com.gialong.relayforge.runtime.security.OwnerLoginFailureLimiter;
 import com.gialong.relayforge.runtime.security.RelayForgeSecurityProperties;
 import com.gialong.relayforge.runtime.security.SecurityProblemWriter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -143,6 +143,11 @@ class ApiRuntimeConfiguration {
             SecurityProblemWriter securityProblemWriter
     ) {
         return new PublisherApiKeyAuthenticationFilter(publisherApiKeyVerifier, securityProblemWriter);
+    }
+
+    @Bean
+    PublisherEventRateLimiter publisherEventRateLimiter(MeterRegistry meterRegistry) {
+        return new PublisherEventRateLimiter(meterRegistry);
     }
 
     @Bean

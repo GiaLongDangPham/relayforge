@@ -248,7 +248,7 @@ Production HTTPS termination must provide:
 
 TLS policy and certificate automation belong to cloud infrastructure, but production application URLs and secure-cookie behavior assume HTTPS.
 
-## 11. Login abuse and rate-limiting scope
+## 11. Login abuse and publisher rate-limiting scope
 
 The bootstrap dashboard has no public registration, but login brute force still requires a bounded defense:
 
@@ -261,7 +261,16 @@ The bootstrap dashboard has no public registration, but login brute force still 
 
 This local limiter is defense in depth, not a cluster-wide guarantee. Redis is not added for it. A cloud edge/WAF or shared limiter is considered only if the demo becomes publicly exposed or measurements show distributed abuse.
 
-Publisher quotas/rate limits are deferred because billing/public SaaS is out of scope. Bounded payloads, API-key revocation, worker permits, and backlog metrics remain mandatory; evidence of publisher abuse or database saturation can trigger a focused policy.
+ADR-010 adds local publisher event admission control for the one-API-process
+public demo: a bounded per-project token bucket runs only after API-key
+authentication and path-project authorization, before body parsing or database
+work. It is local process state, not a durable quota or cluster-wide guarantee;
+restart resets it and multiple API processes have independent buckets. A
+publisher `429` has code `PUBLISH_RATE_LIMITED` and a positive `Retry-After`.
+Every admitted-path request consumes a token, including malformed requests and
+equivalent idempotent retries, so the limiter cannot be bypassed through a
+pre-admission database lookup. PostgreSQL remains the idempotency source of
+truth. The bounded defaults and verification obligations are in ADR-010.
 
 ## 12. Secret and configuration custody
 
@@ -314,7 +323,7 @@ Automated tests must eventually prove:
 - Cloud key provider, secret manager, IAM policy, and TLS termination.
 - API-key pepper rotation and digest-version migration.
 - Endpoint signing-secret rotation; explicitly absent in v1.
-- Cluster-wide rate limiting, quotas, billing, and abuse automation.
+- Cluster-wide rate limiting, persistent quotas, billing, and abuse automation.
 - CSP final directives after frontend assets and external dependencies are known.
 - Dependency/SBOM/container vulnerability scanning in the CI/cloud phase.
 

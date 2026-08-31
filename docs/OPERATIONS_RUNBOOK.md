@@ -20,6 +20,7 @@ Read these Prometheus signals:
 - `relayforge_worker_running`, `relayforge_worker_permits_available`, and `relayforge_worker_claimed_total`: worker lifecycle and local capacity.
 - `relayforge_delivery_attempts_total`, `relayforge_delivery_dispatch_seconds`, recovery, and finalization metrics: dispatch outcome, latency, and recovery evidence.
 - `relayforge_retention_runs_total`, `relayforge_retention_*_deleted_total`, and `relayforge_retention_failures_total`: bounded terminal-history cleanup runs, deleted operational records, and failures. These metrics have no project, event, delivery, or endpoint labels.
+- `relayforge_publisher_rate_limit_requests_total{outcome="admitted|rejected"}`: local API-process publisher admission. A rise in `rejected` means one project exceeded this process's 60-request burst/30-request-per-second limiter; it is not a durable quota or cluster-wide measurement. No project, API-key, idempotency-key, or payload label exists.
 
 If ready backlog and oldest-due age rise while worker-running is zero, restore or inspect the worker. If permits remain zero with slow dispatch latency, inspect receiver behavior and the configured outbound deadline before increasing concurrency. If paused backlog rises, inspect the endpoint enabled state; do not manually change delivery rows.
 

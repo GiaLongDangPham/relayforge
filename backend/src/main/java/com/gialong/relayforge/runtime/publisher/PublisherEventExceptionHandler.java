@@ -1,10 +1,11 @@
 package com.gialong.relayforge.runtime.publisher;
-import com.gialong.relayforge.delivery.api.publish.PublishIdempotencyConflictException;
 
 import com.gialong.relayforge.delivery.api.publish.PublishIdempotencyConflictException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -51,6 +52,18 @@ final class PublisherEventExceptionHandler {
     @ExceptionHandler(PublisherRequestTooLargeException.class)
     ProblemDetail requestTooLarge() {
         return problem(HttpStatus.CONTENT_TOO_LARGE, "PAYLOAD_TOO_LARGE", "Payload too large", "The request body exceeds 64 KiB.");
+    }
+
+    @ExceptionHandler(PublisherRateLimitExceededException.class)
+    ResponseEntity<ProblemDetail> publisherRateLimited(PublisherRateLimitExceededException exception) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(exception.retryAfterSeconds()))
+                .body(problem(
+                        HttpStatus.TOO_MANY_REQUESTS,
+                        "PUBLISH_RATE_LIMITED",
+                        "Publisher rate limited",
+                        "The publisher event request is temporarily rate limited."
+                ));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

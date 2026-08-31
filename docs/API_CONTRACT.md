@@ -82,7 +82,7 @@ Core status/code mapping:
 | 404 | `RESOURCE_NOT_FOUND` |
 | 409 | `IDEMPOTENCY_CONFLICT`, `OPTIMISTIC_LOCK_CONFLICT`, `INVALID_STATE_TRANSITION` |
 | 413 | `PAYLOAD_TOO_LARGE` |
-| 429 | `RATE_LIMITED` when a later bounded policy is active |
+| 429 | `RATE_LIMITED` for owner-login abuse; `PUBLISH_RATE_LIMITED` for publisher event admission |
 | 503 | `DEPENDENCY_UNAVAILABLE` when durable processing cannot proceed |
 
 ## 5. Pagination
@@ -301,6 +301,13 @@ First acceptance and an equivalent retry both return 202 with the same logical r
 ```
 
 An equivalent retry sets only `idempotentReplay` to true; event ID, acceptance time, and delivery count remain original. Same key with different event type or payload returns 409. Zero matching endpoints is valid and returns `deliveryCount: 0`.
+
+ADR-010 applies a local API-process token bucket after API-key authentication and
+path-project authorization but before body reading or publish processing. A
+bucket-empty request returns `429` with code `PUBLISH_RATE_LIMITED` and a
+positive whole-second `Retry-After`; it creates no event or delivery. A retry
+using the same idempotency key still consumes admission capacity and, once
+admitted, follows the unchanged idempotency behavior above.
 
 ## 11. Event and delivery inspection
 

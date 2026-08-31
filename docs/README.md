@@ -9,7 +9,7 @@ Start with [AGENTS.md](../AGENTS.md), [Agent Context](AGENT_CONTEXT.md), and the
 | Delivery, retries, leases, worker capacity, timing, endpoint fairness, receiver retry hints, circuit-breaker behavior | [Delivery Model](DELIVERY_MODEL.md), [Runtime Defaults](DELIVERY_RUNTIME_DEFAULTS.md), [ADR-002](adr/0002-postgresql-backed-delivery-jobs.md), [ADR-007](adr/0007-work-conserving-endpoint-fair-dispatch.md), [ADR-008](adr/0008-bounded-retry-after-scheduling.md), [ADR-009](adr/0009-postgresql-endpoint-circuit-breaker.md) |
 | Database/persistence | [Database Model Part 1](DATABASE_MODEL_PART1.md), [Part 2](DATABASE_MODEL_PART2.md) |
 | HTTP API and DTO boundaries | [API Contract](API_CONTRACT.md) |
-| Authentication, authorization, secrets, SSRF, redaction | [Security Baseline](SECURITY_BASELINE.md) |
+| Authentication, authorization, secrets, SSRF, redaction, and local publisher admission control | [Security Baseline](SECURITY_BASELINE.md), [ADR-010](adr/0010-local-publisher-rate-limiting.md) |
 | Local Docker Compose demo and end-to-end smoke flow | [Local Docker Demo](LOCAL_DOCKER_DEMO.md) |
 | Operator health, metrics, logs, and failure diagnosis | [Operations Runbook](OPERATIONS_RUNBOOK.md) |
 | Local load testing, Prometheus/Grafana, JVM diagnostics, and measured tuning | [Performance Runbook](PERFORMANCE_RUNBOOK.md) |

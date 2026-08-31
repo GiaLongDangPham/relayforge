@@ -13,8 +13,9 @@ This file is the durable source of truth for project scope and progress. Update 
 
 ## Current position
 
-- Current phase: Phase 2 - Advanced delivery controls.
-- Current slice: Delivery public-contract package refactor is complete. The former flat `delivery.api` is organized by publish, processing, history, replay, and operations workflows; all types remain public and runtime behavior is unchanged. Phase 2B remains complete: bounded `Retry-After` parsing/persistence keeps PostgreSQL due-time authority; V14/V15 persist endpoint circuit state; fair claim SQL excludes unavailable circuits and atomically fences one cooldown-expired `HALF_OPEN` probe; conditional finalization and `UNKNOWN` recovery transition the matching circuit in the same short transaction as delivery state. Three qualifying receiver failures open one endpoint without idling healthy capacity. Metrics and owner-visible circuit state remain intentionally deferred.
+- Current phase: Phase 2 - Advanced delivery controls is complete. The next
+  phase is Phase 3 - Evidence-gated product and scale controls.
+- Current slice: Phase 3 Slice 1 local publisher rate limiting is complete under ADR-010. The API-process token bucket is per authenticated project, has a 60-request burst and 30-request-per-second refill, runs after authentication/path authorization but before body/database work, and counts equivalent idempotent retries. It returns `429 PUBLISH_RATE_LIMITED` with a positive `Retry-After`, retains no more than 10,000 idle-expiring buckets, and records bounded admission-outcome metrics only. It is bounded local state, not a quota or cluster guarantee. Versioned signing-secret rotation and event-schema versioning are deferred. Phase 2B remains complete: bounded `Retry-After` parsing/persistence keeps PostgreSQL due-time authority; V14/V15 persist endpoint circuit state; fair claim SQL excludes unavailable circuits and atomically fences one cooldown-expired `HALF_OPEN` probe; conditional finalization and `UNKNOWN` recovery transition the matching circuit in the same short transaction as delivery state. Three qualifying receiver failures open one endpoint without idling healthy capacity. Metrics and owner-visible circuit state remain intentionally deferred.
 - Repository state: Git repository on `main`; RelayForge backend foundation exists under `backend/` and the thin React/Vite owner dashboard exists under `frontend/`.
 - Backend baseline: Java 25, Spring Boot 4.1.0, Maven, Spring Web MVC, Apache HttpClient 5, Spring JDBC/Hikari, Hibernate/JPA, Flyway, PostgreSQL, Spring Security with JDBC Spring Session, Lombok 1.18.46 as a compile-time processor, Testcontainers 2.0.5, ArchUnit 1.4.2, and a required strict runtime-mode contract. V2 creates `owner_accounts`, V3 adds technical Spring Session tables, V4 creates `projects`, V5 creates `project_api_keys`, V6 creates `webhook_endpoints` plus `endpoint_subscriptions`, V7 creates immutable `events` plus original `deliveries`, V8 adds partial claim/recovery indexes, V9 creates `delivery_attempts`, V10 creates `attempt_late_diagnostics`, V11 adds replay lineage, replay idempotency, and history query indexes, and V12 adds terminal-history retention indexes. Identity supports opt-in bootstrap and generic credential verification; API mode has completed browser authentication, owner-scoped configuration access, publisher event acceptance, safe owner history, and CSRF-protected manual replay. Worker mode now has durable claim/recovery/attempt-start contracts, signed and SSRF-pinned outbound HTTP dispatch, conditional finalization/retry, post-attempt `UNKNOWN` recovery, bounded polling through local permit admission, and fixed-delay bounded cleanup of expired complete terminal graphs.
 - Local environment note: the default terminal Java is JDK 21 while this project requires JDK 25; Maven verification currently selects `C:\Program Files\Java\jdk-25` explicitly.
@@ -66,7 +67,9 @@ This file is the durable source of truth for project scope and progress. Update 
 | Receiver `Retry-After` | Honor exactly one valid non-negative delta-seconds field only on retryable HTTP `429`/`503`; cap it at 300 seconds, select `max(equal jitter, hint)`, and record only the effective delay/source | Respects explicit receiver overload signals without allowing receiver clocks, raw header data, or arbitrary values to weaken bounded PostgreSQL-authoritative retry scheduling. |
 | Worker polling defaults | 8 local permits, claim only up to free permits, poll every 500 ms plus 0-100 ms jitter | Bounds local concurrency and avoids claimed-work prefetch while retaining responsive demo latency. |
 | Phase 2 scheduling direction | Non-preemptive, work-conserving endpoint fairness replaces a fixed low per-endpoint cap: competing backlogged endpoints share newly available claim capacity, while one endpoint may burst into idle capacity | Prevents endpoint starvation without leaving worker permits unused; an endpoint that becomes backlogged is favored at the next free claim opportunity rather than cancelling active HTTP work. |
-| Advanced delivery sequence | Fair dispatch first, then bounded `Retry-After`, a PostgreSQL-backed endpoint circuit breaker, versioned signing-secret rotation, and event-schema versioning | Each step solves a concrete receiver-reliability or security problem and can be tested without adding infrastructure for keyword count. |
+| Advanced development sequence | Fair dispatch, bounded `Retry-After`, and a PostgreSQL-backed endpoint circuit breaker are complete; the next phase evaluates product and scale controls from measured need | Signing-secret rotation and event-schema versioning are no longer on the default roadmap. New infrastructure remains evidence-gated rather than a technology-count goal. |
+| Phase 3 delivery protocol | Treat each Phase 3 roadmap item as a parent initiative, not a fixed implementation slice; split it again when its scope, risk, or proof burden is too large | Implement accepted decisions autonomously. Pause only for a new material trade-off, presenting options and a recommendation for owner approval. |
+| Publisher admission | Local per-project token bucket: 60-request burst, 30 requests/second, atomic one-token consumption after API-key/path authorization and before body/database work; every admitted-path request, including an idempotent retry, counts | Bounds one valid project's burst without a pre-admission database lookup or a new distributed dependency. The result is `429 PUBLISH_RATE_LIMITED` plus a positive `Retry-After`; local state is not a durable quota or cluster guarantee. |
 | Distributed-component gate | RabbitMQ, SQS, Kafka, or Redis requires measured PostgreSQL queue, rate-limit, or cache evidence plus a reviewed consistency/cutover decision | Fairness alone does not justify a second source of truth or solve the event/database dual-write boundary. |
 | Configuration identifiers | Application-generated UUIDv4 with PostgreSQL `uuid`; lifecycle timestamps use `timestamptz` and PostgreSQL time | Keeps identifiers opaque and timestamps unambiguous without another generator dependency. |
 | Configuration concurrency | Optimistic `bigint version` on mutable owner, project, and endpoint aggregates | Detects dashboard lost updates without confusing them with worker lease/token fencing. |
@@ -221,6 +224,10 @@ This file is the durable source of truth for project scope and progress. Update 
 | 2026-08-31 | Phase 2B Slice 4 endpoint circuit-breaker contract | Accepted ADR-009: delivery-owned PostgreSQL circuit state has `CLOSED`, `OPEN`, and one token-fenced `HALF_OPEN` probe. Three consecutive qualifying receiver failures open an endpoint for 30 seconds; normal claims are excluded while a cooldown-expired endpoint can compete for one fair permit-bound probe. Finalization/recovery transitions the circuit atomically with delivery state; a probe success/nonqualifying result closes it, while qualifying/`UNKNOWN` probe outcomes reopen it. The contract preserves retry scheduling, endpoint disablement, at-least-once semantics, and PostgreSQL time. Documentation-only verification: `git diff --check` passed; no runtime behavior changed. |
 | 2026-08-31 | Phase 2B Slice 5 circuit persistence and contracts | Added V14 `endpoint_circuit_breakers` with constrained `CLOSED`/`OPEN`/`HALF_OPEN` shapes, endpoint and probe-delivery foreign keys, PostgreSQL timestamps, and no speculative query index. Added separate validated worker circuit defaults (three failures, 30-second cooldown, one probe), immutable delivery-owned state/read contracts, and a pure qualifying-observation classifier. No claim, finalization, recovery, metric, API, or UI workflow calls these contracts yet. Focused policy/configuration tests passed 4/4; PostgreSQL foundation tests passed 22/22 after V1-V14. Rebuilt local API/worker plus frontend; API health and dashboard sign-in smoke were clean. |
 | 2026-08-31 | Phase 2B Slice 6 circuit-breaker transactional behavior | Activated ADR-009 without adding a broker, Redis, cache, metric, or UI. Fair candidate SQL now excludes unexpired `OPEN`/all `HALF_OPEN` circuits and atomically changes exactly one cooldown-expired candidate into a token-fenced probe. Conditional finalization changes delivery/attempt state before applying the matching circuit transition in the same transaction; expired started probe recovery reopens only its matching fence. Testcontainers exposed an important migration defect: `CLOSED` must retain one/two-failure streaks, so V15 replaces V14's overly strict constraint safely. The final clean full Maven suite passed 131/131 after ArchUnit required the circuit settings contract to move from delivery internals to public API. The focused PostgreSQL circuit/claim/finalization/query-plan set passed 15/15; the plan returned eight candidates in 2.646 ms (planning 0.594 ms) on a small warm 128-row local fixture and accepted no new index. Rebuilt local API/worker reached health; the reloaded dashboard sign-in page had no console warnings/errors. |
+| 2026-08-31 | Advanced roadmap reprioritization | Deferred versioned signing-secret rotation and event-schema versioning, then renumbered evidence-gated product and scale controls from Phase 5 to Phase 3 as the next development phase. The first slice is an evidence review for bounded publisher abuse controls; no runtime behavior, dependency, infrastructure, or database design was accepted. Documentation whitespace validation passed. |
+| 2026-08-31 | Phase 3 delivery protocol | The owner set a progressive-slicing rule: each Phase 3 initiative may be split further if it is too broad, and material trade-offs require an explicit recommendation followed by owner approval before implementation. |
+| 2026-08-31 | Phase 3 Slice 1 local publisher rate-limit contract | Accepted ADR-010: one API process uses a bounded project-wide token bucket with capacity 60, refill 30 requests/second, 15-minute idle expiry, and 10,000 retained-bucket maximum. It runs after publisher authentication/path authorization but before body or database work; every request reaching it counts, including malformed bodies and equivalent idempotent retries. `429 PUBLISH_RATE_LIMITED` returns a positive `Retry-After` and creates no event/delivery. Redis, persistence, quotas, billing, and runtime implementation remain out of scope. Documentation whitespace validation passed. |
+| 2026-08-31 | Phase 3 Slice 1 local publisher rate-limit implementation | Implemented ADR-010 in API mode with an atomic monotonic-time per-project token bucket, 15-minute idle expiry, and 10,000-bucket cap. Publisher admission occurs after API-key/path authorization and before request-body reading or publishing; a rejection yields `429 PUBLISH_RATE_LIMITED` with ceiling `Retry-After`. Micrometer records only `admitted`/`rejected` outcomes and logs no identifier or payload. No dependency, migration, Redis, quota, or distributed behavior was introduced. Focused limiter/controller/HTTP Testcontainers tests passed 4/4. Local Compose rebuilt API/worker/frontend; API health was `UP` and dashboard HTTP availability was 200. |
 | 2026-08-31 | Delivery public-contract package refactor | Replaced the flat `delivery.api` directory with five workflow packages: `publish`, `processing`, `history`, `replay`, and `operations`. The refactor preserves each public type, visibility, signature, Spring wiring, database behavior, and ArchUnit public-API boundary; `application` and `JdbcDeliveryStore` were deliberately not moved. All imports and the matching parser test package were updated mechanically. Final verification: clean Maven/Testcontainers suite passed 131/131; local API/worker reached health; dashboard sign-in reload showed no browser console warnings/errors. |
 | 2026-08-27 | Dashboard UI refinement | Unified the React dashboard under one tokenized dark operational theme, corrected the project workspace’s width breakpoint and list-card stretching, and rebuilt Delivery operations as native dark-theme cards instead of its conflicting white surface. Added responsive one-column behavior, visible focus styling, reduced-motion handling, 44px base control targets, selected-state treatment, and safer long-value wrapping without changing API or delivery behavior. `npm run lint` and production build passed; the rebuilt Compose frontend was browser-checked across API-key, endpoint, and delivery panels at desktop and narrow widths with no horizontal overflow or console warnings/errors. |
 
@@ -285,26 +292,16 @@ This file is the durable source of truth for project scope and progress. Update 
    progress, one cross-worker probe, probe success close, and unknown-probe
    reopen. Bounded metrics and owner-visible safe state remain deferred.**
 
-### Phase 3 - Versioned signing-secret rotation
-
-Add prepare, one-time reveal, activate, overlap/grace, attempt-start version
-snapshot, and retire behavior while preserving encrypted storage and auditable
-attempt history.
-
-### Phase 4 - Event schema versioning
-
-Add immutable event-schema versions and publish-time validation so accepted
-events retain the exact contract version used, without payload transformations
-or user-supplied code.
-
-### Phase 5 - Evidence-gated product and scale controls
+### Phase 3 - Evidence-gated product and scale controls
 
 These are review points, not a promise to install every technology:
 
-1. Add bounded publisher rate limiting and per-project quotas only when the
-   public-demo or multi-tenant threat model needs abuse isolation. Keep a local
-   limiter for one instance; consider Redis only when several API instances
-   require shared low-latency counters and PostgreSQL remains authoritative.
+1. Define bounded publisher rate limiting and per-project quotas only when the
+   public-demo or multi-tenant threat model needs abuse isolation. **The local
+   one-instance rate-limit contract is complete in ADR-010; implementation and
+   persistent quotas remain separate slices.** Consider Redis only when several
+   API instances require shared low-latency counters and PostgreSQL remains
+   authoritative.
 2. Add bounded endpoint/project retry-policy customization only after
    `Retry-After` and circuit-breaker behavior have stable safe limits.
 3. Replace REST polling with SSE only if measured dashboard delay or polling
@@ -328,13 +325,16 @@ consumption, retry/dead-letter semantics, cutover, reconciliation, and rollback.
 
 ## Next recommended slice
 
-Owner review/commit the completed Phase 2B work. Then begin Phase 3 Slice 1:
-define the versioned signing-secret rotation contract/ADR before schema or
-runtime changes. Do not add Redis, a broker, custom retry policy, or endpoint
-rate limiting as part of that decision.
+Owner review/commit the Phase 3 Slice 1 contract. The next small slice, if the
+owner requests implementation, is the local API-process limiter with validated
+configuration and focused concurrency/API tests. Do not add Redis or another
+distributed component unless several API instances create a demonstrated
+shared-counter requirement.
 
 ## Deferred until evidence justifies them
 
+- Versioned signing-secret rotation.
+- Event-schema versioning and publish-time schema validation.
 - RabbitMQ, SQS, or Kafka.
 - Redis or distributed caching without a measured multi-instance counter/cache
   need.

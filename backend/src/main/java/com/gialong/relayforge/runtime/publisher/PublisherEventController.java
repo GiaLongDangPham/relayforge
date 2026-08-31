@@ -1,6 +1,4 @@
 package com.gialong.relayforge.runtime.publisher;
-import com.gialong.relayforge.delivery.api.publish.EventPublisher;
-import com.gialong.relayforge.delivery.api.publish.PublishEventResult;
 
 import com.gialong.relayforge.delivery.api.publish.EventPublisher;
 import com.gialong.relayforge.delivery.api.publish.PublishEventResult;
@@ -37,10 +35,16 @@ final class PublisherEventController {
 
     private final EventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final PublisherEventRateLimiter rateLimiter;
 
-    PublisherEventController(EventPublisher eventPublisher, ObjectMapper objectMapper) {
+    PublisherEventController(
+            EventPublisher eventPublisher,
+            ObjectMapper objectMapper,
+            PublisherEventRateLimiter rateLimiter
+    ) {
         this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.rateLimiter = Objects.requireNonNull(rateLimiter, "rateLimiter must not be null");
     }
 
     @PostMapping(consumes = "application/json")
@@ -53,6 +57,10 @@ final class PublisherEventController {
         VerifiedPublisherProject publisher = verifiedPublisher(authentication);
         if (!publisher.projectId().equals(projectId)) {
             throw new PublisherProjectForbiddenException();
+        }
+        PublisherRateLimitDecision admission = rateLimiter.admit(projectId);
+        if (!admission.admitted()) {
+            throw new PublisherRateLimitExceededException(admission.retryAfterSeconds());
         }
         ParsedPublishRequest parsed = parse(readBounded(request));
         PublishEventResult accepted = eventPublisher.publish(
