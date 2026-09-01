@@ -1,6 +1,6 @@
 # RelayForge Agent Context
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
 
 RelayForge is a portfolio learning project: an outbound webhook delivery platform that demonstrates reliable at-least-once dispatch under failure and concurrency.
 
@@ -40,6 +40,31 @@ the short retry transaction; a later update never rewrites persisted `due_at`.
 `ENDPOINT_POLICY` records only a strict floor winner. The dashboard exposes the
 optional setting; there is no project-level policy, scheduler, or new runtime
 dependency.
+
+Phase 3 Slice 4.1 measured the active Delivery dashboard polling baseline. One
+authenticated dashboard-equivalent local session makes five recurring GET reads
+every five seconds; four phase-offset cycles produced the expected 20 API
+requests, with per-route client p95 9.928--22.210 ms and one observed delivery
+transition visible after 2.809 seconds. This is not concurrent or production
+load evidence; it does not justify SSE, PostgreSQL `LISTEN/NOTIFY`, Redis, or a
+broker. Keep bounded REST polling unless a later measured symptom reaches the
+evidence gate.
+
+The owner has accepted Phase 3 Slice 4.2/ADR-013 as an explicit learning
+exception: API-mode SSE is a best-effort, owner/project-scoped invalidation
+hint from post-commit PostgreSQL `NOTIFY`/`LISTEN`, never a durable or
+correctness-critical event source. It carries only project/delivery identity
+and observation time for committed worker finalization/`UNKNOWN` recovery;
+REST remains authoritative and five-second polling remains the recovery path.
+
+Phase 3 Slice 4.3 now implements that API-only bridge. Committed delivery
+finalization and expired-`UNKNOWN` recovery call PostgreSQL `pg_notify` in the
+same transaction; a dedicated, reconnecting API listener connection fans only
+the project ID, delivery ID, and observation time to owner-authorized SSE
+streams. It keeps a 15-second heartbeat and 15-minute lifetime, cleanly closes
+streams at shutdown, and exposes bounded outcome-only metrics. The stream has
+no replay, ordering, or correctness guarantee; worker composition has no SSE
+route or listener. Frontend `EventSource` integration remains a later slice.
 
 The backend uses `com.gialong.relayforge` with `identity`, `project`, `endpoint`, and `delivery` capability packages. ArchUnit tests enforce the approved dependency graph, cycle freedom, and cross-module public-API access. A strict required `relayforge.runtime=api|worker` selects one process. Both modes use a servlet context: API hosts business routes; worker hosts only health/Prometheus behind a management permit chain and deny-all fallback. The persistence foundation uses Spring JDBC/Hikari, Flyway, Hibernate/JPA, and PostgreSQL Testcontainers against pinned PostgreSQL 17.10 in the `public` schema. V2 creates `owner_accounts`; V3 creates the technical Spring Session tables. Identity has race-safe JDBC bootstrap and ordinary JPA credential lookup, with BCrypt work outside short transactions, dummy work for unknown users, generic invalid outcomes, and no public hash exposure.
 

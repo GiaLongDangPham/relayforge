@@ -68,6 +68,26 @@ Every owner mutation, including login and logout, requires a CSRF token delivere
 - Wildcard origin with credentials is forbidden.
 - Preflight does not expose authorization or secret headers beyond the explicit contract.
 
+### 2.5 Owner delivery-update SSE stream
+
+The read-only owner SSE endpoint in ADR-013 authenticates through the existing
+`RF_SESSION`; it is not a publisher-key route and requires no CSRF header.
+Project ownership is checked before a stream body begins, and cross-owner or
+guessed project identifiers receive the same 404 behavior as owner history.
+
+The stream never accepts a token in its URL or query string. It uses the same
+explicit credentialed dashboard CORS origin as the REST owner API, sends
+`Cache-Control: no-store`, and contains only the bounded project/delivery
+identity invalidation envelope defined by the API contract. It must not carry
+payloads, endpoint or receiver details, response previews, claim/lease tokens,
+session/CSRF values, raw notification envelopes, or secrets.
+
+The API bounds each connection's lifetime and heartbeat, and disconnects are
+treated as ordinary best-effort transport loss. Session expiry, logout, API
+restart, or PostgreSQL listener loss must not leave an authorized stream
+indefinitely active or influence delivery processing. REST remains the
+authoritative recovery path.
+
 ## 3. Publisher API keys
 
 ### 3.1 Token format and generation

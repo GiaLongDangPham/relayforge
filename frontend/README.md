@@ -23,6 +23,6 @@ The browser includes the HttpOnly `RF_SESSION` cookie with each API request. It 
 The dashboard is intentionally an operational demo rather than a second implementation of RelayForge rules. It supports project configuration, one-time API-key and endpoint-secret presentation, endpoint enablement/configuration, and owner history/replay inspection.
 
 - TanStack Query caches only safe server metadata. Raw API keys and signing secrets are local component state, are shown once after creation, and are cleared when dismissed.
-- The deliveries tab polls bounded REST endpoints only while visible; it does not create an SSE/WebSocket lifecycle for Portfolio v1.
+- The deliveries tab currently polls bounded REST endpoints only while visible. Slice 4.3 provides an API-only best-effort SSE invalidation endpoint under ADR-013; frontend `EventSource` use remains deferred, and REST polling remains the recovery path. WebSocket remains out of scope.
 - Payloads and receiver previews are rendered as ordinary React text. No dashboard view injects receiver-controlled content as HTML.
 - Each replay button retains an idempotency UUID only in the open component instance, allowing a user to retry a failed browser request without requesting a second replay.

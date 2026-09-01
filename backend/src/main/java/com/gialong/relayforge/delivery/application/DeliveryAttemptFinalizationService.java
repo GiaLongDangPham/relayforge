@@ -31,6 +31,7 @@ final class DeliveryAttemptFinalizationService implements DeliveryAttemptFinaliz
     private final EndpointRetryPolicySnapshotQuery endpointRetryPolicies;
     private final CircuitBreakerSettings circuitBreakerSettings;
     private final CircuitBreakerPolicy circuitBreakerPolicy;
+    private final DeliveryUpdateNotifier deliveryUpdateNotifier;
     private final TransactionTemplate transaction;
 
     DeliveryAttemptFinalizationService(
@@ -38,6 +39,7 @@ final class DeliveryAttemptFinalizationService implements DeliveryAttemptFinaliz
             RetryDelayPolicy retryDelayPolicy,
             EndpointRetryPolicySnapshotQuery endpointRetryPolicies,
             CircuitBreakerSettings circuitBreakerSettings,
+            DeliveryUpdateNotifier deliveryUpdateNotifier,
             PlatformTransactionManager transactionManager
     ) {
         this.deliveryStore = Objects.requireNonNull(deliveryStore, "deliveryStore must not be null");
@@ -48,6 +50,10 @@ final class DeliveryAttemptFinalizationService implements DeliveryAttemptFinaliz
                 "circuitBreakerSettings must not be null"
         );
         this.circuitBreakerPolicy = new CircuitBreakerPolicy();
+        this.deliveryUpdateNotifier = Objects.requireNonNull(
+                deliveryUpdateNotifier,
+                "deliveryUpdateNotifier must not be null"
+        );
         this.transaction = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager must not be null"));
         this.transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
@@ -99,6 +105,7 @@ final class DeliveryAttemptFinalizationService implements DeliveryAttemptFinaliz
                     qualifyingFailure,
                     circuitBreakerSettings
             );
+            deliveryUpdateNotifier.publishCommittedDeliveryChange(instruction.projectId(), instruction.deliveryId());
             return AttemptFinalizationResult.FINALIZED;
         }
         return deliveryStore.recordLateDiagnostic(instruction, completion, java.util.UUID.randomUUID())

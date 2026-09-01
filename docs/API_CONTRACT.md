@@ -1,11 +1,11 @@
 # RelayForge Portfolio v1 API Contract
 
 Status: Phase 0 baseline
-Last updated: 2026-08-09
+Last updated: 2026-09-01
 
 ## 1. Purpose and boundary
 
-This document defines the minimum HTTP contract required to implement and demo Portfolio v1. It covers owner authentication, project configuration, publisher event acceptance, history inspection, and replay.
+This document defines the minimum HTTP contract required to implement and demo Portfolio v1. It covers owner authentication, project configuration, publisher event acceptance, history inspection, replay, and one best-effort owner delivery-update stream.
 
 It is a behavioral baseline, not an OpenAPI file or controller implementation. Exact validation annotations, Java DTOs, generated clients, and frontend components are deferred.
 
@@ -15,7 +15,7 @@ It is a behavioral baseline, not an OpenAPI file or controller implementation. E
 - JSON property names use `camelCase`.
 - UUIDs are lowercase canonical strings.
 - Instants are UTC RFC 3339 strings, for example `2026-08-09T12:34:56.789Z`.
-- Request and response content type is `application/json` except Problem Details errors.
+- Request and response content type is `application/json` except Problem Details errors and the explicit SSE stream.
 - Unknown request fields are rejected in write commands, preventing silent client mistakes.
 - Server-managed fields such as owner ID, project ID, state, attempt count, timestamps, claim token, and signing-secret ciphertext are never accepted from clients unless explicitly listed.
 - Claim tokens and internal leases are not exposed by the business API.
@@ -372,6 +372,31 @@ Returns at most five attempt summaries ordered by `attemptNumber asc`; no cursor
 
 Returns one attempt detail including bounded, escaped response preview, truncation flag, destination fingerprint, and optional late diagnostic. It never returns the exact destination URL snapshot, claim token, secrets, request/response headers, or unbounded receiver body.
 
+### `GET /api/v1/projects/{projectId}/delivery-updates`
+
+Owner session only. This read-only endpoint requires no CSRF header. It first
+performs normal project ownership authorization and returns 404 without a
+stream body for a project the owner does not own.
+
+On success it returns `text/event-stream`, `Cache-Control: no-store`, and a
+best-effort stream of `delivery.changed` invalidation hints:
+
+```text
+event: delivery.changed
+data: {"projectId":"uuid","deliveryId":"uuid","observedAt":"instant"}
+```
+
+The message is emitted only for committed worker finalization or `UNKNOWN`
+recovery transitions in the selected project. It contains no delivery state,
+attempt result, endpoint/receiver data, payload, preview, token, or secret.
+The browser refetches the existing REST history representation after receiving
+a hint and retains five-second REST polling as fallback.
+
+This is neither an event log nor a delivery correctness contract. It provides
+no replay, `Last-Event-ID`, ordering, uniqueness, or completeness guarantee;
+messages may be duplicated, coalesced, or missed around a disconnect or API
+restart. A stream has heartbeat comments and a bounded 15-minute lifetime.
+
 ## 12. Replay
 
 ### `POST /api/v1/projects/{projectId}/deliveries/{deliveryId}/replays`
@@ -450,7 +475,7 @@ Future API-level tests must prove:
 - Manual retry of success/permanent failure.
 - Replay of a non-exhausted delivery.
 - Bulk publish, bulk replay, or arbitrary filtering language.
-- WebSocket/SSE status stream; the dashboard polls bounded REST endpoints.
+- WebSocket status stream.
 - Ordering or exactly-once guarantees.
 
 The implementation may refine field naming through an OpenAPI review, but it must not weaken authentication separation, idempotency, ownership scoping, concurrency conflicts, secret one-time visibility, cursor stability, or delivery semantics.

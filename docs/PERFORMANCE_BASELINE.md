@@ -77,6 +77,37 @@ errors during startup. The final run removed that interference with
 optimization. Repeat this exact workload before and after any future tuning
 change, then compare the same metrics and diagnostic context.
 
+## Phase 3 Slice 4.1: dashboard REST-polling baseline
+
+This controlled local run measures one authenticated dashboard-equivalent
+Delivery workspace before considering SSE. It does not automate a real browser
+or measure concurrent dashboard sessions.
+
+| Observation | Measured value |
+| --- | ---: |
+| Recurring visible-tab queries | 5 GET routes every 5 seconds |
+| Controlled cycles | 4, with a 2.5-second initial phase offset |
+| Expected / observed recurring requests | 20 / 20 |
+| Per-route client p95 round trip | 9.928--22.210 ms |
+| Observed retryable-state visibility delay | 2.809 s |
+
+The five routes are event list/detail, delivery list/detail, and attempt list.
+Attempt detail is loaded on selection but has no polling interval. The harness
+uses a fresh local owner/project/key and a controlled slow receiver; it records
+the API `http_server_requests_seconds_count` delta before/after the polling
+window and stores only aggregate, ignored results. Credentials, raw keys,
+secrets, IDs, payloads, and destination URLs are not recorded.
+
+The 2.809-second observation is one deliberately phase-offset sample from the
+persisted retryable-attempt completion to the next delivery-list response, not
+an end-user SLA. The five-second interval still permits close to five seconds
+of normal stale time plus request rendering. No concurrent-session, production,
+or EC2 load was measured. This small evidence does **not** establish a
+performance need for SSE, `LISTEN/NOTIFY`, Redis, or a broker. The owner
+subsequently accepted ADR-013 as a bounded learning extension: it keeps REST
+and PostgreSQL authoritative, retains polling fallback, and makes no
+performance/capacity claim.
+
 ## Phase 2A claim-order baseline: noisy neighbor
 
 This focused PostgreSQL integration fixture establishes the behavioral baseline

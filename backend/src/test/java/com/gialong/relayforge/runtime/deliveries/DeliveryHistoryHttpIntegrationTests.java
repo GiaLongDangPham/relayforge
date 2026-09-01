@@ -1,8 +1,11 @@
 package com.gialong.relayforge.runtime.deliveries;
-import com.gialong.relayforge.delivery.api.publish.EventPublisher;
-import com.gialong.relayforge.delivery.api.publish.PublishEventResult;
-
 import com.gialong.relayforge.RelayForgeApplication;
+import com.gialong.relayforge.delivery.api.processing.ClaimedDelivery;
+import com.gialong.relayforge.delivery.api.processing.DeliveryAttemptFinalizer;
+import com.gialong.relayforge.delivery.api.processing.DeliveryAttemptStarter;
+import com.gialong.relayforge.delivery.api.processing.DeliveryClaimer;
+import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
+import com.gialong.relayforge.delivery.api.processing.DispatchObservation;
 import com.gialong.relayforge.delivery.api.publish.EventPublisher;
 import com.gialong.relayforge.delivery.api.publish.PublishEventResult;
 import com.gialong.relayforge.endpoint.api.WebhookEndpointCatalog;
@@ -10,6 +13,7 @@ import com.gialong.relayforge.identity.api.OwnerBootstrap;
 import com.gialong.relayforge.identity.api.OwnerBootstrapResult;
 import com.gialong.relayforge.project.api.ProjectCatalog;
 import com.gialong.relayforge.project.api.ProjectDetails;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -26,12 +30,17 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -60,6 +69,10 @@ class DeliveryHistoryHttpIntegrationTests {
             ProjectCatalog projectCatalog = context.getBean(ProjectCatalog.class);
             WebhookEndpointCatalog endpointCatalog = context.getBean(WebhookEndpointCatalog.class);
             EventPublisher eventPublisher = context.getBean(EventPublisher.class);
+            DeliveryClaimer deliveryClaimer = context.getBean(DeliveryClaimer.class);
+            DeliveryAttemptStarter attemptStarter = context.getBean(DeliveryAttemptStarter.class);
+            DeliveryAttemptFinalizer finalizer = context.getBean(DeliveryAttemptFinalizer.class);
+            MeterRegistry meterRegistry = context.getBean(MeterRegistry.class);
             JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
             UUID ownerId = bootstrap(ownerBootstrap, OWNER_LOGIN).ownerId();
             UUID otherOwnerId = bootstrap(ownerBootstrap, OTHER_OWNER_LOGIN).ownerId();
@@ -101,12 +114,58 @@ class DeliveryHistoryHttpIntegrationTests {
             assertThat(detail.statusCode()).isEqualTo(200);
             assertThat(detail.body()).contains("inv-http");
 
+            URI updatesUri = baseUri.resolve("/api/v1/projects/" + project.id() + "/delivery-updates");
+            HttpResponse<InputStream> updates = ownerBrowser.send(
+                    HttpRequest.newBuilder(updatesUri)
+                            .header("Accept", "text/event-stream")
+                            .GET()
+                            .build(),
+                    BodyHandlers.ofInputStream()
+            );
+            assertThat(updates.statusCode()).isEqualTo(200);
+            assertThat(updates.headers().firstValue("Content-Type").orElse("")).contains("text/event-stream");
+            assertThat(updates.headers().firstValue("Cache-Control")).hasValue("no-store");
+            awaitListenerConnection(meterRegistry);
+            try (InputStream updatesBody = updates.body();
+                 BufferedReader updatesReader = new BufferedReader(new InputStreamReader(updatesBody, StandardCharsets.UTF_8));
+                 var readerExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+                assertThat(updatesReader.readLine()).isEqualTo(":connected");
+
+                PublishEventResult liveUpdateEvent = eventPublisher.publish(
+                        project.id(), "history-http-live-update", "invoice.paid", "{\"invoiceId\":\"inv-live\"}"
+                );
+                ClaimedDelivery claim = deliveryClaimer.claim(1, Duration.ofSeconds(15)).getFirst();
+                try (DispatchInstruction instruction = attemptStarter.start(claim, Duration.ofSeconds(20)).orElseThrow();
+                     DispatchObservation observation = DispatchObservation.httpResponse(
+                             DispatchObservation.Outcome.SUCCEEDED,
+                             204,
+                             Duration.ofMillis(10),
+                             new byte[0],
+                             false
+                     )) {
+                    assertThat(instruction.eventId()).isEqualTo(liveUpdateEvent.eventId());
+                    finalizer.finalizeAttempt(instruction, observation);
+                    var line = readerExecutor.submit(() -> nextEventLine(updatesReader));
+                    assertThat(line.get(5, TimeUnit.SECONDS)).isEqualTo("event:delivery.changed");
+                    assertThat(updatesReader.readLine())
+                            .contains("\"projectId\":\"" + project.id() + "\"")
+                            .contains("\"deliveryId\":\"" + instruction.deliveryId() + "\"")
+                            .doesNotContain("SUCCEEDED")
+                            .doesNotContain("inv-live");
+                }
+            }
+
             HttpClient otherBrowser = browserClient();
             login(otherBrowser, baseUri, OTHER_OWNER_LOGIN);
             HttpResponse<String> crossOwner = otherBrowser.send(
                     HttpRequest.newBuilder(eventDetail).GET().build(), BodyHandlers.ofString()
             );
             assertProblem(crossOwner, 404, "RESOURCE_NOT_FOUND");
+            HttpResponse<String> crossOwnerUpdates = otherBrowser.send(
+                    HttpRequest.newBuilder(updatesUri).GET().build(),
+                    BodyHandlers.ofString()
+            );
+            assertProblem(crossOwnerUpdates, 404, "RESOURCE_NOT_FOUND");
             assertThat(otherOwnerId).isNotEqualTo(ownerId);
 
             URI replayUri = baseUri.resolve(
@@ -180,6 +239,29 @@ class DeliveryHistoryHttpIntegrationTests {
         assertThat(response.body()).contains("\"code\":\"" + code + "\"");
     }
 
+    private static void awaitListenerConnection(MeterRegistry meterRegistry) throws InterruptedException {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            var counter = meterRegistry.find("relayforge.dashboard_updates.listener")
+                    .tag("outcome", "connected")
+                    .counter();
+            if (counter != null && counter.count() >= 1) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        throw new AssertionError("API PostgreSQL listener did not connect");
+    }
+
+    private static String nextEventLine(BufferedReader reader) throws Exception {
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (line.startsWith("event:")) {
+                return line;
+            }
+        }
+        throw new AssertionError("SSE stream closed before delivery.changed");
+    }
+
     private OwnerBootstrapResult bootstrap(OwnerBootstrap ownerBootstrap, String loginName) {
         char[] password = PASSWORD.toCharArray();
         try {
@@ -197,7 +279,8 @@ class DeliveryHistoryHttpIntegrationTests {
                         "spring.datasource.url", POSTGRES.getJdbcUrl(),
                         "spring.datasource.username", POSTGRES.getUsername(),
                         "spring.datasource.password", POSTGRES.getPassword(),
-                        "server.port", "0"
+                        "server.port", "0",
+                        "spring.lifecycle.timeout-per-shutdown-phase", "1s"
                 ))
                 .run();
     }

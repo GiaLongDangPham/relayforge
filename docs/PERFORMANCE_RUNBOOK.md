@@ -164,6 +164,36 @@ Do not increase worker permits, Hikari size, thread pools, memory, or add a
 cache merely because load is present. A change is accepted only if it improves
 the relevant measured symptom without violating existing delivery invariants.
 
+## 6. Measure the dashboard polling baseline before considering SSE
+
+Phase 3 Slice 4.1 measures the existing authenticated Delivery workspace before
+any live-update design is accepted. Its steady state contains five visible-tab
+REST reads at a five-second interval: event list/detail, delivery list/detail,
+and attempt list. Attempt detail is fetched on selection only; it does not
+poll.
+
+Start the normal local stack, then run:
+
+```powershell
+./scripts/measure-dashboard-polling.ps1
+```
+
+The script creates a fresh local project/key/slow-receiver fixture, waits until
+the worker has begun its controlled attempt, then uses a 2.5-second initial
+phase offset and executes four five-second polling cycles with the same
+recurring routes as the dashboard. It snapshots
+the API's `http_server_requests_seconds_count` counters immediately before and
+after the cycles, records client round-trip summaries, and observes the delay
+from the persisted retryable attempt completion to the next delivery-list
+response. Its ignored result is `performance/results/dashboard-polling.json`.
+
+The fixture credentials, raw API key, signing secret, IDs, payload, and exact
+destination are neither printed nor written to that result. This is one local
+dashboard-equivalent session, not a browser load test, production capacity
+claim, or end-user latency SLA. The owner has accepted ADR-013 as a
+learning-oriented exception after this run; it is not evidence of a
+performance need for SSE.
+
 ## Evidence record template
 
 Use this compact format in a future committed report after a completed run:

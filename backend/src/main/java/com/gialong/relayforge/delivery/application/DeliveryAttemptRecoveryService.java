@@ -24,6 +24,7 @@ final class DeliveryAttemptRecoveryService implements DeliveryAttemptRecovery {
     private final RetryDelayPolicy retryDelayPolicy;
     private final EndpointRetryPolicySnapshotQuery endpointRetryPolicies;
     private final CircuitBreakerSettings circuitBreakerSettings;
+    private final DeliveryUpdateNotifier deliveryUpdateNotifier;
     private final TransactionTemplate transaction;
 
     DeliveryAttemptRecoveryService(
@@ -31,6 +32,7 @@ final class DeliveryAttemptRecoveryService implements DeliveryAttemptRecovery {
             RetryDelayPolicy retryDelayPolicy,
             EndpointRetryPolicySnapshotQuery endpointRetryPolicies,
             CircuitBreakerSettings circuitBreakerSettings,
+            DeliveryUpdateNotifier deliveryUpdateNotifier,
             PlatformTransactionManager transactionManager
     ) {
         this.deliveryStore = Objects.requireNonNull(deliveryStore, "deliveryStore must not be null");
@@ -39,6 +41,10 @@ final class DeliveryAttemptRecoveryService implements DeliveryAttemptRecovery {
         this.circuitBreakerSettings = Objects.requireNonNull(
                 circuitBreakerSettings,
                 "circuitBreakerSettings must not be null"
+        );
+        this.deliveryUpdateNotifier = Objects.requireNonNull(
+                deliveryUpdateNotifier,
+                "deliveryUpdateNotifier must not be null"
         );
         this.transaction = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager must not be null"));
         this.transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
@@ -67,6 +73,9 @@ final class DeliveryAttemptRecoveryService implements DeliveryAttemptRecovery {
             );
             if (deliveryStore.recoverExpiredStartedAttempt(expiredAttempt, decision)) {
                 deliveryStore.reopenCircuitForRecoveredHalfOpenProbe(expiredAttempt, circuitBreakerSettings);
+                deliveryUpdateNotifier.publishCommittedDeliveryChange(
+                        expiredAttempt.projectId(), expiredAttempt.deliveryId()
+                );
                 recovered++;
             }
         }
