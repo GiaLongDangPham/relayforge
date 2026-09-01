@@ -88,8 +88,8 @@ class PostgreSqlFoundationTests {
         var currentMigration = flyway.info().current();
 
         assertThat(currentMigration).isNotNull();
-        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("15");
-        assertThat(currentMigration.getDescription()).isEqualTo("allow closed circuit failure streak");
+        assertThat(currentMigration.getVersion().getVersion()).isEqualTo("17");
+        assertThat(currentMigration.getDescription()).isEqualTo("add endpoint retry floor");
 
         Integer successfulMigrations = jdbcTemplate.queryForObject(
                 "select count(*) from flyway_schema_history where success",
@@ -102,7 +102,7 @@ class PostgreSqlFoundationTests {
                 String.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(15);
+        assertThat(successfulMigrations).isEqualTo(17);
         assertThat(tables).containsExactly(
                 "attempt_late_diagnostics",
                 "deliveries",
@@ -112,6 +112,7 @@ class PostgreSqlFoundationTests {
                 "events",
                 "owner_accounts",
                 "project_api_keys",
+                "project_publish_quota_usage",
                 "projects",
                 "replay_requests",
                 "spring_session",

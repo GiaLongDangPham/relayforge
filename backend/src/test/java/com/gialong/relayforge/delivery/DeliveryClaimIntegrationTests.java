@@ -104,6 +104,7 @@ class DeliveryClaimIntegrationTests {
         jdbcTemplate.update("delete from webhook_endpoints");
         jdbcTemplate.update("delete from events");
         jdbcTemplate.update("delete from project_api_keys");
+        jdbcTemplate.update("delete from project_publish_quota_usage");
         jdbcTemplate.update("delete from projects");
         jdbcTemplate.update("delete from owner_accounts");
     }

@@ -8,6 +8,9 @@ Complete Phase 3 Slice 3.2--3.4: persist the accepted bounded per-endpoint
 retry floor, expose it through the owner API and dashboard, and apply it during
 retry finalization and `UNKNOWN` recovery.
 
+Repair the full-suite fixture cleanup regression exposed after V16 introduced
+the project quota usage foreign key.
+
 ## Decisions
 
 - ADR-012 defines an optional endpoint-owned whole-second minimum retry delay
@@ -41,6 +44,8 @@ user-supplied retry logic.
 - Focused policy, endpoint API, owner HTTP, and PostgreSQL finalization/recovery
   tests passed 13/13.
 - Frontend lint and production build passed.
+- Full Testcontainers suite passed 140/140 after all project fixtures delete
+  quota usage before their parent project.
 
 ## Next action
 
