@@ -126,6 +126,7 @@ class DeliveryHistoryHttpIntegrationTests {
             assertThat(updates.headers().firstValue("Content-Type").orElse("")).contains("text/event-stream");
             assertThat(updates.headers().firstValue("Cache-Control")).hasValue("no-store");
             awaitListenerConnection(meterRegistry);
+            restartDedicatedListener(jdbcTemplate, meterRegistry);
             try (InputStream updatesBody = updates.body();
                  BufferedReader updatesReader = new BufferedReader(new InputStreamReader(updatesBody, StandardCharsets.UTF_8));
                  var readerExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -240,16 +241,43 @@ class DeliveryHistoryHttpIntegrationTests {
     }
 
     private static void awaitListenerConnection(MeterRegistry meterRegistry) throws InterruptedException {
+        awaitCounterAtLeast(meterRegistry, "relayforge.dashboard_updates.listener", "connected", 1);
+    }
+
+    private static void restartDedicatedListener(JdbcTemplate jdbcTemplate, MeterRegistry meterRegistry) throws InterruptedException {
+        double initialConnections = counterValue(meterRegistry, "relayforge.dashboard_updates.listener", "connected");
+        Integer listenerPid = jdbcTemplate.queryForObject(
+                "select pid from pg_stat_activity where datname = current_database() "
+                        + "and query = 'listen relayforge_delivery_updates' and pid <> pg_backend_pid() "
+                        + "order by backend_start desc limit 1",
+                Integer.class
+        );
+        assertThat(listenerPid).isNotNull();
+        Boolean terminated = jdbcTemplate.queryForObject("select pg_terminate_backend(?)", Boolean.class, listenerPid);
+        assertThat(terminated).isTrue();
+
+        awaitCounterAtLeast(meterRegistry, "relayforge.dashboard_updates.listener", "reconnect", 1);
+        awaitCounterAtLeast(meterRegistry, "relayforge.dashboard_updates.listener", "connected", initialConnections + 1);
+    }
+
+    private static void awaitCounterAtLeast(
+            MeterRegistry meterRegistry,
+            String name,
+            String outcome,
+            double expectedMinimum
+    ) throws InterruptedException {
         for (int attempt = 0; attempt < 100; attempt++) {
-            var counter = meterRegistry.find("relayforge.dashboard_updates.listener")
-                    .tag("outcome", "connected")
-                    .counter();
-            if (counter != null && counter.count() >= 1) {
+            if (counterValue(meterRegistry, name, outcome) >= expectedMinimum) {
                 return;
             }
             Thread.sleep(25);
         }
-        throw new AssertionError("API PostgreSQL listener did not connect");
+        throw new AssertionError("Counter " + name + " outcome=" + outcome + " did not reach " + expectedMinimum);
+    }
+
+    private static double counterValue(MeterRegistry meterRegistry, String name, String outcome) {
+        var counter = meterRegistry.find(name).tag("outcome", outcome).counter();
+        return counter == null ? 0 : counter.count();
     }
 
     private static String nextEventLine(BufferedReader reader) throws Exception {

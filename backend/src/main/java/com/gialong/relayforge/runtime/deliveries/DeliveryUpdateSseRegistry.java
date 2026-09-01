@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** API-local, project-keyed SSE fan-out. It intentionally retains no delivery state or replay buffer. */
 @Component
@@ -37,8 +38,11 @@ final class DeliveryUpdateSseRegistry implements SmartLifecycle {
     @Override
     public void stop() {
         running = false;
-        for (Set<SseEmitter> emitters : emittersByProject.values()) {
-            emitters.forEach(SseEmitter::complete);
+        for (var entry : emittersByProject.entrySet()) {
+            for (SseEmitter emitter : entry.getValue()) {
+                remove(entry.getKey(), emitter, "closed");
+                emitter.complete();
+            }
         }
         emittersByProject.clear();
     }
@@ -101,11 +105,16 @@ final class DeliveryUpdateSseRegistry implements SmartLifecycle {
     }
 
     private void remove(UUID projectId, SseEmitter emitter, String outcome) {
+        AtomicBoolean removed = new AtomicBoolean();
         emittersByProject.computeIfPresent(projectId, (ignored, emitters) -> {
-            emitters.remove(emitter);
+            if (emitters.remove(emitter)) {
+                removed.set(true);
+            }
             return emitters.isEmpty() ? null : emitters;
         });
-        meter(outcome).increment();
+        if (removed.get()) {
+            meter(outcome).increment();
+        }
     }
 
     private io.micrometer.core.instrument.Counter meter(String outcome) {
