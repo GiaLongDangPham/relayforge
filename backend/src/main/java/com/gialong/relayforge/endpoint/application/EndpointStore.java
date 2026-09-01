@@ -22,6 +22,7 @@ public interface EndpointStore {
             String validatedDestinationUrl,
             List<String> normalizedEventTypes,
             boolean enabled,
+            Integer minimumRetryDelaySeconds,
             EncryptedEndpointSecret encryptedSecret
     );
 
@@ -44,12 +45,15 @@ public interface EndpointStore {
 
     Optional<LockedEndpointAttemptConfiguration> lockForAttempt(UUID projectId, UUID endpointId);
 
+    Optional<LockedEndpointRetryPolicy> lockRetryPolicy(UUID projectId, UUID endpointId);
+
     Optional<WebhookEndpointDetails> replaceConfiguration(
             UUID projectId,
             UUID endpointId,
             String normalizedName,
             String validatedDestinationUrl,
             List<String> normalizedEventTypes,
+            Integer minimumRetryDelaySeconds,
             long expectedVersion
     );
 

@@ -220,7 +220,8 @@ Owner session + CSRF. Request:
   "name": "Billing Receiver",
   "destinationUrl": "https://receiver.example/webhooks",
   "eventTypes": ["invoice.paid", "invoice.failed"],
-  "enabled": true
+  "enabled": true,
+  "minimumRetryDelaySeconds": 120
 }
 ```
 
@@ -234,6 +235,7 @@ Returns 201. `signingSecret` appears only in this response:
   "destinationUrl": "https://receiver.example/webhooks",
   "eventTypes": ["invoice.failed", "invoice.paid"],
   "enabled": true,
+  "minimumRetryDelaySeconds": 120,
   "version": 0,
   "signingSecret": "whsec_...",
   "createdAt": "instant",
@@ -253,18 +255,23 @@ Returns one endpoint without signing material.
 
 ### `PUT /api/v1/projects/{projectId}/endpoints/{endpointId}`
 
-Owner session + CSRF. Replaces name, destination URL, and the complete exact subscription set in one optimistic transaction. It does not change enabled state or signing secret.
+Owner session + CSRF. Replaces name, destination URL, complete exact
+subscription set, and optional retry floor in one optimistic transaction. It
+does not change enabled state or signing secret.
 
 ```json
 {
   "name": "Billing Receiver",
   "destinationUrl": "https://new.example/webhooks",
   "eventTypes": ["invoice.paid"],
+  "minimumRetryDelaySeconds": null,
   "version": 0
 }
 ```
 
 Returns the endpoint with incremented version. Empty subscriptions are rejected.
+`minimumRetryDelaySeconds` is optional/null to retain ordinary scheduling, or a
+whole number from 5 through 300 that can only lengthen retries.
 
 ### `POST /api/v1/projects/{projectId}/endpoints/{endpointId}/enable`
 

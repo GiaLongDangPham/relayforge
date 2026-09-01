@@ -15,6 +15,7 @@ public record WebhookEndpointDetails(
         String destinationUrl,
         List<String> eventTypes,
         boolean enabled,
+        Integer minimumRetryDelaySeconds,
         long version,
         Instant createdAt,
         Instant updatedAt
@@ -28,6 +29,10 @@ public record WebhookEndpointDetails(
         eventTypes = List.copyOf(Objects.requireNonNull(eventTypes, "eventTypes must not be null"));
         if (eventTypes.isEmpty()) {
             throw new IllegalArgumentException("eventTypes must not be empty");
+        }
+        if (minimumRetryDelaySeconds != null
+                && (minimumRetryDelaySeconds < 5 || minimumRetryDelaySeconds > 300)) {
+            throw new IllegalArgumentException("minimumRetryDelaySeconds must be between 5 and 300 when present");
         }
         if (version < 0) {
             throw new IllegalArgumentException("version must not be negative");

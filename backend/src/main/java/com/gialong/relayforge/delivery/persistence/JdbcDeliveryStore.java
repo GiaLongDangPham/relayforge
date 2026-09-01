@@ -747,8 +747,8 @@ public class JdbcDeliveryStore implements DeliveryStore, EndpointCircuitStore {
     @Transactional(propagation = Propagation.MANDATORY)
     public List<ExpiredStartedAttempt> lockExpiredStartedAttempts(int capacity) {
         return jdbcTemplate.query(
-                "select delivery.id as delivery_id, attempt.id as attempt_id, delivery.claim_token, "
-                        + "delivery.attempt_count from public.deliveries delivery "
+                "select delivery.project_id, delivery.endpoint_id, delivery.id as delivery_id, attempt.id as attempt_id, "
+                        + "delivery.claim_token, delivery.attempt_count from public.deliveries delivery "
                         + "join public.delivery_attempts attempt on attempt.delivery_id = delivery.id "
                         + "and attempt.claim_token = delivery.claim_token and attempt.status = 'STARTED' "
                         + "where delivery.state = 'CLAIMED' and delivery.lease_expires_at <= CURRENT_TIMESTAMP "
@@ -1328,6 +1328,8 @@ public class JdbcDeliveryStore implements DeliveryStore, EndpointCircuitStore {
 
     private ExpiredStartedAttempt mapExpiredStartedAttempt(ResultSet resultSet, int rowNumber) throws SQLException {
         return new ExpiredStartedAttempt(
+                resultSet.getObject("project_id", UUID.class),
+                resultSet.getObject("endpoint_id", UUID.class),
                 resultSet.getObject("delivery_id", UUID.class),
                 resultSet.getObject("attempt_id", UUID.class),
                 resultSet.getObject("claim_token", UUID.class),

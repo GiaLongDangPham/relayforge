@@ -31,6 +31,7 @@ export function EndpointPanel({ projectId }: { projectId: string }) {
         name: command.name,
         destinationUrl: command.destinationUrl,
         eventTypes: command.eventTypes,
+        minimumRetryDelaySeconds: command.minimumRetryDelaySeconds,
         version: activeEndpoint.version,
       })
       await refresh()
@@ -86,7 +87,7 @@ export function EndpointPanel({ projectId }: { projectId: string }) {
   )
 }
 
-type EndpointCommand = Pick<WebhookEndpointDetails, 'name' | 'destinationUrl' | 'eventTypes' | 'enabled'>
+type EndpointCommand = Pick<WebhookEndpointDetails, 'name' | 'destinationUrl' | 'eventTypes' | 'enabled' | 'minimumRetryDelaySeconds'>
 
 function EndpointEditor({ endpoint, onSave, onToggle }: {
   endpoint: WebhookEndpointDetails | null
@@ -97,6 +98,9 @@ function EndpointEditor({ endpoint, onSave, onToggle }: {
   const [destinationUrl, setDestinationUrl] = useState(endpoint?.destinationUrl ?? '')
   const [eventTypes, setEventTypes] = useState(endpoint?.eventTypes.join(', ') ?? '')
   const [enabled, setEnabled] = useState(endpoint?.enabled ?? true)
+  const [minimumRetryDelaySeconds, setMinimumRetryDelaySeconds] = useState(
+    endpoint?.minimumRetryDelaySeconds?.toString() ?? '',
+  )
   const [submitting, setSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -105,7 +109,14 @@ function EndpointEditor({ endpoint, onSave, onToggle }: {
     setSubmitting(true)
     setErrorMessage(null)
     try {
-      await onSave({ name, destinationUrl, eventTypes: normalizeEventTypes(eventTypes), enabled })
+      const retryFloor = minimumRetryDelaySeconds.trim()
+      await onSave({
+        name,
+        destinationUrl,
+        eventTypes: normalizeEventTypes(eventTypes),
+        enabled,
+        minimumRetryDelaySeconds: retryFloor === '' ? null : Number(retryFloor),
+      })
     } catch (error: unknown) {
       setErrorMessage(error instanceof ApiProblem && error.status === 409 ? 'This endpoint changed elsewhere. Reload it and try again.' : 'Unable to save this endpoint.')
     } finally {
@@ -135,6 +146,11 @@ function EndpointEditor({ endpoint, onSave, onToggle }: {
       <label>Name<input disabled={submitting} maxLength={100} onChange={(event) => setName(event.target.value)} required value={name} /></label>
       <label>Destination URL<input disabled={submitting} onChange={(event) => setDestinationUrl(event.target.value)} placeholder="https://receiver.example/webhooks" required type="url" value={destinationUrl} /></label>
       <label>Event types (comma-separated)<input disabled={submitting} onChange={(event) => setEventTypes(event.target.value)} placeholder="invoice.paid, invoice.failed" required value={eventTypes} /></label>
+      <label>
+        Minimum retry delay (seconds, optional)
+        <input disabled={submitting} max="300" min="5" onChange={(event) => setMinimumRetryDelaySeconds(event.target.value)} placeholder="Use default backoff" step="1" type="number" value={minimumRetryDelaySeconds} />
+        <span className={styles.fieldHint}>5–300 seconds. This can only delay retries; it never adds attempts.</span>
+      </label>
       {endpoint ? <p className={styles.muted}>Current state: {endpoint.enabled ? 'enabled' : 'paused'}. Saving configuration does not change state or signing secret.</p> : <label className={styles.checkbox}><input checked={enabled} disabled={submitting} onChange={(event) => setEnabled(event.target.checked)} type="checkbox" /> Enable immediately</label>}
       <div className={styles.actions}>
         <button disabled={submitting} type="submit">{submitting ? 'Saving…' : endpoint ? 'Save configuration' : 'Create endpoint'}</button>

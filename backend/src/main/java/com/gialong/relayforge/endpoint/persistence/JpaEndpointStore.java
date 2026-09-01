@@ -8,6 +8,7 @@ import com.gialong.relayforge.endpoint.application.EncryptedEndpointSecret;
 import com.gialong.relayforge.endpoint.application.EndpointCursor;
 import com.gialong.relayforge.endpoint.application.EndpointStore;
 import com.gialong.relayforge.endpoint.application.LockedEndpointAttemptConfiguration;
+import com.gialong.relayforge.endpoint.application.LockedEndpointRetryPolicy;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,7 @@ public class JpaEndpointStore implements EndpointStore {
             String validatedDestinationUrl,
             List<String> normalizedEventTypes,
             boolean enabled,
+            Integer minimumRetryDelaySeconds,
             EncryptedEndpointSecret encryptedSecret
     ) {
         WebhookEndpointEntity endpoint = WebhookEndpointEntity.create(
@@ -47,6 +49,7 @@ public class JpaEndpointStore implements EndpointStore {
                 normalizedName,
                 validatedDestinationUrl,
                 enabled,
+                minimumRetryDelaySeconds,
                 encryptedSecret.ciphertext(),
                 encryptedSecret.keyReference()
         );
@@ -195,22 +198,42 @@ public class JpaEndpointStore implements EndpointStore {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<LockedEndpointRetryPolicy> lockRetryPolicy(UUID projectId, UUID endpointId) {
+        return entityManager.createQuery(
+                        "from WebhookEndpoint endpoint where endpoint.projectId = :projectId and endpoint.id = :endpointId",
+                        WebhookEndpointEntity.class
+                )
+                .setParameter("projectId", projectId)
+                .setParameter("endpointId", endpointId)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultStream()
+                .findFirst()
+                .map(endpoint -> new LockedEndpointRetryPolicy(
+                        endpoint.projectId(), endpoint.id(), endpoint.minimumRetryDelaySeconds()
+                ));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public Optional<WebhookEndpointDetails> replaceConfiguration(
             UUID projectId,
             UUID endpointId,
             String normalizedName,
             String validatedDestinationUrl,
             List<String> normalizedEventTypes,
+            Integer minimumRetryDelaySeconds,
             long expectedVersion
     ) {
         // Subscription rows are not a JPA association, so fence the complete aggregate replacement on its versioned root.
         int changed = entityManager.createNativeQuery(
                         "update public.webhook_endpoints set name = :name, destination_url = :destinationUrl, "
+                                + "minimum_retry_delay_seconds = :minimumRetryDelaySeconds, "
                                 + "version = version + 1, updated_at = CURRENT_TIMESTAMP "
                                 + "where id = :endpointId and project_id = :projectId and version = :expectedVersion"
                 )
                 .setParameter("name", normalizedName)
                 .setParameter("destinationUrl", validatedDestinationUrl)
+                .setParameter("minimumRetryDelaySeconds", minimumRetryDelaySeconds)
                 .setParameter("endpointId", endpointId)
                 .setParameter("projectId", projectId)
                 .setParameter("expectedVersion", expectedVersion)
@@ -302,6 +325,7 @@ public class JpaEndpointStore implements EndpointStore {
                 endpoint.destinationUrl(),
                 eventTypes,
                 endpoint.enabled(),
+                endpoint.minimumRetryDelaySeconds(),
                 endpoint.version(),
                 endpoint.createdAt(),
                 endpoint.updatedAt()

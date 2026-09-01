@@ -141,13 +141,14 @@ class ProjectHttpIntegrationTests {
 
             URI endpointsUri = baseUri.resolve("/api/v1/projects/" + projectId + "/endpoints");
             String endpointRequest = "{\"name\":\"Billing Receiver\",\"destinationUrl\":\"http://localhost:8080/receiver\","
-                    + "\"eventTypes\":[\"invoice.paid\",\"invoice.failed\"],\"enabled\":true}";
+                    + "\"eventTypes\":[\"invoice.paid\",\"invoice.failed\"],\"enabled\":true,\"minimumRetryDelaySeconds\":120}";
             assertThat(postJson(firstOwner, endpointsUri, endpointRequest, null).statusCode()).isEqualTo(403);
             HttpResponse<String> createdEndpoint = postJson(firstOwner, endpointsUri, endpointRequest, firstCsrf);
             assertThat(createdEndpoint.statusCode()).isEqualTo(201);
             JsonNode endpoint = JSON.readTree(createdEndpoint.body());
             String endpointId = endpoint.get("id").asString();
             assertThat(endpoint.get("signingSecret").asString()).startsWith("whsec_");
+            assertThat(endpoint.get("minimumRetryDelaySeconds").asInt()).isEqualTo(120);
 
             JsonNode listedEndpoints = JSON.readTree(get(firstOwner, endpointsUri).body());
             assertThat(listedEndpoints.get("items").size()).isEqualTo(1);
@@ -159,11 +160,12 @@ class ProjectHttpIntegrationTests {
                     firstOwner,
                     endpointUri,
                     "{\"name\":\"Updated Receiver\",\"destinationUrl\":\"https://receiver.example/updated\","
-                            + "\"eventTypes\":[\"invoice.paid\"],\"version\":0}",
+                            + "\"eventTypes\":[\"invoice.paid\"],\"minimumRetryDelaySeconds\":300,\"version\":0}",
                     firstCsrf
             );
             assertThat(replacedEndpoint.statusCode()).isEqualTo(200);
             assertThat(JSON.readTree(replacedEndpoint.body()).get("version").asLong()).isEqualTo(1);
+            assertThat(JSON.readTree(replacedEndpoint.body()).get("minimumRetryDelaySeconds").asInt()).isEqualTo(300);
             URI disableUri = baseUri.resolve(
                     "/api/v1/projects/" + projectId + "/endpoints/" + endpointId + "/disable"
             );

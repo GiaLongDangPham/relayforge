@@ -57,11 +57,25 @@ final class WebhookEndpointCatalogService implements WebhookEndpointCatalog {
             List<String> eventTypes,
             boolean enabled
     ) {
+        return create(ownerId, projectId, name, destinationUrl, eventTypes, enabled, null);
+    }
+
+    @Override
+    public Optional<CreatedWebhookEndpoint> create(
+            UUID ownerId,
+            UUID projectId,
+            String name,
+            String destinationUrl,
+            List<String> eventTypes,
+            boolean enabled,
+            Integer minimumRetryDelaySeconds
+    ) {
         UUID requiredOwnerId = requireOwnerId(ownerId);
         UUID requiredProjectId = requireProjectId(projectId);
         String normalizedName = EndpointNames.requireNormalized(name);
         String validatedUrl = endpointUrlPolicy.requireValid(destinationUrl);
         List<String> normalizedEventTypes = EndpointEventTypes.requireNormalized(eventTypes);
+        Integer validatedMinimumRetryDelaySeconds = RetryPolicyDelays.requireNullable(minimumRetryDelaySeconds);
         UUID endpointId = UUID.randomUUID();
         EndpointSecretMaterial.GeneratedEndpointSecret generatedSecret = endpointSecretMaterial.generate(
                 requiredProjectId,
@@ -81,6 +95,7 @@ final class WebhookEndpointCatalogService implements WebhookEndpointCatalog {
                             validatedUrl,
                             normalizedEventTypes,
                             enabled,
+                            validatedMinimumRetryDelaySeconds,
                             generatedSecret.encryptedSecret()
                     );
                     return Optional.of(new CreatedWebhookEndpoint(created, generatedSecret.rawSecret()));
@@ -146,12 +161,36 @@ final class WebhookEndpointCatalogService implements WebhookEndpointCatalog {
             List<String> eventTypes,
             long expectedVersion
     ) {
+        return replaceConfiguration(
+                ownerId,
+                projectId,
+                endpointId,
+                name,
+                destinationUrl,
+                eventTypes,
+                null,
+                expectedVersion
+        );
+    }
+
+    @Override
+    public Optional<WebhookEndpointDetails> replaceConfiguration(
+            UUID ownerId,
+            UUID projectId,
+            UUID endpointId,
+            String name,
+            String destinationUrl,
+            List<String> eventTypes,
+            Integer minimumRetryDelaySeconds,
+            long expectedVersion
+    ) {
         UUID requiredOwnerId = requireOwnerId(ownerId);
         UUID requiredProjectId = requireProjectId(projectId);
         UUID requiredEndpointId = requireEndpointId(endpointId);
         String normalizedName = EndpointNames.requireNormalized(name);
         String validatedUrl = endpointUrlPolicy.requireValid(destinationUrl);
         List<String> normalizedEventTypes = EndpointEventTypes.requireNormalized(eventTypes);
+        Integer validatedMinimumRetryDelaySeconds = RetryPolicyDelays.requireNullable(minimumRetryDelaySeconds);
         requireExpectedVersion(expectedVersion);
 
         return inWriteTransaction(() -> {
@@ -164,6 +203,7 @@ final class WebhookEndpointCatalogService implements WebhookEndpointCatalog {
                     normalizedName,
                     validatedUrl,
                     normalizedEventTypes,
+                    validatedMinimumRetryDelaySeconds,
                     expectedVersion
             );
         });

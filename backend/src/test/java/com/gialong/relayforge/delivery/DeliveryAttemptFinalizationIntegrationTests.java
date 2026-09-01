@@ -35,6 +35,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -235,6 +236,84 @@ class DeliveryAttemptFinalizationIntegrationTests {
             assertThat(attempt).containsEntry("retry_delay_ms", 45000)
                     .containsEntry("retry_schedule_source", "RETRY_AFTER");
             assertThat(persistedGapMilliseconds).isEqualTo(45000L);
+        }
+    }
+
+    @Test
+    void appliesTheCurrentEndpointRetryFloorInsideFinalizationAndAuditsItsStrictWin() {
+        UUID ownerId = bootstrap("finalization.endpoint-floor.owner").ownerId();
+        ProjectDetails project = projectCatalog.create(ownerId, "Endpoint floor finalization");
+        var endpoint = endpointCatalog.create(
+                ownerId,
+                project.id(),
+                "Floor receiver",
+                "https://floor.example/webhooks",
+                List.of("invoice.paid"),
+                true,
+                120
+        ).orElseThrow().endpoint();
+
+        try (DispatchInstruction instruction = start(project.id(), "finalization-endpoint-floor");
+             DispatchObservation observation = DispatchObservation.httpResponse(
+                     DispatchObservation.Outcome.RETRYABLE_FAILURE,
+                     503,
+                     Duration.ofMillis(12),
+                     new byte[0],
+                     false,
+                     Optional.of(Duration.ofSeconds(90))
+             )) {
+            assertThat(finalizer.finalizeAttempt(instruction, observation)).isEqualTo(AttemptFinalizationResult.FINALIZED);
+
+            assertThat(jdbcTemplate.queryForMap(
+                    "select retry_delay_ms, retry_schedule_source from delivery_attempts where id = ?",
+                    instruction.attemptId()
+            )).containsEntry("retry_delay_ms", 120000)
+                    .containsEntry("retry_schedule_source", "ENDPOINT_POLICY");
+
+            Instant dueAt = jdbcTemplate.queryForObject(
+                    "select due_at from deliveries where id = ?", Instant.class, instruction.deliveryId()
+            );
+            endpointCatalog.replaceConfiguration(
+                    ownerId,
+                    project.id(),
+                    endpoint.id(),
+                    endpoint.name(),
+                    endpoint.destinationUrl(),
+                    endpoint.eventTypes(),
+                    null,
+                    endpoint.version()
+            ).orElseThrow();
+            assertThat(jdbcTemplate.queryForObject(
+                    "select due_at from deliveries where id = ?", Instant.class, instruction.deliveryId()
+            )).isEqualTo(dueAt);
+        }
+    }
+
+    @Test
+    void appliesTheCurrentEndpointRetryFloorToExpiredAttemptRecovery() {
+        UUID ownerId = bootstrap("recovery.endpoint-floor.owner").ownerId();
+        ProjectDetails project = projectCatalog.create(ownerId, "Endpoint floor recovery");
+        endpointCatalog.create(
+                ownerId,
+                project.id(),
+                "Recovery floor receiver",
+                "https://recovery-floor.example/webhooks",
+                List.of("invoice.paid"),
+                true,
+                120
+        ).orElseThrow();
+
+        try (DispatchInstruction instruction = start(project.id(), "recovery-endpoint-floor")) {
+            jdbcTemplate.update(
+                    "update deliveries set lease_expires_at = CURRENT_TIMESTAMP - interval '1 millisecond' where id = ?",
+                    instruction.deliveryId()
+            );
+            assertThat(recovery.recoverExpiredStartedAttempts(1)).isEqualTo(1);
+            assertThat(jdbcTemplate.queryForMap(
+                    "select retry_delay_ms, retry_schedule_source from delivery_attempts where id = ?",
+                    instruction.attemptId()
+            )).containsEntry("retry_delay_ms", 120000)
+                    .containsEntry("retry_schedule_source", "ENDPOINT_POLICY");
         }
     }
 

@@ -4,39 +4,45 @@ Status: Complete
 
 ## Goal
 
-Implement the owner-approved minimum durable per-project UTC-day publish quota.
+Complete Phase 3 Slice 3.2--3.4: persist the accepted bounded per-endpoint
+retry floor, expose it through the owner API and dashboard, and apply it during
+retry finalization and `UNKNOWN` recovery.
 
 ## Decisions
 
-- ADR-011 permits one global, validated 10,000-new-event default per project
-  per UTC day; it is not billing or a plan.
-- PostgreSQL owns one current usage row per project. A conditional UPSERT
-  increments it, resets it online on the next UTC day, or rejects atomically.
-- An equivalent idempotent replay and a conflict consume no durable quota;
-  only a new event consumes one unit, irrespective of its delivery fan-out.
+- ADR-012 defines an optional endpoint-owned whole-second minimum retry delay
+  from 5 through 300; it can only lengthen the current schedule.
+- Retry selection for attempts 1--4 and recovered `UNKNOWN` will use the
+  bounded maximum of equal jitter, the floor, and eligible `Retry-After`.
+  Attempt five remains `EXHAUSTED`; PostgreSQL owns `due_at`.
+- Policy is read through a row-locked public endpoint snapshot during retry
+  scheduling. Later endpoint changes never rewrite an existing due-time.
 
 ## Out of scope
 
-Redis, billing/plans, owner-configurable quota tiers, retained usage analytics,
-distributed counters, custom retry policy, SSE, ordering, RBAC, or Kubernetes.
+Project-level policy, retry-budget or circuit-breaker changes, Redis,
+billing/plans, SSE, ordering, RBAC, Kubernetes, and unbounded/custom
+user-supplied retry logic.
 
 ## Evidence required
 
-- Concurrent unique publishes cannot exceed the configured quota; other
-  projects retain independent capacity.
-- A rejection returns `429 PUBLISH_QUOTA_EXCEEDED` with positive `Retry-After`
-  and rolls back the tentative event/delivery set.
+- Endpoint owner writes validate the optional 5--300 second value and preserve
+  the existing optimistic-version behavior.
+- Finalization and recovery persist the selected audit source while PostgreSQL
+  remains authoritative for `due_at`; an existing due-time never changes after
+  a later policy update.
+- Dashboard editing preserves an absent policy and displays the configured
+  value.
 
 ## Completion evidence
 
-- `PublisherQuotaPropertiesTests` passed 2/2 and focused publisher
-  rate-limiter/controller regressions passed 5/5.
-- PostgreSQL Testcontainers publisher HTTP tests passed 4/4: quota exhaustion,
-  idempotent replay, rollback, project isolation, and 20 concurrent publishes.
-- Compose rebuilt API/worker/frontend, local Flyway reached V16, API health was
-  `UP`, and the dashboard sign-in screen loaded without browser console errors.
+- V17 persists the nullable endpoint floor and permits `ENDPOINT_POLICY` in
+  retry-schedule audit rows.
+- Focused policy, endpoint API, owner HTTP, and PostgreSQL finalization/recovery
+  tests passed 13/13.
+- Frontend lint and production build passed.
 
 ## Next action
 
-Owner review/commit. The next Phase 3 initiative is bounded retry-policy
-customization only if a concrete receiver/product need justifies it.
+Owner review/commit the completed Slice 3 work. The next bounded Phase 3 slice
+is evidence-gated SSE only if polling delay or load justifies it.

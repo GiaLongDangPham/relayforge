@@ -18,6 +18,18 @@ public interface WebhookEndpointCatalog {
             boolean enabled
     );
 
+    default Optional<CreatedWebhookEndpoint> create(
+            UUID ownerId,
+            UUID projectId,
+            String name,
+            String destinationUrl,
+            List<String> eventTypes,
+            boolean enabled,
+            Integer minimumRetryDelaySeconds
+    ) {
+        return create(ownerId, projectId, name, destinationUrl, eventTypes, enabled);
+    }
+
     Optional<WebhookEndpointDetails> findOwned(UUID ownerId, UUID projectId, UUID endpointId);
 
     Optional<WebhookEndpointPage> listOwned(UUID ownerId, UUID projectId, int limit, String cursor);
@@ -31,6 +43,19 @@ public interface WebhookEndpointCatalog {
             List<String> eventTypes,
             long expectedVersion
     );
+
+    default Optional<WebhookEndpointDetails> replaceConfiguration(
+            UUID ownerId,
+            UUID projectId,
+            UUID endpointId,
+            String name,
+            String destinationUrl,
+            List<String> eventTypes,
+            Integer minimumRetryDelaySeconds,
+            long expectedVersion
+    ) {
+        return replaceConfiguration(ownerId, projectId, endpointId, name, destinationUrl, eventTypes, expectedVersion);
+    }
 
     Optional<WebhookEndpointDetails> setEnabled(
             UUID ownerId,

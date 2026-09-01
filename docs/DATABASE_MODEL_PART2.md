@@ -166,7 +166,7 @@ Additional rules:
 | `failure_code` | `varchar(64)` | Nullable bounded internal classification such as timeout, network, blocked destination, or response class. |
 | `latency_ms` | `integer` | Nullable nonnegative local observed dispatch duration. |
 | `retry_delay_ms` | `integer` | Nullable positive effective delay only when this terminal attempt returned its delivery to retry `PENDING`. |
-| `retry_schedule_source` | `varchar(32)` | Nullable paired bounded value: `BACKOFF` or `RETRY_AFTER`; records the input that selected the effective delay, never the raw receiver header. |
+| `retry_schedule_source` | `varchar(32)` | Nullable paired bounded value: `BACKOFF`, `RETRY_AFTER`, or `ENDPOINT_POLICY`; records the input that selected the effective delay, never the raw receiver header. |
 | `response_preview` | `bytea` | Nullable first at most 8 KiB of response body bytes. |
 | `response_truncated` | `boolean` | Required; true when additional response bytes were omitted. |
 
@@ -351,11 +351,13 @@ Group 7 adds V9 `delivery_attempts`: restrictive delivery ownership, unique `(de
 Group 10 adds V11 physical replay support. A partial unique `(event_id, endpoint_id)` index applies only to original rows with a null replay parent, while a project/event/endpoint/self-reference tuple prevents replay identity drift. `replay_requests` has project-scoped key uniqueness and a deferred lineage foreign key to the exact replay child, allowing the transaction to reserve the idempotency command before it inserts that child. V11 also adds the project delivery and project/event delivery keyset indexes used by owner history; they are query-shape support, not performance claims.
 
 Phase 2B Slice 3 adds V13 retry-schedule audit columns to `delivery_attempts`.
-They have positive-delay, paired-nullability, bounded-source, and terminal
-status constraints. The finalization/recovery SQL continues to use
+V17 extends the bounded source set with `ENDPOINT_POLICY` and adds nullable
+`webhook_endpoints.minimum_retry_delay_seconds`, constrained to 5--300. The
+finalization/recovery SQL continues to use
 `CURRENT_TIMESTAMP + selected milliseconds` for `deliveries.due_at`; it stores
 the selected delay/source beside the immutable terminal attempt observation,
-not the raw `Retry-After` field.
+not the raw `Retry-After` field. `ENDPOINT_POLICY` means the configured floor
+strictly exceeded both equal-jitter backoff and any eligible receiver hint.
 
 Phase 2B Slice 5 adds V14 `endpoint_circuit_breakers`; V15 corrects its
 closed-state streak constraint. Its primary key is `endpoint_id`; a missing row

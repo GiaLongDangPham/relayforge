@@ -77,13 +77,15 @@ class WebhookEndpointIntegrationTests {
                 " Billing receiver ",
                 "http://localhost:8080/webhooks",
                 List.of("invoice.failed", "invoice.paid"),
-                true
+                true,
+                120
         ).orElseThrow();
         WebhookEndpointDetails initial = created.endpoint();
 
         assertThat(initial.name()).isEqualTo("Billing receiver");
         assertThat(initial.eventTypes()).containsExactly("invoice.failed", "invoice.paid");
         assertThat(initial.enabled()).isTrue();
+        assertThat(initial.minimumRetryDelaySeconds()).isEqualTo(120);
         assertThat(initial.version()).isZero();
         assertThat(created.signingSecret()).matches("whsec_[A-Za-z0-9_-]{43}");
         byte[] rawSecret = Base64.getUrlDecoder().decode(created.signingSecret().substring("whsec_".length()));
@@ -141,12 +143,14 @@ class WebhookEndpointIntegrationTests {
                 "Updated receiver",
                 "https://receiver.example/updated",
                 List.of("invoice.paid"),
+                300,
                 0
         ).orElseThrow();
         assertThat(replaced.name()).isEqualTo("Updated receiver");
         assertThat(replaced.destinationUrl()).isEqualTo("https://receiver.example/updated");
         assertThat(replaced.eventTypes()).containsExactly("invoice.paid");
         assertThat(replaced.enabled()).isTrue();
+        assertThat(replaced.minimumRetryDelaySeconds()).isEqualTo(300);
         assertThat(replaced.version()).isEqualTo(1);
         byte[] rawSecretAfterConfigurationChange = Base64.getUrlDecoder()
                 .decode(created.signingSecret().substring("whsec_".length()));

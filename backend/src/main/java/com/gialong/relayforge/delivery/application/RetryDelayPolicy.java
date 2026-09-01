@@ -31,6 +31,10 @@ final class RetryDelayPolicy {
     }
 
     CompletionDecision forObserved(AttemptCompletion completion, int attemptNumber) {
+        return forObserved(completion, attemptNumber, null);
+    }
+
+    CompletionDecision forObserved(AttemptCompletion completion, int attemptNumber, Duration minimumRetryDelay) {
         Objects.requireNonNull(completion, "completion must not be null");
         return switch (completion.status()) {
             case SUCCEEDED -> new CompletionDecision(AttemptStatus.SUCCEEDED, DeliveryState.SUCCEEDED, null, null);
@@ -43,17 +47,27 @@ final class RetryDelayPolicy {
             case RETRYABLE_FAILURE -> retryable(
                     AttemptStatus.RETRYABLE_FAILURE,
                     attemptNumber,
-                    completion.retryAfterDelay().orElse(null)
+                    completion.retryAfterDelay().orElse(null),
+                    minimumRetryDelay
             );
             case UNKNOWN -> throw new IllegalArgumentException("UNKNOWN is reserved for lease recovery");
         };
     }
 
     CompletionDecision forUnknownRecovery(int attemptNumber) {
-        return retryable(AttemptStatus.UNKNOWN, attemptNumber, null);
+        return forUnknownRecovery(attemptNumber, null);
     }
 
-    private CompletionDecision retryable(AttemptStatus status, int attemptNumber, Duration retryAfterDelay) {
+    CompletionDecision forUnknownRecovery(int attemptNumber, Duration minimumRetryDelay) {
+        return retryable(AttemptStatus.UNKNOWN, attemptNumber, null, minimumRetryDelay);
+    }
+
+    private CompletionDecision retryable(
+            AttemptStatus status,
+            int attemptNumber,
+            Duration retryAfterDelay,
+            Duration minimumRetryDelay
+    ) {
         if (attemptNumber < 1 || attemptNumber > 5) {
             throw new IllegalArgumentException("attemptNumber must be between one and five");
         }
@@ -61,10 +75,25 @@ final class RetryDelayPolicy {
             return new CompletionDecision(status, DeliveryState.EXHAUSTED, null, null);
         }
         Duration backoff = equalJitter(BASE_DELAYS[attemptNumber - 1]);
-        if (retryAfterDelay != null && retryAfterDelay.compareTo(backoff) > 0) {
+        validateMinimumRetryDelay(minimumRetryDelay);
+        if (backoff.compareTo(minimumRetryDelay == null ? Duration.ZERO : minimumRetryDelay) >= 0
+                && (retryAfterDelay == null || backoff.compareTo(retryAfterDelay) >= 0)) {
+            return new CompletionDecision(status, DeliveryState.PENDING, backoff, RetryScheduleSource.BACKOFF);
+        }
+        if (retryAfterDelay != null && retryAfterDelay.compareTo(backoff) > 0
+                && (minimumRetryDelay == null || retryAfterDelay.compareTo(minimumRetryDelay) >= 0)) {
             return new CompletionDecision(status, DeliveryState.PENDING, retryAfterDelay, RetryScheduleSource.RETRY_AFTER);
         }
-        return new CompletionDecision(status, DeliveryState.PENDING, backoff, RetryScheduleSource.BACKOFF);
+        return new CompletionDecision(status, DeliveryState.PENDING, minimumRetryDelay, RetryScheduleSource.ENDPOINT_POLICY);
+    }
+
+    private static void validateMinimumRetryDelay(Duration minimumRetryDelay) {
+        if (minimumRetryDelay == null) {
+            return;
+        }
+        if (minimumRetryDelay.getNano() != 0 || minimumRetryDelay.getSeconds() < 5 || minimumRetryDelay.getSeconds() > 300) {
+            throw new IllegalArgumentException("minimumRetryDelay must be a whole 5 through 300 seconds");
+        }
     }
 
     private Duration equalJitter(Duration baseDelay) {

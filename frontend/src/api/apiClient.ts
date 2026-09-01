@@ -38,6 +38,7 @@ export type WebhookEndpointDetails = {
   destinationUrl: string
   eventTypes: string[]
   enabled: boolean
+  minimumRetryDelaySeconds: number | null
   version: number
   createdAt: string
   updatedAt: string
@@ -224,7 +225,7 @@ class ApiClient {
 
   async createEndpoint(
     projectId: string,
-    command: Pick<WebhookEndpointDetails, 'name' | 'destinationUrl' | 'eventTypes' | 'enabled'>,
+    command: Pick<WebhookEndpointDetails, 'name' | 'destinationUrl' | 'eventTypes' | 'enabled' | 'minimumRetryDelaySeconds'>,
   ): Promise<CreatedWebhookEndpoint> {
     return this.mutate<CreatedWebhookEndpoint>(`/api/v1/projects/${projectId}/endpoints`, {
       method: 'POST',
@@ -235,7 +236,7 @@ class ApiClient {
   async replaceEndpoint(
     projectId: string,
     endpointId: string,
-    command: Pick<WebhookEndpointDetails, 'name' | 'destinationUrl' | 'eventTypes' | 'version'>,
+    command: Pick<WebhookEndpointDetails, 'name' | 'destinationUrl' | 'eventTypes' | 'minimumRetryDelaySeconds' | 'version'>,
   ): Promise<WebhookEndpointDetails> {
     return this.mutate<WebhookEndpointDetails>(`/api/v1/projects/${projectId}/endpoints/${endpointId}`, {
       method: 'PUT',

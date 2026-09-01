@@ -34,6 +34,9 @@ public class WebhookEndpointEntity {
     @Column(name = "enabled", nullable = false)
     private boolean enabled;
 
+    @Column(name = "minimum_retry_delay_seconds")
+    private Integer minimumRetryDelaySeconds;
+
     @Column(name = "signing_secret_ciphertext", nullable = false, updatable = false)
     private byte[] signingSecretCiphertext;
 
@@ -61,6 +64,7 @@ public class WebhookEndpointEntity {
             String name,
             String destinationUrl,
             boolean enabled,
+            Integer minimumRetryDelaySeconds,
             byte[] signingSecretCiphertext,
             String encryptionKeyReference
     ) {
@@ -69,6 +73,7 @@ public class WebhookEndpointEntity {
         this.name = Objects.requireNonNull(name, "name must not be null");
         this.destinationUrl = Objects.requireNonNull(destinationUrl, "destinationUrl must not be null");
         this.enabled = enabled;
+        this.minimumRetryDelaySeconds = minimumRetryDelaySeconds;
         this.signingSecretCiphertext = Arrays.copyOf(
                 Objects.requireNonNull(signingSecretCiphertext, "signingSecretCiphertext must not be null"),
                 signingSecretCiphertext.length
@@ -85,6 +90,7 @@ public class WebhookEndpointEntity {
             String name,
             String destinationUrl,
             boolean enabled,
+            Integer minimumRetryDelaySeconds,
             byte[] signingSecretCiphertext,
             String encryptionKeyReference
     ) {
@@ -94,6 +100,7 @@ public class WebhookEndpointEntity {
                 name,
                 destinationUrl,
                 enabled,
+                minimumRetryDelaySeconds,
                 signingSecretCiphertext,
                 encryptionKeyReference
         );
@@ -122,6 +129,10 @@ public class WebhookEndpointEntity {
 
     public boolean enabled() {
         return enabled;
+    }
+
+    public Integer minimumRetryDelaySeconds() {
+        return minimumRetryDelaySeconds;
     }
 
     public byte[] signingSecretCiphertext() {

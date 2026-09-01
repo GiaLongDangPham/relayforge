@@ -107,9 +107,10 @@ guarantee. The precise selection contract is recorded in
 
 Only a retryable HTTP `429` or `503` response with exactly one valid
 `Retry-After` delta-seconds value may defer the next attempt. The effective
-delay is never less than the normal equal-jitter backoff and never more than
-the configured 300-second cap. Missing, repeated, malformed, HTTP-date, or
-ineligible hints leave normal backoff unchanged.
+delay is never less than the normal equal-jitter backoff, an optional bounded
+endpoint retry floor, or an accepted receiver hint, and is never more than the
+configured 300-second cap. Missing, repeated, malformed, HTTP-date, or
+ineligible hints leave only the normal backoff and optional endpoint floor.
 
 The worker supplies a selected bounded duration; PostgreSQL computes the
 persisted due-time. A fifth retryable attempt remains `EXHAUSTED`. The exact
@@ -414,9 +415,10 @@ The implementation is not considered correct until tests demonstrate:
     eligible endpoint.
 21. only a single valid `Retry-After` delta-seconds field on HTTP `429` or
     `503` may affect retry selection; malformed, repeated, HTTP-date, and
-    ineligible values retain normal backoff;
-22. the selected retry duration is the maximum of deterministic equal jitter
-    and the capped accepted hint, while PostgreSQL computes the due-time; and
+    ineligible values retain normal backoff and an optional endpoint floor;
+22. the selected retry duration is the maximum of deterministic equal jitter,
+    the optional endpoint floor, and the capped accepted hint, while PostgreSQL
+    computes the due-time; and
 23. a fifth retryable HTTP response with any `Retry-After` value still becomes
     `EXHAUSTED` without a sixth attempt.
 24. three concurrent qualifying endpoint failures open the circuit exactly

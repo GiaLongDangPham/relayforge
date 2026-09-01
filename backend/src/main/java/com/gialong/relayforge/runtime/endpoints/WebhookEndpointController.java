@@ -46,7 +46,8 @@ final class WebhookEndpointController {
                 request.name(),
                 request.destinationUrl(),
                 request.eventTypes(),
-                request.enabled()
+                request.enabled(),
+                request.minimumRetryDelaySeconds()
         ).orElseThrow(EndpointNotFoundException::new);
         WebhookEndpointDetails endpoint = created.endpoint();
         URI location = URI.create("/api/v1/projects/" + projectId + "/endpoints/" + endpoint.id());
@@ -57,6 +58,7 @@ final class WebhookEndpointController {
                 endpoint.destinationUrl(),
                 endpoint.eventTypes(),
                 endpoint.enabled(),
+                endpoint.minimumRetryDelaySeconds(),
                 endpoint.version(),
                 created.signingSecret(),
                 endpoint.createdAt(),
@@ -99,6 +101,7 @@ final class WebhookEndpointController {
                 request.name(),
                 request.destinationUrl(),
                 request.eventTypes(),
+                request.minimumRetryDelaySeconds(),
                 request.version()
         ).orElseThrow(EndpointNotFoundException::new);
     }
@@ -145,7 +148,8 @@ final class WebhookEndpointController {
             String name,
             String destinationUrl,
             List<String> eventTypes,
-            Boolean enabled
+            Boolean enabled,
+            Integer minimumRetryDelaySeconds
     ) {
 
         CreateEndpointRequest {
@@ -159,6 +163,7 @@ final class WebhookEndpointController {
             String name,
             String destinationUrl,
             List<String> eventTypes,
+            Integer minimumRetryDelaySeconds,
             Long version
     ) {
 
@@ -185,6 +190,7 @@ final class WebhookEndpointController {
             String destinationUrl,
             List<String> eventTypes,
             boolean enabled,
+            Integer minimumRetryDelaySeconds,
             long version,
             String signingSecret,
         Instant createdAt,
@@ -195,6 +201,7 @@ final class WebhookEndpointController {
         public String toString() {
             return "CreateEndpointResponse[id=" + id + ", projectId=" + projectId + ", name=" + name
                     + ", destinationUrl=" + destinationUrl + ", eventTypes=" + eventTypes + ", enabled=" + enabled
+                    + ", minimumRetryDelaySeconds=" + minimumRetryDelaySeconds
                     + ", version=" + version + ", signingSecret=<redacted>, createdAt=" + createdAt
                     + ", updatedAt=" + updatedAt + "]";
         }

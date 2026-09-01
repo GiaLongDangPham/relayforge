@@ -94,4 +94,31 @@ class RetryDelayPolicyTests {
             );
         }
     }
+
+    @Test
+    void selectsEndpointPolicyOnlyWhenItStrictlyWinsAndKeepsReceiverHintTiePrecedence() {
+        try (AttemptCompletion retryable = AttemptCompletion.observed(DispatchObservation.httpResponse(
+                DispatchObservation.Outcome.RETRYABLE_FAILURE,
+                429,
+                Duration.ofMillis(10),
+                new byte[0],
+                false,
+                Optional.of(Duration.ofSeconds(90))
+        ))) {
+            RetryDelayPolicy policy = new RetryDelayPolicy(() -> 0.0d);
+
+            assertThat(policy.forObserved(retryable, 1, Duration.ofSeconds(120))).isEqualTo(new CompletionDecision(
+                    AttemptStatus.RETRYABLE_FAILURE,
+                    DeliveryState.PENDING,
+                    Duration.ofSeconds(120),
+                    RetryScheduleSource.ENDPOINT_POLICY
+            ));
+            assertThat(policy.forObserved(retryable, 1, Duration.ofSeconds(90))).isEqualTo(new CompletionDecision(
+                    AttemptStatus.RETRYABLE_FAILURE,
+                    DeliveryState.PENDING,
+                    Duration.ofSeconds(90),
+                    RetryScheduleSource.RETRY_AFTER
+            ));
+        }
+    }
 }

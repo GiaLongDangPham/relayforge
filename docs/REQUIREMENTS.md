@@ -122,7 +122,7 @@ A worker claims eligible delivery work without holding a database transaction du
 
 ### UC-08 - Retry bounded transient failure
 
-RelayForge retries network errors, timeouts, HTTP 408, HTTP 429, and HTTP 5xx responses with exponential backoff and jitter.
+RelayForge retries network errors, timeouts, HTTP 408, HTTP 429, and HTTP 5xx responses with exponential backoff and jitter. An endpoint may opt into the bounded longer retry floor defined by ADR-012; it cannot make retries more aggressive or change the attempt budget.
 
 - A delivery has at most five dispatch attempts, including the initial attempt. Destination security rejection can consume an attempt without sending an HTTP request.
 - Every HTTP 4xx response except 408 and 429 is a permanent failure.

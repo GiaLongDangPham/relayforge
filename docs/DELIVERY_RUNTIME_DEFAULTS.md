@@ -102,6 +102,15 @@ history may record only the effective delay and scheduling source, never the
 raw receiver-supplied header. See [ADR-008](adr/0008-bounded-retry-after-scheduling.md)
 for accepted syntax, cap, and trade-offs.
 
+ADR-012 permits one optional per-endpoint minimum retry delay of 5--300 whole
+seconds. Attempts one through four and recovered `UNKNOWN` attempts select the
+maximum of normal equal jitter, that endpoint floor, and a valid bounded
+receiver hint; the absolute cap remains 300 seconds. A strict floor winner is
+audited as `ENDPOINT_POLICY`; equal values retain the established `BACKOFF`,
+then `RETRY_AFTER`, tie precedence. V17 persists the nullable floor and the
+additional audit value. A later configuration change never rewrites an already
+persisted `due_at`.
+
 The schedule is intentionally short enough for a portfolio demonstration but long enough to expose persisted scheduling, jitter, exhaustion, and backlog behavior. It is not claimed to be suitable for every webhook product.
 
 ### 5.1 Endpoint circuit-breaker defaults
