@@ -1,0 +1,433 @@
+.skipLink {
+  background: var(--focus);
+  color: #071120;
+  inset-block-start: 12px;
+  inset-inline-start: 16px;
+  padding: 10px 14px;
+  position: fixed;
+  transform: translateY(-160%);
+  z-index: 2;
+}
+
+.skipLink:focus-visible {
+  transform: translateY(0);
+}
+
+.siteHeader {
+  align-items: center;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding-block: 8px 32px;
+}
+
+.brand {
+  color: var(--text);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+.sectionNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+}
+
+.sectionNav a {
+  color: var(--muted);
+  text-underline-offset: 0.22em;
+}
+
+.signInLink,
+.primaryAction,
+.secondaryAction {
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  display: inline-flex;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  text-decoration: none;
+}
+
+.signInLink,
+.secondaryAction {
+  color: var(--text);
+}
+
+.primaryAction {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--button-text);
+}
+
+.hero {
+  align-items: center;
+  display: grid;
+  gap: clamp(40px, 7vw, 96px);
+  grid-template-columns: minmax(0, 1.1fr) minmax(20rem, 0.9fr);
+  padding-block: clamp(64px, 10vw, 136px);
+  position: relative;
+}
+
+.heroCopy {
+  max-width: 42rem;
+}
+
+.hero h1,
+.sectionIntroduction h2,
+.finalCallToAction h2 {
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.hero h1 {
+  font-size: clamp(2.8rem, 6vw, 5.5rem);
+  line-height: 1;
+  margin: 16px 0 24px;
+}
+
+.heroLead {
+  color: var(--muted);
+  font-size: clamp(1.1rem, 2.3vw, 1.35rem);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 42rem;
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-block-start: 32px;
+}
+
+.deliveryPath {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 14%, var(--surface-raised)), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  margin: 0;
+  padding: clamp(20px, 3vw, 32px);
+}
+
+.deliveryPath figcaption {
+  display: grid;
+  gap: 6px;
+}
+
+.deliveryPath figcaption span,
+.pathOrder {
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.deliveryPath figcaption strong {
+  font-size: clamp(1.35rem, 2.5vw, 1.7rem);
+  letter-spacing: -0.03em;
+}
+
+.deliveryPathSteps {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+}
+
+.deliveryPathSteps li {
+  align-items: center;
+  background: color-mix(in srgb, var(--input) 75%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 14px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 14px;
+  position: relative;
+}
+
+.deliveryPathSteps li:not(:last-child)::after {
+  background: color-mix(in srgb, var(--accent) 50%, var(--border));
+  content: "";
+  height: 10px;
+  inset-block-start: 100%;
+  inset-inline-start: 29px;
+  position: absolute;
+  width: 1px;
+}
+
+.pathOrder {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent) 17%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius: 10px;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  letter-spacing: 0.06em;
+  width: 30px;
+}
+
+.deliveryPathSteps div {
+  display: grid;
+  gap: 3px;
+}
+
+.deliveryPathSteps strong {
+  font-size: 0.95rem;
+}
+
+.deliveryPathSteps span:not(.pathOrder),
+.pathFootnote {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.pathFootnote {
+  border-top: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  margin: 22px 0 0;
+  padding-block-start: 18px;
+}
+
+.proofPoints {
+  border-block: 1px solid var(--border);
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding-block: 24px;
+  padding-inline: 0;
+}
+
+.proofPoints li {
+  display: grid;
+  gap: 6px;
+}
+
+.proofPoints strong {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.proofPoints span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.contentSection,
+.finalCallToAction {
+  border-top: 1px solid var(--border);
+  padding-block: clamp(64px, 9vw, 112px);
+  scroll-margin-block-start: 24px;
+}
+
+.sectionIntroduction {
+  max-width: 44rem;
+}
+
+.sectionIntroduction h2,
+.finalCallToAction h2 {
+  font-size: clamp(2rem, 4.5vw, 3.4rem);
+  line-height: 1.08;
+  margin: 12px 0 16px;
+}
+
+.sectionIntroduction > p:last-child,
+.finalCallToAction > p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.workflowList {
+  display: grid;
+  gap: 16px;
+  list-style: none;
+  margin: 40px 0 0;
+  padding: 0;
+}
+
+.workflowList li {
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 24px;
+}
+
+.stepNumber {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+  border-radius: 999px;
+  color: var(--accent-strong);
+  display: inline-flex;
+  font-weight: 800;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.workflowList h3,
+.capability h3 {
+  margin: 2px 0 8px;
+}
+
+.workflowList p,
+.capability p,
+.architecturePanel p,
+.footer p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.capabilityGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-block-start: 40px;
+}
+
+.capability {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.architecturePanel {
+  background: linear-gradient(135deg, var(--surface), color-mix(in srgb, var(--accent) 9%, var(--surface-raised)));
+  display: grid;
+  gap: 14px;
+  margin-block-start: 40px;
+  max-width: 52rem;
+}
+
+.architecturePanel strong {
+  color: var(--text);
+}
+
+.finalCallToAction {
+  max-width: 48rem;
+}
+
+.finalCallToAction .primaryAction {
+  margin-block-start: 28px;
+}
+
+.footer {
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+  padding-block: 32px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .signInLink,
+  .primaryAction,
+  .secondaryAction,
+  .workflowList li,
+  .capability,
+  .deliveryPathSteps li {
+    transition-duration: 150ms;
+    transition-property: background-color, border-color, box-shadow, transform;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+}
+
+@media (hover: hover) {
+  .sectionNav a:hover {
+    color: var(--text);
+  }
+
+  .signInLink:hover,
+  .secondaryAction:hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: var(--accent);
+  }
+
+  .primaryAction:hover {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .primaryAction:active,
+  .secondaryAction:active,
+  .signInLink:active {
+    transform: scale(0.96);
+  }
+
+  .workflowList li:hover,
+  .capability:hover,
+  .deliveryPathSteps li:hover {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    transform: translateY(-2px);
+  }
+}
+
+@media (max-width: 58rem) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .deliveryPath {
+    max-width: 42rem;
+  }
+}
+
+@media (max-width: 48rem) {
+  .siteHeader {
+    align-items: flex-start;
+    grid-template-columns: 1fr auto;
+  }
+
+  .sectionNav {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    order: 3;
+  }
+
+  .proofPoints,
+  .capabilityGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .proofPoints {
+    gap: 18px;
+  }
+}
+
+@media (max-width: 30rem) {
+  .heroActions {
+    display: grid;
+  }
+
+  .primaryAction,
+  .secondaryAction {
+    width: 100%;
+  }
+
+  .workflowList li,
+  .deliveryPath {
+    padding: 20px;
+  }
+}

@@ -1,6 +1,9 @@
-# RelayForge dashboard
+# RelayForge frontend
 
-The dashboard is a deliberately small React + Vite client for the RelayForge owner API. It does not contain delivery rules or authentication tokens: PostgreSQL-backed server sessions remain owned by the backend.
+RelayForge has a deliberately small React + Vite frontend. Its public landing
+page explains the accepted delivery model without fetching owner data; the
+private owner dashboard does not contain delivery rules or authentication
+tokens. PostgreSQL-backed server sessions remain owned by the backend.
 
 For the complete PostgreSQL/API/worker/receiver/frontend stack, follow the repository [Local Docker Demo](../docs/LOCAL_DOCKER_DEMO.md). This directory's commands are for frontend-only development.
 
@@ -18,7 +21,20 @@ VITE_API_ORIGIN=https://api.example.test npm run dev
 
 The browser includes the HttpOnly `RF_SESSION` cookie with each API request. It obtains a fresh CSRF token immediately before an owner mutation; neither value is written to local storage.
 
-## Dashboard scope
+## Route and module boundary
+
+- `/` is a static public product explanation. It must not request protected
+  owner or delivery data, expose credentials, or offer public registration.
+- `/login` uses the existing owner-session API only to display the private
+  sign-in flow. An already authenticated owner is redirected to `/app`.
+- `/app` is a client-side convenience guard around the existing server-session
+  workflow. The backend remains the authority for every authorization decision;
+  an anonymous visitor is redirected to `/login`.
+- `src/app/router/` composes routes and session-dependent route states.
+  `src/features/landing/`, `src/features/auth/`, and dashboard features own
+  their respective UI and styles. Do not move feature behavior into `App.tsx`.
+
+## Private dashboard scope
 
 The dashboard is intentionally an operational demo rather than a second implementation of RelayForge rules. It supports project configuration, one-time API-key and endpoint-secret presentation, endpoint enablement/configuration, and owner history/replay inspection.
 

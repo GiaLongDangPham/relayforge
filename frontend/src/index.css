@@ -28,7 +28,6 @@
 
 body {
   margin: 0;
-  min-width: 320px;
   min-height: 100svh;
   background: var(--page);
 }
@@ -36,6 +35,10 @@ body {
 button,
 input {
   font-family: inherit;
+}
+
+a {
+  color: var(--accent-strong);
 }
 
 button {
@@ -75,7 +78,8 @@ input {
 
 input:focus-visible,
 button:focus-visible,
-summary:focus-visible {
+summary:focus-visible,
+a:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }

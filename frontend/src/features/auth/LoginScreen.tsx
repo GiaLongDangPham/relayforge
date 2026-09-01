@@ -1,4 +1,5 @@
 import { type SubmitEvent, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ApiProblem } from '../../api/apiClient'
 import { PageFrame } from '../../app/PageFrame'
 import appStyles from '../../app/app.module.css'
@@ -30,46 +31,53 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   }
 
   return (
-    <PageFrame>
-      <main className={styles.loginLayout}>
-        <section className={styles.loginIntroduction}>
-          <p className={appStyles.eyebrow}>Webhook delivery platform</p>
-          <h1>RelayForge</h1>
-          <p>Inspect reliable outbound deliveries without exposing the credentials that protect them.</p>
-        </section>
-        <form className={`${appStyles.panel} ${styles.loginForm}`} onSubmit={submit}>
-          <h2>Sign in</h2>
-          <p className={styles.formDescription}>Use the bootstrap owner account configured for your local environment.</p>
-          <label>
-            Login name
-            <input
-              autoComplete="username"
-              disabled={submitting}
-              name="loginName"
-              onChange={(event) => setLoginName(event.target.value)}
-              required
-              value={loginName}
-            />
-          </label>
-          <label>
-            Password
-            <input
-              autoComplete="current-password"
-              disabled={submitting}
-              name="password"
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              type="password"
-              value={password}
-            />
-          </label>
-          {errorMessage ? <p className={appStyles.formError} role="alert">{errorMessage}</p> : null}
-          <button disabled={submitting} type="submit">
-            {submitting ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-      </main>
-    </PageFrame>
+    <>
+      <a className={styles.skipLink} href="#sign-in-content">Skip to sign in</a>
+      <PageFrame>
+        <header className={styles.loginHeader}>
+          <Link aria-label="RelayForge home" className={styles.brandLink} to="/">RelayForge</Link>
+          <Link className={styles.overviewLink} to="/">Back to overview</Link>
+        </header>
+        <main className={styles.loginLayout} id="sign-in-content">
+          <section className={styles.loginIntroduction}>
+            <p className={appStyles.eyebrow}>Private owner workspace</p>
+            <h1>Inspect your webhook operations.</h1>
+            <p>Sign in to manage your own projects, endpoints, delivery history, and exhausted-delivery replay.</p>
+          </section>
+          <form className={`${appStyles.panel} ${styles.loginForm}`} onSubmit={submit}>
+            <h2>Sign in</h2>
+            <p className={styles.formDescription}>Use the owner account configured for this RelayForge environment.</p>
+            <label>
+              Login name
+              <input
+                autoComplete="username"
+                disabled={submitting}
+                name="loginName"
+                onChange={(event) => setLoginName(event.target.value)}
+                required
+                value={loginName}
+              />
+            </label>
+            <label>
+              Password
+              <input
+                autoComplete="current-password"
+                disabled={submitting}
+                name="password"
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                type="password"
+                value={password}
+              />
+            </label>
+            {errorMessage ? <p className={appStyles.formError} role="alert">{errorMessage}</p> : null}
+            <button disabled={submitting} type="submit">
+              {submitting ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+        </main>
+      </PageFrame>
+    </>
   )
 }
 

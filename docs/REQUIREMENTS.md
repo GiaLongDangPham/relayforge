@@ -1,7 +1,7 @@
 # RelayForge Portfolio v1 Requirements
 
-Status: Reviewed Phase 0 baseline
-Last updated: 2026-08-09
+Status: Reviewed Phase 0 baseline; U1.1 follow-on accepted
+Last updated: 2026-09-01
 
 ## 1. Product definition
 
@@ -252,3 +252,105 @@ Focused Phase 0 documents now resolve the behavioral choices that did not belong
 - conceptual persistence: `DATABASE_MODEL_PART1.md` and `DATABASE_MODEL_PART2.md`.
 
 The concrete IP-pinning HTTP adapter, cloud/database topology, and numerical performance targets remain implementation/measurement decisions. Keeping those details out of this file preserves the separation between product requirements and technical design.
+
+## 12. Follow-on product clarity contract (U1)
+
+This section extends the portfolio presentation after the v1 core and does not
+change delivery behavior, authentication, or the security model. Anonymous
+visitors receive a public explanation of RelayForge. Owner projects and
+operational data remain available only through authenticated dashboard APIs.
+
+### 12.1 Audience and visitor questions
+
+The primary anonymous visitor is a technical reviewer, recruiter, or engineer
+who has not used RelayForge. The secondary visitor is an invited owner/operator
+who needs to reach sign-in. The public page is not self-serve SaaS onboarding.
+
+Without credentials, the page must answer:
+
+1. What problem RelayForge solves and who uses it.
+2. How an authenticated publisher event becomes durable delivery intent and a
+   signed request to a subscribed receiver.
+3. What "reliable" means here: PostgreSQL-backed intent, asynchronous delivery,
+   bounded retry, inspectable history, and manual replay.
+4. Which guarantees are deliberately absent: exactly-once processing, delivery
+   ordering, an uptime SLA, and proof that a receiver committed its transaction.
+5. What the visitor can do next: understand the architecture or sign in to an
+   invited owner's private dashboard.
+
+### 12.2 Truthful public promise
+
+The approved headline is:
+
+> Reliable outbound webhooks, visible from acceptance to final attempt.
+
+The approved supporting statement is:
+
+> RelayForge accepts publisher events, persists delivery intent in PostgreSQL,
+> sends signed requests asynchronously with bounded retries, and gives
+> authenticated owners safe history and replay.
+
+Public copy may describe at-least-once delivery and the possibility of
+duplicates. It must not describe RelayForge as exactly-once, ordered,
+guaranteed real-time, production-ready multi-tenant SaaS, or covered by an SLA.
+
+### 12.3 Public information architecture
+
+The public landing page presents these sections in order:
+
+1. A header with the RelayForge identity, in-page links to workflow,
+   reliability, and architecture, plus a private sign-in action.
+2. A hero containing the approved promise, supporting statement, a primary
+   `Sign in to dashboard` action, and a secondary `See how delivery works`
+   action.
+3. A workflow explanation: publisher authenticates and submits an event;
+   RelayForge persists the event and routing snapshot; a worker sends the
+   signed request; the owner inspects attempts and may replay an exhausted
+   delivery.
+4. Three capability explanations: durable acceptance, secure signed dispatch,
+   and bounded failure recovery.
+5. An operator-visibility explanation covering safe event, delivery, and
+   attempt history plus replay.
+6. Architecture evidence using the accepted Java/Spring, PostgreSQL, and
+   separate API/worker runtime model, alongside the material limitations.
+7. A final private sign-in call to action.
+8. A small footer that may link only to approved public repository or
+   documentation locations.
+
+The U2 first-owner path remains: create project, configure subscribed endpoint,
+create publisher API key, publish a test event, then inspect its delivery. U1
+may preview that path but must not implement onboarding or weaken one-time
+secret handling.
+
+### 12.4 Public/private boundary
+
+The public surface may contain static product copy, generic architecture and
+workflow diagrams, truthful aggregate evidence already approved for portfolio
+use, and explicit limitation language. Rendering it must not require a
+business-data API request.
+
+The public surface must not contain or fetch owner credentials, bootstrap owner
+identifiers, project/endpoint/event/delivery identifiers, event payloads, API
+keys, signing secrets, session data, private history, or privileged health and
+metrics URLs. It must not offer public registration, a shared demo account, or
+anonymous mutation. Authentication and backend ownership checks remain the
+authority for every private resource.
+
+### 12.5 U1.1 acceptance and implementation handoff
+
+U1.1 is accepted when this contract is recorded and is consistent with the v1
+requirements and security baseline. U1.2 and later UI slices must prove that:
+
+- the first viewport identifies the product, the core workflow, and the private
+  sign-in action;
+- a new visitor can restate the publisher-to-receiver flow after reading the
+  page;
+- at-least-once delivery, duplicate possibility, bounded retries, lack of
+  ordering, and lack of SLA are represented accurately;
+- unauthenticated page rendering performs no protected-data request and exposes
+  no credential or owner data in the DOM, bundle, or browser network activity;
+- the page uses semantic landmarks and heading order and remains usable by
+  keyboard, at narrow viewport width, and at 200% zoom.
+
+This contract does not approve a routing dependency, authentication change,
+new API, analytics integration, public demo dataset, or delivery-runtime change.

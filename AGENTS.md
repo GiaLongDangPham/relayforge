@@ -57,3 +57,11 @@ This order does **not** authorize silently resolving a conflict. If two authorit
 ## Completion report
 
 Report the outcome in plain language, including files changed and each file's purpose, what was implemented or decided, tests/checks run and their real results, remaining issues or decisions, and one small proposed next step when appropriate.
+
+Every final response, including answers during a discussion between slices,
+must end with a concise **Bước tiếp theo** checkpoint. State the current or
+queued child slice, the immediate work, the expected number of smaller steps
+when known (or say that analysis must split it), and whether an important owner
+decision is pending. When a decision is pending, include a recommendation.
+Do not lose this roadmap pointer merely because the owner asks intermediate
+questions.

@@ -78,6 +78,29 @@ dashboard opened/closed/reopened the Delivery stream, received a valid fixture
 hint, retained REST-rendered history, and logged no browser warnings/errors.
 The hint remains deliberately lossy; five-second polling remains recovery.
 
+The owner-approved follow-on roadmap is maintained in `PROJECT_STATUS.md` under
+“Owner-approved product and job-readiness roadmap.” U1 is complete under
+option A: a static explanatory landing is public, while sign-in, owner data,
+and operations remain private. The truthful promise and section/public-data
+contract are authoritative in `REQUIREMENTS.md` section 12. U1.4 acceptance
+proved the public artifact's start-of-page keyboard order, visible focus,
+semantic landmarks, reduced-motion guard, clean console, and 320px no-overflow
+rendering; direct 200% browser zoom remains unavailable in the embedded browser.
+The current next child is U2.1, first-owner empty-state and guided-success
+contract. U1.3 provides a code-native
+`DeliveryPathVisual` in `frontend/src/features/landing`, showing Publisher →
+PostgreSQL durable intent → Worker → Receiver without claiming live telemetry,
+exactly-once delivery, or ordering. It also removed the global `body` 320px
+minimum width after browser evidence found it created a narrow-screen scrollbar.
+U1.2 now
+uses `react-router-dom`: the static `/` landing is isolated in
+`frontend/src/features/landing`, while `/login` and `/app` invoke the existing
+owner-session behavior through `frontend/src/app/router`; frontend navigation
+is never authorization. Read the ledger at the start
+of planning/implementation work and update it with `tasks/CURRENT.md` after
+every child slice. Product clarity U1–U5 is intentionally prioritized before
+J1–J7 technology extensions; existing Phase 3 decision gates remain valid.
+
 The backend uses `com.gialong.relayforge` with `identity`, `project`, `endpoint`, and `delivery` capability packages. ArchUnit tests enforce the approved dependency graph, cycle freedom, and cross-module public-API access. A strict required `relayforge.runtime=api|worker` selects one process. Both modes use a servlet context: API hosts business routes; worker hosts only health/Prometheus behind a management permit chain and deny-all fallback. The persistence foundation uses Spring JDBC/Hikari, Flyway, Hibernate/JPA, and PostgreSQL Testcontainers against pinned PostgreSQL 17.10 in the `public` schema. V2 creates `owner_accounts`; V3 creates the technical Spring Session tables. Identity has race-safe JDBC bootstrap and ordinary JPA credential lookup, with BCrypt work outside short transactions, dummy work for unknown users, generic invalid outcomes, and no public hash exposure.
 
 The completed owner browser-authentication slice adds API-only Spring Security, JSON CSRF/login/me/logout endpoints, a JDBC-backed `RF_SESSION` with rotation and invalidation, credentialed origin allowlisting, and a bounded local failed-login limiter. The verifier remains the identity-owned credential decision point and `VerifiedOwner` remains the sole hash-free principal. PostgreSQL integration tests prove CSRF, session rotation/restart/logout, CORS, rate limiting, and non-web worker exclusion. The completed `project` slices add Flyway V4 projects and V5 publisher API keys, owner-UUID-only JPA aggregates, explicit owner-scoped management, keyset pagination, and API-only REST routes that reuse session and CSRF. API keys use a required environment pepper, a UUID selector, a one-time 32-byte secret, and HMAC digest storage. V6 adds owner-managed endpoints with exact subscriptions, immutable one-time `whsec_` signing material encrypted with AES-256-GCM, owner-bound cursor pagination, optimistic configuration updates, and idempotent enable/disable. V7 supports publisher API-key event acceptance: the delivery module stores immutable JSONB events and their exact enabled-subscription delivery snapshot atomically, with project-scoped idempotency and no browser session or CSRF requirement. V8 adds the worker claim foundation: bounded PostgreSQL-time `PENDING` claims, lease/token fencing, paused-backlog filtering plus final endpoint row-lock recheck, expired pre-attempt recovery, and local permit reservation. V9 adds durable `STARTED` attempts: a current-claim/endpoint snapshot atomically increments attempt count, stores one numbered attempt, fingerprints the URL, and extends the lease; dispatch instructions carry opaque encrypted signing material and are never persisted. V10 adds conditional attempt finalization, equal-jitter retry scheduling, immutable `UNKNOWN` recovery with late diagnostics, and a worker-only bounded polling lifecycle using virtual-thread tasks behind the permit limit. V11 adds owner-scoped event/delivery/attempt history with opaque filter-bound cursors, bounded escaped attempt previews, and a replay transaction that reserves a project idempotency key then creates one linked `PENDING` delivery. Existing worker orchestration consumes that replay normally. Group 11 frontend is now complete: its React/Vite dashboard has session/auth controls, query-cached project and configuration lists, creation-only raw API-key/signing-secret reveals kept out of cache/storage, endpoint configuration, bounded REST-polled history, safe diagnostic rendering, and exhausted-delivery replay with a component-memory idempotency key. Docker, operational observability, and terminal-history retention are now complete; cloud, CI, load/JVM profiling, and an owner-led authenticated dashboard walkthrough remain deferred.

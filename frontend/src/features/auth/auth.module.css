@@ -1,3 +1,37 @@
+.skipLink {
+  background: var(--focus);
+  color: #071120;
+  inset-block-start: 12px;
+  inset-inline-start: 16px;
+  padding: 10px 14px;
+  position: fixed;
+  transform: translateY(-160%);
+  z-index: 1;
+}
+
+.skipLink:focus-visible {
+  transform: translateY(0);
+}
+
+.loginHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  min-height: 44px;
+}
+
+.brandLink {
+  color: var(--text);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+.overviewLink {
+  color: var(--muted);
+}
+
 .loginLayout {
   align-items: center;
   display: grid;

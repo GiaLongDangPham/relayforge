@@ -335,13 +335,103 @@ oldest-due age, database pressure, or a real need for independent retained
 consumers. Any proposal must define outbox/atomic publication, duplicate-safe
 consumption, retry/dead-letter semantics, cutover, reconciliation, and rollback.
 
+## Owner-approved product and job-readiness roadmap
+
+This roadmap is the durable progress ledger for the next sequence of work.
+It intentionally prioritizes product clarity and a credible owner workflow
+before new infrastructure. It does not weaken or replace the accepted
+PostgreSQL delivery source of truth, at-least-once semantics, security
+boundaries, or the evidence gates above. Each row is a parent initiative that
+must be split into small, testable child slices before implementation.
+
+**Tracking rule:** update this table when a child slice starts, materially
+changes, or completes; record the active child and its scoped evidence in
+`tasks/CURRENT.md`. `docs/AGENT_CONTEXT.md` is only a concise pointer to this
+ledger. A new material architecture, security, data, or infrastructure
+trade-off still requires an ADR/owner decision before implementation. Every
+final discussion or implementation report must also preserve the roadmap
+pointer: next child, immediate work, known substep count, and pending owner
+decision plus recommendation.
+
+| Order | Parent initiative | Status | Intended outcome and boundaries |
+| --- | --- | --- | --- |
+| U1 | Product story and public landing | **Complete (U1.1–U1.4)** | Define information architecture and truthful copy, then add a public landing page that explains Publisher → RelayForge → signed webhook receiver, at-least-once delivery, retry, replay, and safe limits. It may link to private sign-in but must not expose credentials, raw secrets, or real delivery data. |
+| U2 | First-owner onboarding | Planned | Empty states and a guided first success path: create project → create endpoint → create API key → publish test event → inspect delivery. Preserve one-time secret handling; do not add public registration or self-serve accounts. |
+| U3 | Operational dashboard clarity | Planned | Make delivery health, statuses, retries, replay, and next actions understandable. New backend summary/read endpoints are allowed only when their query contract and safe aggregation are explicit; no change to delivery state-machine semantics. |
+| U4 | Design system, responsive behavior, and accessibility | Planned | Establish reusable visual tokens and consistent loading/empty/error/success states; verify semantic HTML, keyboard/focus flow, contrast, reduced motion, 320px width, and 200% zoom. Do not adopt a UI library solely for visual novelty. |
+| U5 | Portfolio-demo quality | Planned | Add safe public documentation/screenshots/demo script and proportionate frontend smoke/E2E coverage. A public read-only interactive demo needs a separately approved isolated dataset and security model. |
+| J1 | Organization and RBAC | Planned; decision gate | Expand from one owner/project to organization membership and tenant-aware authorization. Recommended first contract is organization-level `OWNER`, `OPERATOR`, and `VIEWER`; project-specific ACL, invitations, and public onboarding remain later decisions. Every API authorization path needs cross-role and cross-tenant evidence. |
+| J2 | OAuth2/OIDC learning extension | Planned; decision gate | Learn external identity/provider integration without replacing the correct current server-session model merely to add JWT. Scope, provider, token/session boundary, and role mapping require a dedicated contract. |
+| J3 | Multi-replica readiness and Redis | Planned; evidence gate | First scale API and worker locally and measure sessions, PostgreSQL claims, SSE, pool pressure, and publisher admission. Add Redis only if shared low-latency rate limiting/cache state is needed across API replicas, with an explicit failure policy; never make it the delivery correctness source. |
+| J4 | Messaging and transactional outbox | Planned; evidence gate | Learn transactional outbox, idempotent consumers, acknowledgements, redelivery, retry, DLQ, reconciliation, and rollback before choosing one broker. RabbitMQ is the recommended first implementation because its work-queue semantics fit delivery dispatch; Kafka/SQS remain comparison options, not parallel additions. |
+| J5 | AWS ECS deployment | Planned; evidence gate | Deploy API and worker as independently scalable services using ECS/Fargate only after local multi-replica evidence. Cover image registry, IAM, network boundary, external database, health checks, logs/metrics, rollback, and cost. Do not run ECS and Kubernetes as duplicate production targets. |
+| J6 | Kubernetes lab | Planned; learning gate | Use kind/minikube first to learn Deployment, Service, Gateway, ConfigMap/Secret, probes, resource limits, rollout, and failure recovery. A production Kubernetes move needs a separate operational/cost need beyond ECS or Compose. |
+| J7 | Interview and system-design closeout | Planned | Keep ADRs, diagrams, failure drills, CV bullets, and interview explanations current. Every technology must be explainable through its problem, trade-off, invariant, and evidence—not presented as a keyword list. |
+
+### Immediate next child slice: U2.1
+
+Define the first-owner empty-state and guided-success contract before adding
+any onboarding UI:
+
+1. distinguish a first owner with no projects from a returning owner with an
+   empty filtered view or an API/loading/error state;
+2. establish the safe, ordered guidance from project to endpoint, one-time API
+   key reveal, test publish, and delivery inspection, including what must not
+   be shown after the secret is dismissed;
+3. identify which guidance is client-side presentation versus an existing API
+   workflow, without adding registration, demo credentials, or persisted
+   onboarding state; and
+4. define acceptance evidence and split the implementation into the smallest
+   coherent follow-on children.
+
+**No owner decision is pending.** The recommendation is to preserve the
+current one-time secret contract and start with client-side, state-derived
+guidance; propose a decision only if analysis shows a genuine need for durable
+onboarding progress or a new backend read contract.
+
+### Expected U1 child map
+
+1. **U1.1 — information architecture and public/private contract:** four
+   checkpoints covering visitor questions/audience, truthful product promise,
+   landing-section hierarchy, and acceptance/public-data boundaries.
+2. **U1.2 — public route and semantic page skeleton:** implement the landing
+   route, navigation, content landmarks, and private sign-in handoff without
+   changing authentication behavior.
+3. **U1.3 — visual product narrative:** implement the workflow explanation,
+   reliability/limitations content, purposeful imagery/icons, responsive
+   presentation, and restrained interaction polish within the existing stack.
+4. **U1.4 — acceptance and handoff:** keyboard/narrow-width/browser checks,
+   frontend lint/build, safe unauthenticated smoke, documentation, and durable
+   progress update.
+
+This is an expected split, not permission to implement all four at once. If a
+child becomes too heavy, split it again before implementation and report the
+new child map to the owner.
+
+### Expected U2 child map
+
+1. **U2.1 — first-owner empty-state and guided-success contract:** define the
+   audience/state distinctions, secure step order, presentation/API boundary,
+   and acceptance evidence.
+2. **U2.2 — project and endpoint empty-state guidance:** implement the
+   approved state-derived guidance in the existing private dashboard without
+   new persisted onboarding state.
+3. **U2.3 — first publish and inspection handoff:** make the transition from
+   one-time key creation to a safe test publish and delivery-history inspection
+   understandable, without caching or re-revealing a secret.
+4. **U2.4 — acceptance and handoff:** run owner-safe workflow evidence, check
+   no-secret regressions, document the result, and establish the U3.1 contract.
+
+This is an expected split, not permission to implement all four at once. If a
+child becomes too heavy, split it again before implementation and report the
+new child map to the owner.
+
 ## Next recommended slice
 
-The Phase 3 dashboard polling/SSE initiative is complete: REST polling remains
-the correctness path and the best-effort SSE learning extension is bounded by
-ADR-013. Select the next evidence-gated Phase 3 initiative only after reviewing
-its concrete need and trade-offs; do not add another distributed component by
-default.
+U2.1 is the next analysis slice in the owner-approved roadmap. Phase 3 Slice 5
+ordering and its remaining evidence-gated initiatives stay deferred; the
+current priority is product clarity and owner usability before a new distributed
+component.
 
 ## Deferred until evidence justifies them
 
@@ -358,6 +448,45 @@ default.
 - Kubernetes, microservices, multi-region, billing, and quota management.
 
 ## Change log
+
+### 2026-09-01
+
+- Completed U1.1 under owner-approved option A: recorded the public audience,
+  truthful product promise, landing information architecture, public/private
+  data boundary, and UI acceptance handoff. No runtime or authentication
+  behavior changed.
+- Completed U1.2 after the owner approved `react-router-dom`: introduced
+  `/`, `/login`, and `/app` composition; a static public landing module;
+  session-aware sign-in/private-dashboard route guards; and back/skip-link
+  navigation. The landing makes no React query or API-client call; backend
+  authorization remains authoritative. Frontend lint/build and a rebuilt
+  Docker frontend passed. Browser evidence covered the public artifact,
+  semantic landmarks, console, and 320px overflow. A local IPv6 relay still
+  serves a stale app at `localhost:5173`; artifact browser testing used
+  `127.0.0.1:5173`, where the intentional dashboard-origin CORS policy prevents
+  a sign-in form smoke.
+- Completed U1.3 with no new dependency or asset: the `features/landing`
+  module now has a semantic, code-native delivery-path figure (Publisher →
+  PostgreSQL durable intent → Worker → Receiver), stronger hero/action
+  hierarchy, foundation strip, and restrained hover/focus/reduced-motion-safe
+  polish. The visual states at-least-once limits explicitly and is not live
+  telemetry. A narrow-width check exposed `body`'s global 320px minimum width
+  creating a scrollbar beside a vertical scrollbar; removing that obsolete
+  minimum leaves 320px content without horizontal overflow. Frontend lint/build
+  and a no-dependency Docker frontend rebuild pass; public artifact screenshot,
+  semantic DOM, and console evidence pass.
+- Completed U1.4 landing acceptance and handoff. The skip target is now
+  programmatically focusable (`main#main-content`, `tabIndex=-1`); the public
+  artifact proved keyboard order at the start of the page (skip link → brand →
+  section navigation), a visible 2.4px focus outline, one `h1`, header/nav/
+  main/figure/footer landmarks, a reduced-motion guard, and a clean console.
+  At 320px the rendered page had no horizontal overflow. Frontend lint and an
+  elevated local production build passed, as did a rebuilt Docker frontend
+  artifact. The in-app browser could not change its browser zoom with Ctrl±,
+  so 200% zoom is not represented as direct evidence; the 320px reflow result
+  is the available automated evidence. `localhost:5173` remains an IPv6 relay
+  serving a stale app, so the rebuilt artifact was inspected at
+  `127.0.0.1:5173` with a cache-busting URL. No owner credential was entered.
 
 ### 2026-08-10
 
