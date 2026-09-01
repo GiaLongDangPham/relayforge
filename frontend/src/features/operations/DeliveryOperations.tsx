@@ -8,9 +8,11 @@ import {
   type ReplayDeliveryResult,
 } from '../../api/apiClient'
 import styles from './deliveryOperations.module.css'
+import { useDeliveryUpdateInvalidation } from './useDeliveryUpdateInvalidation'
 
 export function DeliveryOperations({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient()
+  useDeliveryUpdateInvalidation(projectId)
   const replayKeys = useRef(new Map<string, string>())
   const [eventType, setEventType] = useState('')
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)

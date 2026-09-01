@@ -313,6 +313,10 @@ class ApiClient {
     })
   }
 
+  deliveryUpdatesUrl(projectId: string): string {
+    return `${this.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/delivery-updates`
+  }
+
   private async mutate<T>(path: string, request: RequestInit): Promise<T> {
     const csrf = await this.request<CsrfToken>('/api/v1/auth/csrf')
     const headers = new Headers(request.headers)

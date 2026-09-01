@@ -4,47 +4,50 @@ Status: Complete
 
 ## Goal
 
-Complete Phase 3 Slice 4.3: implement the smallest API-only owner SSE stream
-and post-commit PostgreSQL notification bridge defined by ADR-013.
+Complete Phase 3 Slice 4.4: use the existing owner SSE stream only as a
+visible-Delivery-workspace TanStack Query invalidation hint.
 
 ## Decisions
 
-- PostgreSQL and existing owner-scoped REST history remain the source of truth;
-  SSE is a lossy invalidation hint only.
-- The delivery finalization/recovery transaction calls `pg_notify` only after
-  its durable state/circuit updates succeed; PostgreSQL releases it at commit.
-- API mode owns the dedicated reconnecting `LISTEN` connection and only fans a
-  received project/delivery identity to streams authorized for that project.
+- The dashboard opens at most one credentialed `EventSource` for the visible
+  selected project and closes it on workspace/project teardown, including
+  logout.
+- A stream open, reconnect/error, or valid `delivery.changed` message only
+  invalidates active project history query keys; it never mutates cached
+  delivery state from the hint.
+- Existing five-second REST polling remains enabled and is the recovery path
+  when SSE is unavailable or lossy.
 
 ## Out of scope
 
-Frontend `EventSource` integration, migrations, Redis/broker, delivery-state
-machine changes, WebSocket, ordering, RBAC, production/EC2 measurements, and
-performance/capacity claims.
+Backend contract/bridge changes, migrations, Redis/broker, delivery-state
+machine changes, WebSocket, ordering, RBAC, a connection-status UI,
+production/EC2 measurements, and performance/capacity claims.
 
 ## Evidence required
 
-- API-only authenticated stream returns 404 for a cross-owner project and is
-  absent from worker composition.
-- A committed finalization/recovery reaches same-project SSE with the bounded
-  payload; stale/rolled-back paths emit no notification.
-- Listener reconnect, client close, bounded heartbeat/lifetime, safe metrics,
-  and REST fallback boundaries are represented without any correctness impact.
+- Only the mounted Delivery workspace creates a stream, and cleanup closes it
+  when the selected project/workspace is gone.
+- Valid hints/open/reconnect/error invalidate the existing history queries;
+  malformed or wrong-project messages do not change cache state.
+- Frontend lint/build pass, the existing backend bridge regression remains
+  green, and the rebuilt local dashboard smoke has no console errors.
 
 ## Completion evidence
 
-- PostgreSQL Testcontainers proves that committed worker finalization and
-  `UNKNOWN` recovery emit the exact bounded project/delivery identity, while a
-  stale finalization emits nothing.
-- API HTTP integration proves owner authorization, cross-owner `404`, stream
-  headers, committed `LISTEN`/`NOTIFY` fan-out, and the absence of event body
-  or outcome data from the SSE payload.
-- Focused API/worker composition, finalization, and ArchUnit boundary checks
-  passed. The local Compose API/worker reload and dashboard browser smoke are
-  recorded in the project status ledger.
+- `DeliveryOperations` mounts the sole `EventSource` only while its Delivery
+  tab and selected project are visible; React cleanup closes it on tab,
+  project, or authenticated-app teardown.
+- Stream open, error/reconnect, and validated same-project `delivery.changed`
+  messages invalidate only the pre-existing history query families. The hook
+  rejects malformed or wrong-project message data and never writes a delivery
+  state from SSE.
+- Frontend lint and TypeScript/Vite production build passed. The rebuilt local
+  dashboard reached its sign-in screen with no browser console warning/error;
+  the committed backend SSE bridge remains covered by Slice 4.3's focused
+  Testcontainers HTTP evidence.
 
 ## Next action
 
-Start Slice 4.4: integrate one visible-dashboard `EventSource` as a lossy
-TanStack Query invalidation hint while retaining the existing five-second REST
-polling recovery path.
+Phase 3's polling/SSE initiative is complete. Select the next evidence-gated
+Phase 3 initiative only when its own scope and trade-offs are reviewed.

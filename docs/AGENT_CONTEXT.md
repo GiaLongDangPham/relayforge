@@ -64,7 +64,11 @@ the project ID, delivery ID, and observation time to owner-authorized SSE
 streams. It keeps a 15-second heartbeat and 15-minute lifetime, cleanly closes
 streams at shutdown, and exposes bounded outcome-only metrics. The stream has
 no replay, ordering, or correctness guarantee; worker composition has no SSE
-route or listener. Frontend `EventSource` integration remains a later slice.
+  route or listener. Slice 4.4 mounts one credentialed `EventSource` only for
+  the visible selected-project Delivery workspace. Open/reconnect/error and a
+  validated same-project hint invalidate existing history queries; the client
+  never writes delivery state from SSE and keeps five-second REST polling as
+  recovery.
 
 The backend uses `com.gialong.relayforge` with `identity`, `project`, `endpoint`, and `delivery` capability packages. ArchUnit tests enforce the approved dependency graph, cycle freedom, and cross-module public-API access. A strict required `relayforge.runtime=api|worker` selects one process. Both modes use a servlet context: API hosts business routes; worker hosts only health/Prometheus behind a management permit chain and deny-all fallback. The persistence foundation uses Spring JDBC/Hikari, Flyway, Hibernate/JPA, and PostgreSQL Testcontainers against pinned PostgreSQL 17.10 in the `public` schema. V2 creates `owner_accounts`; V3 creates the technical Spring Session tables. Identity has race-safe JDBC bootstrap and ordinary JPA credential lookup, with BCrypt work outside short transactions, dummy work for unknown users, generic invalid outcomes, and no public hash exposure.
 
