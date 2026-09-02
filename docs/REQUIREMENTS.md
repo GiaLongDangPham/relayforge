@@ -354,3 +354,134 @@ requirements and security baseline. U1.2 and later UI slices must prove that:
 
 This contract does not approve a routing dependency, authentication change,
 new API, analytics integration, public demo dataset, or delivery-runtime change.
+
+## 13. First-owner onboarding contract (U2.1)
+
+This contract makes the existing private owner workflow understandable without
+changing the delivery protocol, identity model, API contract, or one-time
+secret rules. It applies only after an authenticated owner reaches the existing
+dashboard. It does not add public registration, shared/demo credentials,
+persisted onboarding progress, a new endpoint, or an automatic publish.
+
+### 13.1 State-derived guidance
+
+Guidance is derived from successful owner-scoped reads and short-lived UI state;
+it is not a durable workflow status. Loading, a failed request, an expired
+session, and an incomplete paginated resource list are distinct operational
+states and must not be presented as a missing resource or completed step.
+
+There is no project deletion or project-list filter in v1. Therefore a
+successful empty first page from `GET /projects` means the owner has no project
+and is the first-project state. It is not a separate “returning owner with an
+empty filtered list” case. For API keys and endpoints, the dashboard may say
+that none exist only after a successful fully exhausted list; a non-null cursor
+means it must load more or use neutral wording instead of claiming absence.
+
+| Owner-visible state | Evidence required | Primary next action | Must not imply |
+| --- | --- | --- | --- |
+| First project | Owned-project list succeeds with no items | Create a project | That an account, project, or key was created automatically. |
+| Project selected, no configured endpoint | Selected project's endpoint list succeeds and is exhausted with no items | Create a subscribed endpoint | That a later event will route before an endpoint is enabled. |
+| Endpoints exist, none enabled | Endpoint list is complete and every endpoint is paused | Enable or create an enabled subscribed endpoint | That publishing will create a delivery. |
+| Enabled subscribed endpoint exists, no usable raw key in hand | At least one enabled endpoint is visible; API-key metadata cannot reveal raw material | Create a publisher API key or paste an already-held key for this project | That a listed key can be copied/recovered. |
+| Test event accepted with zero deliveries | Publish response has `deliveryCount: 0` | Inspect event type and enabled endpoint subscriptions | Receiver success or an eventual delivery. |
+| Test event accepted with one or more deliveries | Publish response has `deliveryCount > 0` | Open Delivery history and inspect the asynchronous outcome | Synchronous receiver success, exactly-once processing, or ordering. |
+
+The dashboard must keep an API/list error actionable in place (for example,
+retry or refresh guidance) and must not overwrite it with onboarding copy. A
+returning owner with existing projects begins from the selected project and sees
+only the first unmet configuration step; completed steps stay compact rather
+than forcing a linear wizard.
+
+Within a selected project, the dashboard presents the first-success path as a
+four-step walkthrough: **enabled endpoint**, **one-time API key**, **test
+event**, and **delivery inspection**. It displays one current step with one
+visually primary action and a short explanation; other steps remain visibly
+pending or complete without competing primary actions. Opening a tab alone is
+not progress. A step advances only after the relevant existing fact is known:
+an enabled endpoint is read, an API key creation response succeeds, a publish
+response succeeds, or the owner opens the existing Delivery view after a routed
+publish. This transient guide state may live only in the selected-project React
+tree and contains no raw key, signing secret, event payload, or credential.
+
+### 13.2 Guided first-success path
+
+The private dashboard guides one safe, optional local success path in this
+order:
+
+1. **Create project.** The owner supplies a project name; the existing owner
+   session and CSRF-protected project API remain the authority.
+2. **Configure endpoint.** The owner names a receiver, selects one or more
+   event types, and enables the endpoint. The guide explains that only enabled
+   matching subscriptions create deliveries. On successful creation, the
+   signing secret is shown once so the owner can configure receiver verification
+   before sending an event.
+3. **Create publisher API key.** The owner assigns a display name and handles
+   the one-time raw key. The guide explicitly says it will not be listed or
+   recoverable later.
+4. **Publish one test event.** The owner manually pastes that key into the
+   existing password-type test input, chooses an event type subscribed by the
+   enabled endpoint, and submits valid JSON. The dashboard generates the
+   idempotency key for this one new-event action; a repeated request is an
+   idempotency demonstration, not a second guided success step.
+5. **Inspect delivery.** The owner follows the existing result handoff to
+   Delivery history. A `202` acceptance proves durable acceptance and the
+   number of created deliveries, not that the receiver has finished. History,
+   existing REST polling, and the best-effort SSE invalidation hint expose the
+   later outcome.
+
+The path may show a deliberate “zero routes” experiment separately, but it is
+never labeled the first delivery success path. It may point to the existing
+local receiver guidance, but must not prefill an endpoint with a hidden shared
+secret, mutate receiver configuration, or make an outbound request itself.
+
+When a walkthrough CTA opens an existing workspace, the dashboard must bring
+that workspace heading into view and move programmatic focus to it. This gives
+both pointer and keyboard users an immediate, named destination; it is
+orientation only and must not advance the guide by itself. Smooth scrolling
+respects the user's reduced-motion preference.
+
+### 13.3 Secret and ownership invariant
+
+The guide must preserve the existing secret contract:
+
+- raw API keys and endpoint signing secrets appear only in their successful
+  creation responses and only in their existing component-local one-time
+  presentation;
+- no guide/progress object, query cache, route state, URL, browser storage,
+  analytics event, error message, clipboard abstraction, or delivery-history
+  record may retain either raw value;
+- the dashboard must not automatically transfer a raw API key between the
+  creation and test-event views; the owner explicitly pastes it, and the test
+  input can be cleared;
+- loss of a raw API key means create a replacement key; loss of an endpoint
+  signing secret follows the existing disable-and-replace rule; and
+- all guidance remains project-scoped and never converts owner UI state into
+  publisher authorization. The existing API-key/path-project check remains the
+  authority.
+
+### 13.4 UI/API boundary and acceptance handoff
+
+U2.2 through U2.4 may compose the existing project, endpoint, API-key, test-event, and
+delivery-history calls and their response metadata. It must not add a
+`firstRun` column, a progress API, a count endpoint, a privilege, an API client
+store, or a backend mutation. A later slice may propose such a contract only if
+state-derived guidance is demonstrably insufficient; that would be a material
+product/data decision requiring owner approval.
+
+U2 onboarding acceptance must prove:
+
+- a successful empty project list offers project creation, while loading/error
+  states remain visibly distinct;
+- the next recommendation changes only after the required successful,
+  owner-scoped data is available, including pagination safety for absence
+  claims;
+- no-enabled-endpoint and zero-delivery outcomes explain why they are not a
+  delivery success;
+- raw key/signing-secret values never appear in a list, query cache, route,
+  browser storage, or after their one-time view is dismissed; and
+- a project with a valid enabled route can complete the existing test publish
+  and delivery-inspection handoff without changing publisher, worker, or SSE
+  semantics; and
+- each current-step CTA visibly reveals and programmatically focuses its named
+  existing workspace, while opening the workspace alone leaves guide progress
+  unchanged.

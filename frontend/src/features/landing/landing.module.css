@@ -18,7 +18,7 @@
   display: grid;
   gap: 20px;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  padding-block: 8px 32px;
+  padding-block: 8px 20px;
 }
 
 .brand {
@@ -69,9 +69,9 @@
 .hero {
   align-items: center;
   display: grid;
-  gap: clamp(40px, 7vw, 96px);
-  grid-template-columns: minmax(0, 1.1fr) minmax(20rem, 0.9fr);
-  padding-block: clamp(64px, 10vw, 136px);
+  gap: clamp(28px, 4vw, 56px);
+  grid-template-columns: minmax(0, 1.2fr) minmax(19rem, 0.8fr);
+  padding-block: clamp(32px, 5.5vw, 72px);
   position: relative;
 }
 
@@ -87,15 +87,15 @@
 }
 
 .hero h1 {
-  font-size: clamp(2.8rem, 6vw, 5.5rem);
-  line-height: 1;
-  margin: 16px 0 24px;
+  font-size: clamp(2.6rem, 4.75vw, 4.5rem);
+  line-height: 1.06;
+  margin: 12px 0 18px;
 }
 
 .heroLead {
   color: var(--muted);
-  font-size: clamp(1.1rem, 2.3vw, 1.35rem);
-  line-height: 1.6;
+  font-size: clamp(1rem, 1.6vw, 1.2rem);
+  line-height: 1.55;
   margin: 0;
   max-width: 42rem;
 }
@@ -104,17 +104,17 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-block-start: 32px;
+  margin-block-start: 24px;
 }
 
 .deliveryPath {
   background:
     linear-gradient(145deg, color-mix(in srgb, var(--accent) 14%, var(--surface-raised)), var(--surface));
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
-  border-radius: 24px;
+  border-radius: 20px;
   box-shadow: var(--shadow);
   margin: 0;
-  padding: clamp(20px, 3vw, 32px);
+  padding: clamp(16px, 2vw, 24px);
 }
 
 .deliveryPath figcaption {
@@ -132,15 +132,15 @@
 }
 
 .deliveryPath figcaption strong {
-  font-size: clamp(1.35rem, 2.5vw, 1.7rem);
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
   letter-spacing: -0.03em;
 }
 
 .deliveryPathSteps {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   list-style: none;
-  margin: 28px 0 0;
+  margin: 20px 0 0;
   padding: 0;
 }
 
@@ -150,9 +150,9 @@
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 14px;
   display: grid;
-  gap: 14px;
+  gap: 12px;
   grid-template-columns: auto minmax(0, 1fr);
-  padding: 14px;
+  padding: 12px;
   position: relative;
 }
 
@@ -196,8 +196,8 @@
 
 .pathFootnote {
   border-top: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
-  margin: 22px 0 0;
-  padding-block-start: 18px;
+  margin: 16px 0 0;
+  padding-block-start: 14px;
 }
 
 .proofPoints {

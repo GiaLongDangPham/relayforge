@@ -1,22 +1,16 @@
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { type SubmitEvent, useMemo, useState } from 'react'
 import { apiClient, ApiProblem, type WebhookEndpointDetails } from '../../api/apiClient'
 import { OneTimeSecret } from '../secrets/OneTimeSecret'
+import { endpointQueryKey, useEndpointPages } from './useEndpointPages'
 import styles from './endpoints.module.css'
-
-const endpointQueryKey = (projectId: string) => ['projects', projectId, 'endpoints'] as const
 
 export function EndpointPanel({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient()
   const [selectedEndpointId, setSelectedEndpointId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [signingSecret, setSigningSecret] = useState<string | null>(null)
-  const endpointsQuery = useInfiniteQuery({
-    queryKey: endpointQueryKey(projectId),
-    initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => apiClient.listEndpoints(projectId, pageParam),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  })
+  const endpointsQuery = useEndpointPages(projectId)
   const endpoints = useMemo(() => endpointsQuery.data?.pages.flatMap((page) => page.items) ?? [], [endpointsQuery.data])
   const activeEndpointId = endpoints.some((endpoint) => endpoint.id === selectedEndpointId) ? selectedEndpointId : null
   const activeEndpoint = creating ? null : endpoints.find((endpoint) => endpoint.id === activeEndpointId) ?? null
@@ -53,7 +47,7 @@ export function EndpointPanel({ projectId }: { projectId: string }) {
     <section className={styles.panel} aria-labelledby="endpoints-heading">
       <div className={styles.heading}>
         <div>
-          <h3 id="endpoints-heading">Endpoints</h3>
+          <h3 id="endpoints-heading" tabIndex={-1}>Endpoints</h3>
           <p>Route subscribed event types to webhook receivers.</p>
         </div>
         <button onClick={() => { setSelectedEndpointId(null); setCreating(true) }} type="button">New endpoint</button>

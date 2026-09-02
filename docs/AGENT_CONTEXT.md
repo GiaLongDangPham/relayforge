@@ -1,6 +1,6 @@
 # RelayForge Agent Context
 
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 
 RelayForge is a portfolio learning project: an outbound webhook delivery platform that demonstrates reliable at-least-once dispatch under failure and concurrency.
 
@@ -86,8 +86,23 @@ contract are authoritative in `REQUIREMENTS.md` section 12. U1.4 acceptance
 proved the public artifact's start-of-page keyboard order, visible focus,
 semantic landmarks, reduced-motion guard, clean console, and 320px no-overflow
 rendering; direct 200% browser zoom remains unavailable in the embedded browser.
-The current next child is U2.1, first-owner empty-state and guided-success
-contract. U1.3 provides a code-native
+U1.5 then compacted the same public hero from owner feedback without changing
+copy or behavior: title maximum 88px → 72px, hero height about 1,072px → 654px
+in the local browser measurement, with the workflow visible earlier.
+U2.1 defines state-derived private onboarding, pagination-safe absence claims,
+the secure project → enabled endpoint → one-time key → test event → inspection
+path, and the no-secret/no-persisted-progress invariant. U2.2 is complete:
+the dashboard now distinguishes first-project/loading/error, evaluates endpoint
+readiness only after pagination is exhausted, and routes the owner only to the
+existing Endpoints view. U2.3 is complete: a selected project now has one
+four-step walkthrough with only its current CTA active; it advances only from
+safe existing success facts and never holds raw material. U2.4 is complete: an
+owner-authorized disposable local project/endpoint/key/event proved all four
+real transitions and a `SUCCEEDED` delivery without recording raw material.
+Guide CTAs now reveal and focus their existing target panel while leaving
+progress unchanged until its real success fact. U3.1 dashboard-health contract
+analysis is next. U1.3 provides
+a code-native
 `DeliveryPathVisual` in `frontend/src/features/landing`, showing Publisher →
 PostgreSQL durable intent → Worker → Receiver without claiming live telemetry,
 exactly-once delivery, or ordering. It also removed the global `body` 320px

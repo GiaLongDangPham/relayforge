@@ -6,7 +6,7 @@ import styles from './apiKeys.module.css'
 
 const apiKeyQueryKey = (projectId: string) => ['projects', projectId, 'api-keys'] as const
 
-export function ApiKeyPanel({ projectId }: { projectId: string }) {
+export function ApiKeyPanel({ onRawKeyCreated, projectId }: { onRawKeyCreated?: () => void; projectId: string }) {
   const queryClient = useQueryClient()
   const [rawKey, setRawKey] = useState<string | null>(null)
   const keysQuery = useInfiniteQuery({
@@ -27,13 +27,14 @@ export function ApiKeyPanel({ projectId }: { projectId: string }) {
     // Do not use a mutation here: TanStack's mutation cache must never retain raw key material.
     const created = await apiClient.createApiKey(projectId, displayName)
     setRawKey(created.rawKey)
+    onRawKeyCreated?.()
     await queryClient.invalidateQueries({ queryKey: apiKeyQueryKey(projectId) })
   }
 
   return (
     <section className={styles.panel} aria-labelledby="api-keys-heading">
       <div>
-        <h3 id="api-keys-heading">Publisher API keys</h3>
+        <h3 id="api-keys-heading" tabIndex={-1}>Publisher API keys</h3>
         <p className={styles.muted}>A publisher uses one key to accept events for this project. Only metadata is listed after creation.</p>
       </div>
       <CreateApiKeyForm onCreate={create} />

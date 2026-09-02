@@ -1,58 +1,38 @@
-# Current Task
+# U1.5 — Compact landing hero follow-up
 
 Status: Complete
 
-## Goal
+## Outcome
 
-Completed U1.4: independently accepted the public landing for keyboard,
-semantic, responsive, motion, build, and safe unauthenticated behavior; and
-recorded the U2.1 handoff.
+Compacted the public landing hero in response to owner feedback, preserving its
+approved story and first-viewport purpose while making the page easier to take
+in as one overview.
 
-## Decisions
+## Changes
 
-- U1.1's product, truthful-claim, and public/private contract in
-  `docs/REQUIREMENTS.md` section 12 remains authoritative.
-- U1.2–U1.3 implementation is the subject under test; U1.4 adds no product
-  feature and does not treat client routing as authorization.
-- The owner authorizes use of the configured owner account if an authenticated
-  test is necessary. Browser policy still requires confirmation immediately
-  before transmitting a password; the planned safe acceptance path does not
-  require it.
+- Reduced desktop title maximum from 88px to 72px and loosened its oversized
+  multi-line footprint without weakening the heading hierarchy.
+- Reduced hero block padding maximum from 136px to 72px, grid gap maximum from
+  96px to 56px, and header trailing space from 32px to 20px.
+- Gave the text column proportionally more room and condensed the delivery-path
+  card's padding, title, steps, and footnote spacing. Body text and 44px action
+  targets remain readable and unchanged in purpose.
 
-## Out of scope
+## Verification
 
-New UI features, external assets or dependencies, public live data, new API
-endpoints, authentication or authorization changes, public registration, demo
-credentials/data, analytics, RBAC, Redis/broker/Kubernetes, and delivery-state
-behavior.
-
-## Completed checkpoints
-
-1. Confirmed start-of-page keyboard order (skip link → brand → section
-   navigation), visible skip-link focus styling, a native `#main-content`
-   target with a programmatically focusable main landmark, and accessible
-   public names/landmarks. Browser automation also followed the Reliability
-   anchor; its same-page skip-link click did not expose a fragment change.
-2. Confirmed 320px public rendering has no horizontal overflow, inspected the
-   reduced-motion guard, and found no browser console messages. The embedded
-   browser did not support Ctrl± zoom, so a direct 200% zoom observation is
-   recorded as an environment limitation rather than claimed.
-3. Ran frontend lint, an elevated local production build, a rebuilt Docker
-   frontend artifact, and safe unauthenticated smoke at `127.0.0.1:5173`.
-   `localhost:5173` is a stale IPv6 relay in this environment; no owner
-   password was entered.
-
-## Completion evidence
-
-- `npm run lint` passed.
-- `npm run build` passed outside the Windows sandbox after the sandboxed
-  process was blocked by `spawn EPERM`.
-- The rebuilt Docker frontend rendered the current landing artifact; browser
-  evidence is recorded in `PROJECT_STATUS.md`.
+- At the same desktop browser setting, hero height reduced from about 1,072px
+  to 654px; the workflow section begins about 430px earlier.
+- `npm run lint` and elevated `npm run build` passed.
+- `docker compose up -d --build --no-deps frontend` passed.
+- Public browser check found one `h1`, one `main`, the named section navigation,
+  no console entries, and no horizontal overflow at the embedded browser's
+  narrow 640 CSS-pixel result for its 320-device setting.
+- The Front-End Checklist MCP's `review_code` tool remains unavailable in this
+  runtime. Manual layout, typography, accessibility, semantics, motion, and
+  responsive review found no Critical or High issue.
 
 ## Next action
 
-Begin U2.1 analysis: define first-owner versus other empty states and the
-secure, state-derived guided-success contract. No owner decision is pending;
-recommend preserving one-time secret handling and avoiding persisted onboarding
-state unless analysis exposes a concrete requirement.
+Analyze U3.1 — dashboard-health contract in three checkpoints: owner questions,
+current safe reads, then any justified aggregate contract. No owner decision is
+pending; recommend using existing reads first.

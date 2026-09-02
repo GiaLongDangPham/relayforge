@@ -1,0 +1,149 @@
+.walkthrough {
+  background: color-mix(in srgb, var(--surface-raised) 74%, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  display: grid;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.walkthroughHeading,
+.walkthroughHeading > div,
+.step,
+.stepHeading,
+.stepDetail {
+  display: grid;
+}
+
+.walkthroughHeading {
+  gap: 8px 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.8fr);
+}
+
+.walkthroughHeading > div,
+.stepDetail {
+  gap: 6px;
+}
+
+.walkthroughHeading h3,
+.walkthroughHeading p,
+.stepHeading h4,
+.stepDetail p {
+  margin: 0;
+}
+
+.walkthroughHeading h3 {
+  font-size: clamp(1.2rem, 2vw, 1.45rem);
+}
+
+.walkthroughHeading > p,
+.stepDetail {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.steps {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.step {
+  align-items: start;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  gap: 14px;
+  grid-template-columns: 32px minmax(0, 1fr);
+  opacity: 0.58;
+  padding: 14px;
+}
+
+.step.current {
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  border-color: var(--accent-strong);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 12%, transparent);
+  opacity: 1;
+}
+
+.step.complete {
+  opacity: 0.86;
+}
+
+.stepNumber {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 800;
+  height: 32px;
+  justify-content: center;
+}
+
+.current .stepNumber {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #071224;
+}
+
+.complete .stepNumber {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.stepContent {
+  min-width: 0;
+}
+
+.stepHeading {
+  align-items: center;
+  gap: 8px 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.stepHeading h4 {
+  font-size: 1rem;
+}
+
+.currentLabel,
+.completeLabel,
+.pendingLabel {
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.currentLabel {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+
+.completeLabel {
+  color: var(--success);
+}
+
+.pendingLabel {
+  color: var(--muted);
+}
+
+.stepDetail {
+  margin-top: 8px;
+}
+
+.stepDetail button {
+  justify-self: start;
+  margin-top: 8px;
+}
+
+@media (max-width: 720px) {
+  .walkthroughHeading {
+    grid-template-columns: 1fr;
+  }
+}

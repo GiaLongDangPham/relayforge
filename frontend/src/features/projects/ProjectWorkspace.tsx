@@ -14,6 +14,7 @@ export function ProjectWorkspace() {
     ? selectedProjectId
     : projects[0]?.id ?? null
   const selectedProject = projects.find((project) => project.id === activeProjectId) ?? null
+  const isFirstProject = !isPending && !error && projects.length === 0
 
   async function create(name: string) {
     const created = await createProject.mutateAsync(name)
@@ -33,10 +34,9 @@ export function ProjectWorkspace() {
             <h2 id="projects-heading">Projects</h2>
           </div>
         </div>
-        <CreateProjectForm onCreate={create} />
+        <CreateProjectForm firstProject={isFirstProject} onCreate={create} />
         {isPending ? <p className={styles.muted}>Loading projects…</p> : null}
         {error ? <p className={appStyles.formError} role="alert">Unable to load projects. Refresh the page and try again.</p> : null}
-        {!isPending && !error && projects.length === 0 ? <p className={styles.muted}>Create your first project to configure webhook delivery.</p> : null}
         <div className={styles.projectList} aria-label="Owned projects">
           {projects.map((project) => (
             <button
@@ -71,7 +71,7 @@ export function ProjectWorkspace() {
   )
 }
 
-function CreateProjectForm({ onCreate }: { onCreate: (name: string) => Promise<void> }) {
+function CreateProjectForm({ firstProject, onCreate }: { firstProject: boolean; onCreate: (name: string) => Promise<void> }) {
   const [name, setName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -92,6 +92,13 @@ function CreateProjectForm({ onCreate }: { onCreate: (name: string) => Promise<v
 
   return (
     <form className={styles.createForm} onSubmit={submit}>
+      {firstProject ? (
+        <div className={styles.firstProjectGuide}>
+          <p className={appStyles.eyebrow}>First setup</p>
+          <h3>Create your first project</h3>
+          <p>Projects define the owner boundary for endpoints, publisher API keys, and delivery history.</p>
+        </div>
+      ) : null}
       <label>
         New project
         <input

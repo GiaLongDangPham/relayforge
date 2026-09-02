@@ -355,8 +355,8 @@ decision plus recommendation.
 
 | Order | Parent initiative | Status | Intended outcome and boundaries |
 | --- | --- | --- | --- |
-| U1 | Product story and public landing | **Complete (U1.1–U1.4)** | Define information architecture and truthful copy, then add a public landing page that explains Publisher → RelayForge → signed webhook receiver, at-least-once delivery, retry, replay, and safe limits. It may link to private sign-in but must not expose credentials, raw secrets, or real delivery data. |
-| U2 | First-owner onboarding | Planned | Empty states and a guided first success path: create project → create endpoint → create API key → publish test event → inspect delivery. Preserve one-time secret handling; do not add public registration or self-serve accounts. |
+| U1 | Product story and public landing | **Complete (U1.1–U1.5)** | Define information architecture and truthful copy, then add a public landing page that explains Publisher → RelayForge → signed webhook receiver, at-least-once delivery, retry, replay, and safe limits. It may link to private sign-in but must not expose credentials, raw secrets, or real delivery data. |
+| U2 | First-owner onboarding | **Complete (U2.1–U2.4)** | Empty states and a guided first success path: create project → create endpoint → create API key → publish test event → inspect delivery. Preserve one-time secret handling; do not add public registration or self-serve accounts. |
 | U3 | Operational dashboard clarity | Planned | Make delivery health, statuses, retries, replay, and next actions understandable. New backend summary/read endpoints are allowed only when their query contract and safe aggregation are explicit; no change to delivery state-machine semantics. |
 | U4 | Design system, responsive behavior, and accessibility | Planned | Establish reusable visual tokens and consistent loading/empty/error/success states; verify semantic HTML, keyboard/focus flow, contrast, reduced motion, 320px width, and 200% zoom. Do not adopt a UI library solely for visual novelty. |
 | U5 | Portfolio-demo quality | Planned | Add safe public documentation/screenshots/demo script and proportionate frontend smoke/E2E coverage. A public read-only interactive demo needs a separately approved isolated dataset and security model. |
@@ -368,26 +368,15 @@ decision plus recommendation.
 | J6 | Kubernetes lab | Planned; learning gate | Use kind/minikube first to learn Deployment, Service, Gateway, ConfigMap/Secret, probes, resource limits, rollout, and failure recovery. A production Kubernetes move needs a separate operational/cost need beyond ECS or Compose. |
 | J7 | Interview and system-design closeout | Planned | Keep ADRs, diagrams, failure drills, CV bullets, and interview explanations current. Every technology must be explainable through its problem, trade-off, invariant, and evidence—not presented as a keyword list. |
 
-### Immediate next child slice: U2.1
+### Immediate next child slice: U3.1 — dashboard-health contract
 
-Define the first-owner empty-state and guided-success contract before adding
-any onboarding UI:
-
-1. distinguish a first owner with no projects from a returning owner with an
-   empty filtered view or an API/loading/error state;
-2. establish the safe, ordered guidance from project to endpoint, one-time API
-   key reveal, test publish, and delivery inspection, including what must not
-   be shown after the secret is dismissed;
-3. identify which guidance is client-side presentation versus an existing API
-   workflow, without adding registration, demo credentials, or persisted
-   onboarding state; and
-4. define acceptance evidence and split the implementation into the smallest
-   coherent follow-on children.
-
-**No owner decision is pending.** The recommendation is to preserve the
-current one-time secret contract and start with client-side, state-derived
-guidance; propose a decision only if analysis shows a genuine need for durable
-onboarding progress or a new backend read contract.
+Analyze what an owner must understand from Delivery history: state and retry
+meaning, where the next action belongs, which safe existing reads already answer
+the question, and which aggregate would justify a new read contract. Start with
+existing data and do not add a summary endpoint until a concrete owner question
+cannot be answered safely and efficiently. This is an analysis split of three
+small checkpoints; no owner decision is pending yet. If new aggregation is
+needed, present its query/ownership/freshness trade-off with a recommendation.
 
 ### Expected U1 child map
 
@@ -403,6 +392,9 @@ onboarding progress or a new backend read contract.
 4. **U1.4 — acceptance and handoff:** keyboard/narrow-width/browser checks,
    frontend lint/build, safe unauthenticated smoke, documentation, and durable
    progress update.
+5. **U1.5 — compact hero follow-up:** reduce visual density in response to
+   owner feedback while preserving the approved promise, hierarchy, semantics,
+   and public/private boundary.
 
 This is an expected split, not permission to implement all four at once. If a
 child becomes too heavy, split it again before implementation and report the
@@ -428,7 +420,7 @@ new child map to the owner.
 
 ## Next recommended slice
 
-U2.1 is the next analysis slice in the owner-approved roadmap. Phase 3 Slice 5
+U3.1 is the next analysis slice in the owner-approved roadmap. Phase 3 Slice 5
 ordering and its remaining evidence-gated initiatives stay deferred; the
 current priority is product clarity and owner usability before a new distributed
 component.
@@ -448,6 +440,35 @@ component.
 - Kubernetes, microservices, multi-region, billing, and quota management.
 
 ## Change log
+
+### 2026-09-02
+
+- Completed U1.5 compact-hero follow-up from owner visual feedback. The public
+  landing preserves its approved copy and structure, while the desktop hero now
+  uses a 72px maximum title (was 88px), a 72px maximum block padding (was
+  136px), a tighter balanced grid, and a denser delivery-path card. In the same
+  browser environment its hero height fell from about 1,072px to 654px and the
+  workflow starts roughly 430px earlier. Frontend lint/build and a rebuilt
+  local artifact passed; public semantic/console and narrow no-overflow checks
+  remain clean. No public data, dependency, API, or auth behavior changed.
+- Completed U2.4 with an owner-approved disposable local project, enabled local
+  success receiver, one-time publisher key, and one routed `onboarding.accepted`
+  test event. The full private UI flow advanced endpoint → key → test event →
+  Delivery, then displayed `SUCCEEDED` after the worker's asynchronous attempt.
+  The fixture remains deliberately labelled because v1 has no delete. Its raw
+  API key and signing secret were never recorded in docs or output; after each
+  one-time dismissal they were absent from the DOM, and the test-key input was
+  cleared after publish.
+- Improved walkthrough orientation: every current-step CTA now opens its
+  existing panel, scrolls its named heading into view, and programmatically
+  focuses it; reopening the current panel has the same behavior. It honors
+  reduced-motion preferences and remains orientation only, so tab opening does
+  not advance a step. Browser acceptance covered all four CTA destinations,
+  four completed steps, no current CTA at the end, clean console, no signing
+  secret/raw key in DOM, and narrow no-overflow layout.
+- Updated `AGENTS.md` frontend-checklist rule to distinguish a callable MCP
+  review from the required manual fallback. The plugin's `review_code` tool is
+  still not exposed in this runtime, so no MCP review is claimed.
 
 ### 2026-09-01
 
@@ -487,6 +508,43 @@ component.
   is the available automated evidence. `localhost:5173` remains an IPv6 relay
   serving a stale app, so the rebuilt artifact was inspected at
   `127.0.0.1:5173` with a cache-busting URL. No owner credential was entered.
+- Completed U2.1 contract in `docs/REQUIREMENTS.md` section 13. Guidance is
+  client-side and state-derived from successful existing owner reads; there is
+  no `firstRun` persistence, progress API, new endpoint, or automatic publish.
+  Because v1 has neither project deletion nor project-list filtering, a
+  successful empty project list is the first-project state rather than an
+  ambiguous returning-owner state. The contract requires pagination-safe
+  absence claims, orders the first success path as project → enabled subscribed
+  endpoint → one-time API key → test event → delivery inspection, and keeps
+  raw key/signing-secret custody unchanged. U2.2 now owns only project and
+  endpoint empty-state guidance; API-key/test-event guidance remains U2.3.
+- Completed U2.2 with no backend/API/dependency change. `ProjectWorkspace`
+  distinguishes a successful empty project list from loading/error and gives
+  its existing creation form first-project context. `EndpointReadinessGuide`
+  uses the existing shared owner-scoped endpoint query, exhausts pagination
+  before absence/all-paused claims, surfaces a retryable error rather than
+  onboarding copy, and only switches to the existing Endpoints tab. It never
+  creates, enables, or stores a resource. The authenticated owner browser
+  showed an existing project's “Endpoint route ready” state and the Endpoints
+  view with no `whsec_` in the DOM or console errors; no fixture was created,
+  so first-project/all-paused branches have source/build rather than live-data
+  evidence. Frontend lint, production build, Docker artifact rebuild, and a
+  public artifact smoke all passed. U2.3 owns API-key/test-event handoff.
+- Completed U2.3 as a four-step `FirstDeliveryWalkthrough`: enabled endpoint,
+  one-time API key, test event, and delivery inspection. Only the current step
+  shows one primary CTA and its concise rationale; completed/pending steps do
+  not compete. A guide CTA opens setup, while progress advances only from an
+  enabled endpoint read, a successful raw-key creation response, a publish
+  response, or opening Delivery after a routed publish. The React tree retains
+  only boolean/result-count facts, never raw key/secret/payload data. Existing
+  `ApiKeyPanel` and `TestEventsPanel` send only safe success signals upward.
+  An authenticated owner browser proved four steps, one current step, one CTA,
+  route-ready → API-key progression, responsive no-overflow, no signing secret
+  in the DOM, and a clean console. No test key/event was created, so real
+  post-creation/post-publish transitions remain U2.4 acceptance evidence.
+  The requested Front-End Checklist MCP was not exposed as a callable tool in
+  this runtime; a manual relevant review found no Critical/High issue in
+  semantic controls, responsive layout, state/error handling, or secret flow.
 
 ### 2026-08-10
 

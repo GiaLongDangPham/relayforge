@@ -12,11 +12,12 @@ type LastRequest = {
 }
 
 type TestEventsPanelProps = {
+  onPublishAccepted?: (result: PublishedEvent) => void
   projectId: string
   onViewDeliveries: () => void
 }
 
-export function TestEventsPanel({ projectId, onViewDeliveries }: TestEventsPanelProps) {
+export function TestEventsPanel({ onPublishAccepted, projectId, onViewDeliveries }: TestEventsPanelProps) {
   const queryClient = useQueryClient()
   const suggestionListId = useId()
   const keyHelpId = useId()
@@ -59,6 +60,7 @@ export function TestEventsPanel({ projectId, onViewDeliveries }: TestEventsPanel
     try {
       const published = await apiClient.publishEvent(projectId, apiKey, command.idempotencyKey, command.eventType, command.payload)
       setResult(published)
+      onPublishAccepted?.(published)
       if (rememberOnSuccess) {
         setLastRequest(command)
       }
@@ -103,7 +105,7 @@ export function TestEventsPanel({ projectId, onViewDeliveries }: TestEventsPanel
     <section className={styles.panel} aria-labelledby="test-events-heading">
       <div className={styles.heading}>
         <div>
-          <h3 id="test-events-heading">Test events</h3>
+          <h3 id="test-events-heading" tabIndex={-1}>Test events</h3>
           <p>This sends an event as a project publisher for local testing.</p>
         </div>
       </div>

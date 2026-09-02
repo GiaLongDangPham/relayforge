@@ -89,7 +89,7 @@ export function DeliveryOperations({ projectId }: { projectId: string }) {
     <section className={styles.panel} aria-labelledby="deliveries-heading">
       <div className={styles.heading}>
         <div>
-          <h3 id="deliveries-heading">Deliveries</h3>
+          <h3 id="deliveries-heading" tabIndex={-1}>Deliveries</h3>
           <p>Inspect accepted events, their webhook deliveries, and receiver diagnostics. Updates every 5 seconds while this tab is visible.</p>
         </div>
         <button onClick={() => void queryClient.invalidateQueries({ queryKey: ['projects', projectId] })} type="button">Refresh now</button>

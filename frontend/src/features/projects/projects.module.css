@@ -30,6 +30,25 @@
   padding: 16px;
 }
 
+.firstProjectGuide {
+  display: grid;
+  gap: 6px;
+}
+
+.firstProjectGuide h3,
+.firstProjectGuide p {
+  margin: 0;
+}
+
+.firstProjectGuide h3 {
+  font-size: 1.1rem;
+}
+
+.firstProjectGuide > p:last-child {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .createForm label,
 .renameForm label {
   display: grid;

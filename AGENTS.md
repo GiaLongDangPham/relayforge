@@ -65,3 +65,53 @@ when known (or say that analysis must split it), and whether an important owner
 decision is pending. When a decision is pending, include a recommendation.
 Do not lose this roadmap pointer merely because the owner asks intermediate
 questions.
+
+## Frontend Quality Rules
+
+For any frontend implementation or modification:
+
+1. Use the `frontend-checklist` MCP as the source of frontend best practices
+   when its tools are callable in the active session.
+
+2. When implementing or modifying:
+   - React components
+   - HTML
+   - CSS
+   - JavaScript/TypeScript
+   - forms
+   - responsive UI
+   - accessibility
+   - SEO
+   - frontend security
+   - images
+
+   review the affected code using Front-End Checklist.
+
+3. Use `review_code` on relevant changed frontend code when it is exposed.
+   If the plugin is installed but its MCP tools are unavailable, record that
+   limitation, perform the same relevant review manually, and do not claim an
+   MCP review occurred.
+
+4. Prioritize findings in this order:
+   Critical > High > Medium > Low.
+
+5. Critical and High findings should normally be fixed before considering
+   the task complete.
+
+6. Do not blindly implement every checklist rule.
+   Only apply rules relevant to the current page/component/project.
+
+7. Before completing a frontend feature:
+   - check accessibility
+   - responsive behavior
+   - semantic HTML
+   - loading/error/empty states
+   - performance regressions
+   - basic frontend security
+   - image optimization when applicable
+
+8. Before a release or major PR, use the Front-End Checklist launch/review
+   workflow for a broader audit.
+
+9. If the application is already deployed publicly, use `audit_url`
+   against the deployed HTTPS URL when useful.
