@@ -96,6 +96,16 @@ export type DeliveryHistorySummary = {
 
 export type DeliveryHistoryPage = { items: DeliveryHistorySummary[]; nextCursor: string | null }
 
+export type DeliveryProjectHealth = {
+  observedAt: string
+  dueEnabledCount: number
+  oldestDueEnabledAt: string | null
+  retryScheduledCount: number
+  inFlightCount: number
+  pausedCount: number
+  exhaustedCount: number
+}
+
 export type AttemptHistorySummary = {
   id: string
   attemptNumber: number
@@ -292,6 +302,10 @@ class ApiClient {
       parameters.set('eventId', eventId)
     }
     return this.request<DeliveryHistoryPage>(`/api/v1/projects/${projectId}/deliveries?${parameters.toString()}`)
+  }
+
+  async findDeliveryHealth(projectId: string): Promise<DeliveryProjectHealth> {
+    return this.request<DeliveryProjectHealth>(`/api/v1/projects/${projectId}/delivery-health`)
   }
 
   async findDelivery(projectId: string, deliveryId: string): Promise<DeliveryHistoryDetails> {

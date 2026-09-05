@@ -1,9 +1,10 @@
-import { useEffect, useMemo, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import appStyles from '../../app/app.module.css'
-import { useEndpointPages } from '../endpoints/useEndpointPages'
+import { useWalkthroughProgress } from './useWalkthroughProgress'
 import styles from './onboarding.module.css'
 
 type FirstDeliveryWalkthroughProps = {
+  initiallyOpen?: boolean
   apiKeyCreated: boolean
   deliveryOpened: boolean
   onOpenApiKeys: () => void
@@ -17,6 +18,7 @@ type FirstDeliveryWalkthroughProps = {
 type Step = 'endpoint' | 'apiKey' | 'testEvent' | 'delivery'
 
 export function FirstDeliveryWalkthrough({
+  initiallyOpen = false,
   apiKeyCreated,
   deliveryOpened,
   onOpenApiKeys,
@@ -26,61 +28,26 @@ export function FirstDeliveryWalkthrough({
   projectId,
   publishDeliveryCount,
 }: FirstDeliveryWalkthroughProps) {
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isError,
-    isFetchingNextPage,
-    isPending,
-    refetch,
-  } = useEndpointPages(projectId)
-  const endpoints = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data])
-  const endpointReady = endpoints.some((endpoint) => endpoint.enabled)
-
-  useEffect(() => {
-    if (!isError && hasNextPage && !isFetchingNextPage) {
-      void fetchNextPage()
-    }
-  }, [fetchNextPage, hasNextPage, isError, isFetchingNextPage])
-
-  const endpointState = isError
-    ? 'error'
-    : isPending || isFetchingNextPage || hasNextPage
-      ? 'checking'
-      : endpoints.length === 0
-        ? 'missing'
-        : endpointReady
-          ? 'ready'
-          : 'paused'
-
-  const activeStep: Step | null = endpointState === 'ready'
-    ? !apiKeyCreated
-      ? 'apiKey'
-      : publishDeliveryCount === null
-        ? 'testEvent'
-        : publishDeliveryCount === 0 || !deliveryOpened
-          ? 'delivery'
-          : null
-    : 'endpoint'
+  const [open, setOpen] = useState(initiallyOpen)
+  const { endpointState, activeStep, keyConfirmed, refetch } = useWalkthroughProgress(projectId, apiKeyCreated, publishDeliveryCount, deliveryOpened)
 
   const steps: Array<{ complete: boolean; detail: ReactNode; key: Step; title: string }> = [
     { key: 'endpoint', title: 'Route an endpoint', complete: endpointState === 'ready', detail: endpointDetail(endpointState, onOpenEndpoints, refetch) },
     {
       key: 'apiKey',
-      title: 'Create an API key',
-      complete: apiKeyCreated,
+      title: 'Publisher key',
+      complete: keyConfirmed,
       detail: apiKeyCreated
-        ? 'A new raw key was shown once. Keep it outside RelayForge before continuing.'
-        : <Action detail="Create a one-time publisher key. RelayForge will not show its raw value in the list later." label="Open API-key setup" onClick={onOpenApiKeys} />,
+        ? 'Key created. Save its one-time value outside RelayForge.'
+        : <Action detail="Create a key, then save its one-time value." label="Open API-key setup" onClick={onOpenApiKeys} />,
     },
     {
       key: 'testEvent',
       title: 'Send a test event',
       complete: publishDeliveryCount !== null,
       detail: publishDeliveryCount !== null
-        ? 'The event acceptance result is available below; publishing remains asynchronous.'
-        : <Action detail="Paste the raw key yourself, choose a subscribed event type, and send one JSON event." label="Open test-event setup" onClick={onOpenTestEvents} />,
+        ? 'Event sent. Delivery continues in the background.'
+        : <Action detail="Paste your key and send an event." label="Open test-event setup" onClick={onOpenTestEvents} />,
     },
     {
       key: 'delivery',
@@ -91,13 +58,13 @@ export function FirstDeliveryWalkthrough({
   ]
 
   return (
-    <section aria-labelledby="first-delivery-walkthrough-heading" className={styles.walkthrough}>
+    <section aria-label="Setup guide" className={styles.walkthrough}>
+      <button className={appStyles.secondaryButton} type="button" aria-expanded={open} aria-controls="walkthrough-content" onClick={() => setOpen(!open)}>{open ? 'Hide guide' : 'Setup guide'}</button>
+      <div id="walkthrough-content" hidden={!open}>
       <div className={styles.walkthroughHeading}>
         <div>
-          <p className={appStyles.eyebrow}>Guided first delivery</p>
-          <h3 id="first-delivery-walkthrough-heading">One clear next action at a time</h3>
+          <h3 id="first-delivery-walkthrough-heading">First webhook</h3>
         </div>
-        <p>Complete the current action to reveal the next one. This guide never stores secrets or changes delivery behavior.</p>
       </div>
       <ol className={styles.steps}>
         {steps.map((step, index) => {
@@ -110,29 +77,30 @@ export function FirstDeliveryWalkthrough({
                   <h4>{step.title}</h4>
                   {current ? <span className={styles.currentLabel}>Current step</span> : step.complete ? <span className={styles.completeLabel}>Complete</span> : <span className={styles.pendingLabel}>Up next</span>}
                 </div>
-                {current || step.complete ? <div className={styles.stepDetail}>{step.detail}</div> : null}
               </div>
             </li>
           )
         })}
       </ol>
+      <div className={styles.stepDetail}>{activeStep ? steps.find(step => step.key === activeStep)?.detail : <p>Guide complete. Check Deliveries when you need it.</p>}</div>
+      </div>
     </section>
   )
 }
 
 function endpointDetail(state: 'checking' | 'error' | 'missing' | 'paused' | 'ready', onOpenEndpoints: () => void, refetch: () => Promise<unknown>) {
-  if (state === 'checking') return 'Checking every configured endpoint before choosing the next action.'
-  if (state === 'error') return <Action detail="Endpoint readiness could not be confirmed. Retry before treating a route as missing or ready." label="Retry endpoint check" onClick={() => void refetch()} secondary />
-  if (state === 'missing') return <Action detail="An event creates a delivery only for an enabled endpoint with a matching subscription." label="Configure endpoint" onClick={onOpenEndpoints} />
-  if (state === 'paused') return <Action detail="Every configured endpoint is paused, so publishing now would create no delivery." label="Review endpoints" onClick={onOpenEndpoints} />
-  return 'An enabled subscribed endpoint is ready to receive matching deliveries.'
+  if (state === 'checking') return 'Checking your endpoints.'
+  if (state === 'error') return <Action detail="Endpoint status is unavailable." label="Retry endpoint check" onClick={() => void refetch()} secondary />
+  if (state === 'missing') return <Action detail="Create an enabled endpoint for this event." label="Configure endpoint" onClick={onOpenEndpoints} />
+  if (state === 'paused') return <Action detail="Enable an endpoint before sending an event." label="Review endpoints" onClick={onOpenEndpoints} />
+  return 'An enabled endpoint is ready.'
 }
 
 function deliveryDetail(publishDeliveryCount: number | null, deliveryOpened: boolean, onOpenDeliveries: () => void, onOpenEndpoints: () => void) {
-  if (publishDeliveryCount === null) return 'Send a test event first. Delivery history is where asynchronous receiver outcomes become visible.'
-  if (publishDeliveryCount === 0) return <Action detail="RelayForge accepted the event, but no enabled subscription matched it. This is not a delivery success." label="Review endpoint routing" onClick={onOpenEndpoints} />
-  if (deliveryOpened) return 'Delivery history is open. A routed event is still at-least-once and may finish after acceptance.'
-  return <Action detail="RelayForge accepted a routed event. Open Delivery history to inspect the asynchronous result." label="Open deliveries" onClick={onOpenDeliveries} />
+  if (publishDeliveryCount === null) return 'Send a test event first.'
+  if (publishDeliveryCount === 0) return <Action detail="No enabled endpoint matched this event." label="Review endpoint routing" onClick={onOpenEndpoints} />
+  if (deliveryOpened) return 'Delivery history is open.'
+  return <Action detail="Open deliveries to see the result." label="Open deliveries" onClick={onOpenDeliveries} />
 }
 
 function Action({ detail, label, onClick, secondary = false }: { detail: string; label: string; onClick: () => void; secondary?: boolean }) {

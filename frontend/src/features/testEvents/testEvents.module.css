@@ -83,6 +83,18 @@
   gap: 8px;
 }
 
+.fieldLabel {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.field {
+  display: grid;
+  font-weight: 600;
+  gap: 8px;
+}
+
 .form input,
 .form textarea {
   background: var(--input);

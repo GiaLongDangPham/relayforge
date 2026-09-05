@@ -3,9 +3,9 @@
   border: 1px solid var(--border);
   border-radius: 18px;
   display: grid;
-  gap: 20px;
-  margin-bottom: 24px;
-  padding: clamp(18px, 3vw, 28px);
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
 }
 
 .walkthroughHeading,
@@ -18,7 +18,7 @@
 
 .walkthroughHeading {
   gap: 8px 24px;
-  grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .walkthroughHeading > div,
@@ -49,16 +49,17 @@
   list-style: none;
   margin: 0;
   padding: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .step {
   align-items: start;
   border: 1px solid transparent;
   border-radius: 14px;
-  gap: 14px;
+  gap: 0.5rem;
   grid-template-columns: 32px minmax(0, 1fr);
   opacity: 0.58;
-  padding: 14px;
+  padding: 0.5rem;
 }
 
 .step.current {
@@ -103,11 +104,23 @@
 .stepHeading {
   align-items: center;
   gap: 8px 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .stepHeading h4 {
-  font-size: 1rem;
+  font-size: 0.875rem;
+}
+
+.walkthrough > button { justify-self: end; }
+.walkthrough:has(> div[hidden]) { background: none; border-color: transparent; padding: 0; }
+.walkthroughHeading h3 { font-size: 1rem; }
+.walkthroughHeading > p { margin-bottom: 0.5rem; }
+.stepDetail { padding: 0.5rem; }
+.stepDetail button { margin-top: 0; }
+@media (max-width: 40rem) {
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .step { grid-template-columns: minmax(0, 1fr); }
+  .stepNumber { width: 2rem; }
 }
 
 .currentLabel,

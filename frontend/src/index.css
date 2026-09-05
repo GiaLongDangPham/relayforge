@@ -12,7 +12,7 @@
   --surface-raised: #17253e;
   --input: #0b1528;
   --border: #2a3b5b;
-  --border-strong: #496186;
+  --border-strong: #536f9c;
   --accent: #588cff;
   --accent-strong: #77a4ff;
   --button-text: #071120;
@@ -33,7 +33,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font-family: inherit;
 }
 
@@ -51,9 +52,18 @@ button {
   font-weight: 700;
   min-height: 44px;
   padding: 10px 16px;
-  transition-duration: 150ms;
-  transition-property: background-color, border-color, color, transform;
-  transition-timing-function: ease-out;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button {
+    transition-duration: 150ms;
+    transition-property: background-color, border-color, color, transform;
+    transition-timing-function: ease-out;
+  }
+
+  button:not(:disabled):active {
+    transform: scale(0.96);
+  }
 }
 
 @media (hover: hover) {
@@ -61,10 +71,6 @@ button {
     background: var(--accent-strong);
     border-color: var(--accent-strong);
   }
-}
-
-button:not(:disabled):active {
-  transform: scale(0.96);
 }
 
 button:disabled {
@@ -77,6 +83,7 @@ input {
 }
 
 input:focus-visible,
+textarea:focus-visible,
 button:focus-visible,
 summary:focus-visible,
 a:focus-visible {
@@ -87,6 +94,23 @@ a:focus-visible {
 h3[tabindex='-1']:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
+}
+
+main[tabindex='-1']:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  input:focus-visible,
+  textarea:focus-visible,
+  button:focus-visible,
+  summary:focus-visible,
+  a:focus-visible,
+  h3[tabindex='-1']:focus-visible,
+  main[tabindex='-1']:focus-visible {
+    outline-color: Highlight;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

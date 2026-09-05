@@ -325,6 +325,37 @@ event and creates no delivery.
 
 ## 11. Event and delivery inspection
 
+### `GET /api/v1/projects/{projectId}/delivery-health`
+
+Owner session only. This read-only endpoint requires no CSRF header, returns
+`Cache-Control: no-store`, and applies the same owner-scoped `404` behavior as
+history. It returns one aggregate observation, never a worker metric or a
+claim/dispatch command:
+
+```json
+{
+  "observedAt": "instant",
+  "dueEnabledCount": 3,
+  "oldestDueEnabledAt": "instant",
+  "retryScheduledCount": 2,
+  "inFlightCount": 1,
+  "pausedCount": 4,
+  "exhaustedCount": 1
+}
+```
+
+`dueEnabledCount` covers pending deliveries due at the observation time whose
+current endpoint is enabled; `oldestDueEnabledAt` is `null` when that count is
+zero. It is not a promise that a worker can claim a delivery immediately:
+local permits or an endpoint circuit can still defer work. `retryScheduledCount`
+covers enabled pending deliveries with a persisted future due time;
+`inFlightCount` covers enabled claimed deliveries; `pausedCount` covers pending
+or claimed deliveries whose current endpoint is disabled; and `exhaustedCount`
+covers retained exhausted deliveries. The response excludes project, event,
+delivery, endpoint, destination, payload, token, secret, worker, and receiver
+identifiers/data. It is a REST/PostgreSQL observation; SSE only invalidates it
+for refetch and five-second polling remains recovery.
+
 ### `GET /api/v1/projects/{projectId}/events`
 
 Owner session. Filters: optional exact `eventType`; pagination order `(acceptedAt desc, id desc)`. List item excludes full payload by default.

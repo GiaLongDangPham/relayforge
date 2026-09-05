@@ -1,6 +1,6 @@
 # RelayForge Project Status
 
-Last updated: 2026-09-01
+Last updated: 2026-09-05
 
 This file is the durable source of truth for project scope and progress. Update it after every completed slice.
 
@@ -357,8 +357,8 @@ decision plus recommendation.
 | --- | --- | --- | --- |
 | U1 | Product story and public landing | **Complete (U1.1–U1.5)** | Define information architecture and truthful copy, then add a public landing page that explains Publisher → RelayForge → signed webhook receiver, at-least-once delivery, retry, replay, and safe limits. It may link to private sign-in but must not expose credentials, raw secrets, or real delivery data. |
 | U2 | First-owner onboarding | **Complete (U2.1–U2.4)** | Empty states and a guided first success path: create project → create endpoint → create API key → publish test event → inspect delivery. Preserve one-time secret handling; do not add public registration or self-serve accounts. |
-| U3 | Operational dashboard clarity | Planned | Make delivery health, statuses, retries, replay, and next actions understandable. New backend summary/read endpoints are allowed only when their query contract and safe aggregation are explicit; no change to delivery state-machine semantics. |
-| U4 | Design system, responsive behavior, and accessibility | Planned | Establish reusable visual tokens and consistent loading/empty/error/success states; verify semantic HTML, keyboard/focus flow, contrast, reduced motion, 320px width, and 200% zoom. Do not adopt a UI library solely for visual novelty. |
+| U3 | Operational dashboard clarity | **Complete (U3.1–U3.2)** | The owner-facing Delivery workspace now pairs its REST/PostgreSQL aggregate observation with unambiguous status and next-action wording. All-zero means no counted delivery needs attention, not no terminal outcomes; paused work hands off to existing Endpoints and exhausted work remains an individual replay decision. No new API, command, or state transition was added. |
+| U4 | Design system, responsive behavior, and accessibility | **Complete (U4.1–U4.4 + UX1 follow-up)** | Compact workspace, shared data states, focused validation, persistent action results, detail-read recovery, visible focus, measured contrast and reduced-motion behavior are implemented. UX1 then reduces first-time cognitive load without changing product behavior: concise copy, optional keyboard/touch info tips, retry and diagnostics under progressive disclosure, short empty states with contextual actions, and static-artifact CSP. Browser evidence covers controlled 503/revoke flows, keyboard project dialog, tooltip Escape, accessible field names, and 320/683/1366/1440 reflow. Native browser zoom and spoken screen-reader output remain manual compatibility limits. |
 | U5 | Portfolio-demo quality | Planned | Add safe public documentation/screenshots/demo script and proportionate frontend smoke/E2E coverage. A public read-only interactive demo needs a separately approved isolated dataset and security model. |
 | J1 | Organization and RBAC | Planned; decision gate | Expand from one owner/project to organization membership and tenant-aware authorization. Recommended first contract is organization-level `OWNER`, `OPERATOR`, and `VIEWER`; project-specific ACL, invitations, and public onboarding remain later decisions. Every API authorization path needs cross-role and cross-tenant evidence. |
 | J2 | OAuth2/OIDC learning extension | Planned; decision gate | Learn external identity/provider integration without replacing the correct current server-session model merely to add JWT. Scope, provider, token/session boundary, and role mapping require a dedicated contract. |
@@ -368,15 +368,39 @@ decision plus recommendation.
 | J6 | Kubernetes lab | Planned; learning gate | Use kind/minikube first to learn Deployment, Service, Gateway, ConfigMap/Secret, probes, resource limits, rollout, and failure recovery. A production Kubernetes move needs a separate operational/cost need beyond ECS or Compose. |
 | J7 | Interview and system-design closeout | Planned | Keep ADRs, diagrams, failure drills, CV bullets, and interview explanations current. Every technology must be explainable through its problem, trade-off, invariant, and evidence—not presented as a keyword list. |
 
-### Immediate next child slice: U3.1 — dashboard-health contract
+### Immediate next parent slice: U5 — portfolio-demo quality (analysis required)
 
-Analyze what an owner must understand from Delivery history: state and retry
-meaning, where the next action belongs, which safe existing reads already answer
-the question, and which aggregate would justify a new read contract. Start with
-existing data and do not add a summary endpoint until a concrete owner question
-cannot be answered safely and efficiently. This is an analysis split of three
-small checkpoints; no owner decision is pending yet. If new aggregation is
-needed, present its query/ownership/freshness trade-off with a recommendation.
+U4 is complete. U4.1/U4.2 implement the compact workspace and shared data
+states. U4.3 adds ordered validation focus, persistent action announcements,
+revoke error feedback, recoverable event/delivery/attempt detail reads, and a
+keyboard-safe Project Picker dialog. U4.4 measures and corrects the input
+boundary contrast baseline (3.34:1/3.01:1), extends visible focus to textareas
+and workspace targets, provides a forced-colors fallback, and makes button
+motion opt-in. Controlled browser acceptance passed at 320/683/1366/1440 CSS
+pixels. Spoken screen-reader output and native browser zoom remain manual
+compatibility checks, not automated claims.
+
+UX1 is a completed clarity follow-up, not a new architecture slice. It shortens
+first-time copy across public and private routes, keeps required warnings and
+errors visible, moves optional webhook concepts to accessible info controls,
+and places retry policy/diagnostics behind native disclosure. It adds no API or
+delivery behavior and validates a restrictive static-artifact CSP that permits
+only the current local API origin in addition to same-origin connections.
+
+UX1.1 completes a replay-clarity follow-up without changing the aggregate-only
+delivery-health contract: its `View event history` CTA focuses the Events region
+instead of the filter, and a selected event visibly retains every delivery while
+marking only `EXHAUSTED` rows as `Needs replay`. The existing individual replay
+action remains available only after selecting that exact row; no health
+identifier, bulk command, API, or state transition was added.
+
+UX1.2 completes selected-workspace reload recovery. The private URL contains
+only the selected owner project ID; a reload resolves it through the existing
+paginated owner project read, including later pages, without flashing the first
+project workspace. Unknown or no-longer-owned IDs fall back to the first
+available project after pagination finishes. No raw secret, draft, guide,
+event, or delivery state is persisted. Lint, Docker production build, static
+checklist review, and a 25-project built-artifact browser fixture pass.
 
 ### Expected U1 child map
 
@@ -420,10 +444,9 @@ new child map to the owner.
 
 ## Next recommended slice
 
-U3.1 is the next analysis slice in the owner-approved roadmap. Phase 3 Slice 5
-ordering and its remaining evidence-gated initiatives stay deferred; the
-current priority is product clarity and owner usability before a new distributed
-component.
+Analyze U5.1 (safe portfolio/demo evidence) before a public-facing demo change; see tasks/CURRENT.md for U4.4 evidence and manual compatibility limits. Phase 3 Slice 5 ordering and its
+remaining evidence-gated initiatives stay deferred; the current priority is
+product clarity and owner usability before a new distributed component.
 
 ## Deferred until evidence justifies them
 
@@ -441,8 +464,64 @@ component.
 
 ## Change log
 
+### 2026-09-05
+
+- U4.2 adds `features/ui-state` for neutral loading, valid empty, recoverable
+  read error/retry, and local operation-result presentation. It adopts this
+  bounded presentation across Projects, Endpoints, API keys, Test-event routing
+  preview, and Delivery history. Existing facts remain visible on a failed
+  refresh; empty claims wait for a successful read. Test-event key validation
+  now focuses the required key field instead of disabling submit. No backend,
+  API, polling/SSE, secret, dependency, or delivery behavior changed. Lint,
+  elevated production build, Docker artifact build, and checklist static review
+  passed. Authenticated browser verified valid empty states, focused missing-key
+  validation, Delivery read-error/retry/recovery with a temporarily stopped API,
+  1365px no-overflow, and clean console. The API was restarted and PostgreSQL
+  was unchanged. Exact 320px/200% remain an embedded-browser limitation.
+- U4.1 implements a compact dashboard, native paginated project picker,
+  on-demand creation, tabs before optional onboarding, and project-ID-scoped
+  workspace state. Existing projects open Deliveries; new projects open
+  Endpoints and the guide. Browser testing caught and verified a fix for cache
+  insertion initializing a new workspace too early. Rename/guide toggles keep
+  drafts; project changes reset them. Two disposable local projects remain.
+- Lint, final Docker TypeScript/Vite build, and callable review_code passed
+  (no provable Critical/High issue). Browser verified 27-item picker pagination,
+  bounded scrolling, Escape/focus return, CTA focus, and no-overflow at measured
+  1367x767 / 1440x898. Exact 320px/200% zoom, forced loading/error, and empty-owner
+  acceptance remain unverified; see tasks/CURRENT.md before closing acceptance.
+
 ### 2026-09-02
 
+- Completed U3.2 delivery-status and next-action clarity without changing the
+  U3.1 REST contract or delivery protocol. The all-zero health presentation now
+  explicitly means no delivery needs attention in the five observed categories,
+  while preserving terminal-outcome inspection through event history. Every
+  existing display status has concise operational wording; paused deliveries
+  provide a real focused/scrolling handoff to the existing Endpoints view, and
+  exhausted work retains the individual replay control. Frontend lint and Vite
+  build pass; the rebuilt local Docker artifact and authenticated browser prove
+  both exhausted/replay guidance and the all-zero explanation, with no console
+  warnings/errors. Callable Front-End Checklist review of the new markup found
+  no Critical/High issue.
+- Completed U3.1 dashboard-health contract and implementation. An
+  authenticated owner now reads `GET /api/v1/projects/{projectId}/delivery-health`,
+  a `Cache-Control: no-store`, project-scoped, aggregate-only REST observation
+  with `observedAt`, due-enabled/oldest-due, retry-scheduled, in-flight, paused,
+  and exhausted counts. Delivery verifies ownership in its existing read
+  transaction, reads enabled endpoint identities only through the endpoint
+  public history query, and lets PostgreSQL calculate the aggregate; it never
+  exposes IDs, payload, destination, secret, token, receiver data, global
+  operator telemetry, or a command. A due enabled count is deliberately not a
+  promise of immediate dispatch because worker admission and circuit state can
+  still defer work. The visible Delivery workspace presents the observation,
+  uses the existing five-second REST polling and best-effort SSE invalidation,
+  and keeps history as drill-down. No migration, dependency, worker behavior,
+  state-machine change, or new index was added. PostgreSQL Testcontainers prove
+  enabled/retry/in-flight/paused/exhausted count semantics and cross-owner
+  denial; HTTP Testcontainers prove `no-store`, safe response shape, and `404`;
+  frontend lint/build, Docker artifact rebuild, callable Front-End Checklist
+  review (no Critical/High finding), and authenticated local browser inspection
+  passed. U3.2 owns status wording and next-action clarity.
 - Completed U1.5 compact-hero follow-up from owner visual feedback. The public
   landing preserves its approved copy and structure, while the desktop hero now
   uses a 72px maximum title (was 88px), a 72px maximum block padding (was

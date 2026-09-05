@@ -2,6 +2,8 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { type SubmitEvent, useMemo, useState } from 'react'
 import { apiClient, ApiProblem, type ProjectApiKeyDetails } from '../../api/apiClient'
 import { OneTimeSecret } from '../secrets/OneTimeSecret'
+import { ActionResult, EmptyState, LoadingState, ReadErrorState } from '../ui-state/AsyncState'
+import { InfoTip } from '../ui-state/InfoTip'
 import styles from './apiKeys.module.css'
 
 const apiKeyQueryKey = (projectId: string) => ['projects', projectId, 'api-keys'] as const
@@ -9,6 +11,7 @@ const apiKeyQueryKey = (projectId: string) => ['projects', projectId, 'api-keys'
 export function ApiKeyPanel({ onRawKeyCreated, projectId }: { onRawKeyCreated?: () => void; projectId: string }) {
   const queryClient = useQueryClient()
   const [rawKey, setRawKey] = useState<string | null>(null)
+  const [actionResult, setActionResult] = useState<string | null>(null)
   const keysQuery = useInfiniteQuery({
     queryKey: apiKeyQueryKey(projectId),
     initialPageParam: null as string | null,
@@ -17,9 +20,11 @@ export function ApiKeyPanel({ onRawKeyCreated, projectId }: { onRawKeyCreated?: 
   })
   const keys = useMemo(() => keysQuery.data?.pages.flatMap((page) => page.items) ?? [], [keysQuery.data])
   const revoke = useMutation({
+    onMutate: () => setActionResult(null),
     mutationFn: (apiKeyId: string) => apiClient.revokeApiKey(projectId, apiKeyId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: apiKeyQueryKey(projectId) })
+      setActionResult('API key revoked. Publishers using it can no longer authenticate.')
     },
   })
 
@@ -34,18 +39,21 @@ export function ApiKeyPanel({ onRawKeyCreated, projectId }: { onRawKeyCreated?: 
   return (
     <section className={styles.panel} aria-labelledby="api-keys-heading">
       <div>
-        <h3 id="api-keys-heading" tabIndex={-1}>Publisher API keys</h3>
-        <p className={styles.muted}>A publisher uses one key to accept events for this project. Only metadata is listed after creation.</p>
+        <h3 id="api-keys-heading" tabIndex={-1}>API keys</h3>
+        <p className={styles.muted}>Let an app send events to this project.</p>
       </div>
       <CreateApiKeyForm onCreate={create} />
       {rawKey ? <OneTimeSecret label="publisher API key" onClose={() => setRawKey(null)} value={rawKey} /> : null}
-      {keysQuery.isPending ? <p className={styles.muted}>Loading API keys…</p> : null}
-      {keysQuery.error ? <p className={styles.error} role="alert">Unable to load API keys.</p> : null}
+      <ActionResult>{actionResult}</ActionResult>
+      {revoke.isError ? <ReadErrorState title="API-key revocation could not be confirmed." detail="Refresh the key list to check its current status. If it is still active, use its Revoke button to try again." onRetry={() => void keysQuery.refetch()} retrying={keysQuery.isFetching} /> : null}
+      {keysQuery.isPending ? <LoadingState label="Loading API keys…" /> : null}
+      {keysQuery.error ? <ReadErrorState detail={keys.length > 0 ? 'The loaded key metadata remains available.' : 'No API-key metadata is available yet.'} onRetry={() => void keysQuery.refetch()} retrying={keysQuery.isRefetching} title="Unable to load API keys." /> : null}
       <div className={styles.list}>
         {keys.map((apiKey) => (
-          <ApiKeyRow apiKey={apiKey} key={apiKey.id} onRevoke={() => revoke.mutate(apiKey.id)} revoking={revoke.isPending} />
+          <ApiKeyRow apiKey={apiKey} key={apiKey.id} onRevoke={() => revoke.mutate(apiKey.id)} revoking={revoke.isPending && revoke.variables === apiKey.id} disabled={revoke.isPending} />
         ))}
       </div>
+      {!keysQuery.isPending && !keysQuery.error && keys.length === 0 ? <EmptyState detail="Create one when an app is ready to send events." title="No API keys yet." /> : null}
       {keysQuery.hasNextPage ? (
         <button disabled={keysQuery.isFetchingNextPage} onClick={() => void keysQuery.fetchNextPage()} type="button">
           {keysQuery.isFetchingNextPage ? 'Loading…' : 'Load more'}
@@ -76,17 +84,17 @@ function CreateApiKeyForm({ onCreate }: { onCreate: (displayName: string) => Pro
 
   return (
     <form className={styles.createForm} onSubmit={submit}>
-      <label>
-        Key display name
-        <input disabled={submitting} maxLength={100} onChange={(event) => setDisplayName(event.target.value)} placeholder="Checkout publisher" required value={displayName} />
-      </label>
+      <div className={styles.field}>
+        <span className={styles.fieldLabel}><label htmlFor="api-key-display-name">Key name</label><InfoTip label="Key name">A key lets an app publish events. Its raw value is shown once.</InfoTip></span>
+        <input id="api-key-display-name" autoComplete="off" disabled={submitting} maxLength={100} onChange={(event) => setDisplayName(event.target.value)} placeholder="Checkout publisher" required type="text" value={displayName} />
+      </div>
       <button disabled={submitting} type="submit">{submitting ? 'Creating…' : 'Create API key'}</button>
       {errorMessage ? <p className={styles.error} role="alert">{errorMessage}</p> : null}
     </form>
   )
 }
 
-function ApiKeyRow({ apiKey, onRevoke, revoking }: { apiKey: ProjectApiKeyDetails; onRevoke: () => void; revoking: boolean }) {
+function ApiKeyRow({ apiKey, onRevoke, revoking, disabled }: { apiKey: ProjectApiKeyDetails; onRevoke: () => void; revoking: boolean; disabled: boolean }) {
   const active = apiKey.revokedAt === null
   return (
     <article className={styles.row}>
@@ -95,7 +103,7 @@ function ApiKeyRow({ apiKey, onRevoke, revoking }: { apiKey: ProjectApiKeyDetail
         <code>{apiKey.keyHint}</code>
         <small>Created {formatInstant(apiKey.createdAt)}</small>
       </div>
-      {active ? <button disabled={revoking} onClick={onRevoke} type="button">{revoking ? 'Revoking…' : 'Revoke'}</button> : <span className={styles.revoked}>Revoked</span>}
+      {active ? <button aria-label={`Revoke ${apiKey.displayName}`} disabled={disabled} onClick={onRevoke} type="button">{revoking ? 'Revoking…' : 'Revoke'}</button> : <span className={styles.revoked}>Revoked</span>}
     </article>
   )
 }

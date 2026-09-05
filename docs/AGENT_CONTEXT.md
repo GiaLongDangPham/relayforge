@@ -100,8 +100,23 @@ safe existing success facts and never holds raw material. U2.4 is complete: an
 owner-authorized disposable local project/endpoint/key/event proved all four
 real transitions and a `SUCCEEDED` delivery without recording raw material.
 Guide CTAs now reveal and focus their existing target panel while leaving
-progress unchanged until its real success fact. U3.1 dashboard-health contract
-analysis is next. U1.3 provides
+progress unchanged until its real success fact. U3.1 is complete: an
+authenticated owner can read one project-scoped, aggregate-only
+`delivery-health` observation through REST. It reports due enabled, future
+retry, in-flight, paused, and exhausted counts plus a database observation
+time; it is not a worker metric, dispatch promise, command, or SSE source of
+truth. PostgreSQL/Testcontainers proves the aggregate and cross-owner boundary,
+and the visible Delivery workspace refetches it through the existing
+polling/SSE-invalidated query path. U3.2 is complete: the dashboard now says
+that all-zero health means no delivery currently needs attention rather than no
+outcomes, gives concise meaning for every existing owner-visible status, and
+hands paused work to the existing focused Endpoints view. It adds no command,
+API, or state change. U4.1 now implements the compact project picker/workspace
+and optional guide with project-ID-scoped state. U4.2 is complete: a bounded
+frontend `ui-state` module distinguishes loading/empty/recoverable-error/result
+states across the dashboard, with browser evidence for missing-key focus and
+API stop/retry/recovery. Exact 320px/200% stays unavailable in the embedded
+browser; see tasks/CURRENT.md before claiming that U4.1 acceptance. U1.3 provides
 a code-native
 `DeliveryPathVisual` in `frontend/src/features/landing`, showing Publisher →
 PostgreSQL durable intent → Worker → Receiver without claiming live telemetry,
@@ -127,5 +142,7 @@ Group 20 is complete: `README.md` and `docs/PORTFOLIO_PLAYBOOK.md` connect accep
 Operational deployment note: the owner-led public dashboard workflow is complete. At `https://gialong.duckdns.org`, the authenticated owner created one project/key/enabled HTTPS endpoint, published one `invoice.paid` event, and observed one `SUCCEEDED` HTTP-204 worker delivery after one attempt; session and safe metadata survived a dashboard reload without console errors. The raw API key and signing secret remained one-time browser values. Deployment configuration/documentation is committed; manual rollback/backup drill, managed observability, and production load testing remain deferred.
 
 The high-level architecture is a modular monolith: one artifact/image starts in either `api` or `worker` mode, and PostgreSQL is the source of truth and Portfolio v1 work transport. Detailed contracts belong in their dedicated documents; this file intentionally does not restate them. The project requires JDK 25, but the current terminal defaults to JDK 21, so local Maven commands must select the installed JDK 25 until the environment is corrected.
+
+Current frontend checkpoint: U4 is complete, followed by completed UX1 cognitive-load reduction, UX1.1 replay clarity, and UX1.2 selected-project reload recovery. U4.3 provides form focus, persistent action feedback, revoke error, detail-read recovery, and a keyboard-safe project-picker dialog. U4.4 measures/corrects input boundary contrast, extends visible focus, supplies a forced-colors fallback, and makes button motion opt-in. UX1 keeps required warnings/errors visible while shortening action copy, adding keyboard/touch info controls for optional terminology, collapsing retry/detail diagnostics, and serving a restrictive CSP that permits only the current local API origin in addition to same-origin connections. UX1.1 retains aggregate-only health: its CTA focuses Events rather than the filter, and selected event history retains all outcomes while naming the one replayable exhausted delivery. UX1.2 stores only a safe project ID in the private URL, resolves later-page IDs on reload without flashing the first project, and falls back only when finite owner pagination proves it absent; it never retains raw keys, drafts, guide, event, or delivery state. Browser evidence covers 320/683/1366/1440 reflow, named fields, tooltip Escape, history focus, all-outcome display, selected project reload and existing recovery/contrast checks. Native browser zoom and spoken screen-reader output remain manual compatibility checks. Analyze U5.1 safe portfolio/demo evidence next; use `tasks/CURRENT.md` for actual evidence.
 
 Start work with [AGENTS.md](../AGENTS.md), then [CURRENT.md](../tasks/CURRENT.md), and use the concise [documentation index](README.md) to open only the relevant authority. `PROJECT_STATUS.md` is the project-wide progress ledger. Accepted ADRs in `docs/adr/` record material architectural choices and are not silently reversed.

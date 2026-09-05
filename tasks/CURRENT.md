@@ -1,38 +1,66 @@
-# U1.5 — Compact landing hero follow-up
+# UX1.2 — Restore selected project after reload
 
-Status: Complete
+Status: Complete.
+
+## Scope
+
+Preserve the owner's selected project across a dashboard reload without
+persisting any raw secret, form draft, onboarding progress, event or delivery
+selection. Keep owner-scoped pagination, the compact project picker, and the
+existing project-local reset boundary.
+
+Out of scope: browser storage, backend/API changes, deep links into events or
+deliveries, restoring project-local drafts, or changing onboarding behavior.
+
+## Design direction
+
+- The safe project identifier lives in the private `/app?project=<id>` URL.
+  It is owner-validated against the existing paginated project list; it never
+  carries raw keys, secrets, drafts, guide state, payloads, or delivery state.
+- A reload of a project beyond the first page progressively reads the existing
+  project pages only until it finds that owned ID. It does not temporarily show
+  the first project as the selected workspace.
+- If the ID is no longer owned or no longer exists, the URL is replaced with the
+  first available project (or cleared when none remain). This is a safe fallback,
+  not an authorization decision; the API remains authoritative.
 
 ## Outcome
 
-Compacted the public landing hero in response to owner feedback, preserving its
-approved story and first-viewport purpose while making the page easier to take
-in as one overview.
+- Project selection is now represented only by the safe project ID in
+  `/app?project=<id>`. Selecting a project or successfully creating one updates
+  that URL, so a normal reload and the browser Back/Forward history preserve the
+  observed workspace.
+- A requested later-page project keeps the workspace unselected while the
+  existing paginated owner read resolves it; the dashboard never flashes the
+  first project as though it were selected. An absent or unauthorized ID safely
+  replaces the URL with the first owned project after the finite list is
+  exhausted.
+- The existing `ProjectResources` project-ID key continues to reset raw-key
+  reveal, forms and guide state when the project changes. Those values are not
+  encoded in the URL or stored in browser storage.
 
-## Changes
+## Acceptance evidence
 
-- Reduced desktop title maximum from 88px to 72px and loosened its oversized
-  multi-line footprint without weakening the heading hierarchy.
-- Reduced hero block padding maximum from 136px to 72px, grid gap maximum from
-  96px to 56px, and header trailing space from 32px to 20px.
-- Gave the text column proportionally more room and condensed the delivery-path
-  card's padding, title, steps, and footnote spacing. Body text and 44px action
-  targets remain readable and unchanged in purpose.
+- `npm run lint` passed. `node tests/history-read-state.test.mjs` passed (4/4).
+- Docker rebuilt the production TypeScript/Vite artifact successfully with
+  `docker compose up -d --no-deps --build frontend`.
+- Built-artifact Playwright acceptance passed with 25 fixture projects. It
+  selects project 24 from the second page, reloads and observes project 24
+  again, then proves an unknown `project` query safely lands on project 0. The
+  existing keyboard dialog, 320/683/1366/1440 reflow, error/retry and AX checks
+  also remain green.
+- Front-End Checklist `review_code` found no provable static issue (0 Critical,
+  0 High) in `ProjectWorkspace.tsx`; its result remains a heuristic review, so
+  built-artifact keyboard/AX evidence supplies the interaction check.
 
-## Verification
+## Remaining manual compatibility limits
 
-- At the same desktop browser setting, hero height reduced from about 1,072px
-  to 654px; the workflow section begins about 430px earlier.
-- `npm run lint` and elevated `npm run build` passed.
-- `docker compose up -d --build --no-deps frontend` passed.
-- Public browser check found one `h1`, one `main`, the named section navigation,
-  no console entries, and no horizontal overflow at the embedded browser's
-  narrow 640 CSS-pixel result for its 320-device setting.
-- The Front-End Checklist MCP's `review_code` tool remains unavailable in this
-  runtime. Manual layout, typography, accessibility, semantics, motion, and
-  responsive review found no Critical or High issue.
+- Verify native browser zoom from browser UI and spoken output with the team's target screen reader before a public release. Automated reflow/AX-tree evidence exists, but it is not a substitute for those two manual checks.
 
-## Next action
+## Next checkpoint
 
-Analyze U3.1 — dashboard-health contract in three checkpoints: owner questions,
-current safe reads, then any justified aggregate contract. No owner decision is
-pending; recommend using existing reads first.
+Analyze U5.1 — safe portfolio/demo evidence. Expected 3 steps: (1) select
+public-safe artifacts and redaction boundary, (2) create the documentation/demo
+script, (3) run public/private smoke checks. No owner decision is pending for
+analysis; an interactive public demo would need a separate isolated-dataset and
+security decision first.

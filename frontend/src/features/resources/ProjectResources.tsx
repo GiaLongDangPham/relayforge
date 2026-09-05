@@ -16,8 +16,8 @@ const panelHeadingId: Record<Panel, string> = {
   operations: 'deliveries-heading',
 }
 
-export function ProjectResources({ project }: { project: ProjectDetails }) {
-  const [panel, setPanel] = useState<Panel>('apiKeys')
+export function ProjectResources({ project, newlyCreated = false }: { project: ProjectDetails; newlyCreated?: boolean }) {
+  const [panel, setPanel] = useState<Panel>(newlyCreated ? 'endpoints' : 'operations')
   const [apiKeyCreated, setApiKeyCreated] = useState(false)
   const [publishDeliveryCount, setPublishDeliveryCount] = useState<number | null>(null)
   const [deliveryOpened, setDeliveryOpened] = useState(false)
@@ -53,7 +53,14 @@ export function ProjectResources({ project }: { project: ProjectDetails }) {
 
   return (
     <section className={styles.resources} aria-label="Project resources">
+      <nav className={styles.tabs} aria-label="Project views">
+        <Tab active={panel === 'operations'} label="Deliveries" onClick={openDeliveries} />
+        <Tab active={panel === 'endpoints'} label="Endpoints" onClick={() => setPanel('endpoints')} />
+        <Tab active={panel === 'apiKeys'} label="API keys" onClick={() => setPanel('apiKeys')} />
+        <Tab active={panel === 'testEvents'} label="Test events" onClick={() => setPanel('testEvents')} />
+      </nav>
       <FirstDeliveryWalkthrough
+        initiallyOpen={newlyCreated}
         apiKeyCreated={apiKeyCreated}
         deliveryOpened={deliveryOpened}
         onOpenApiKeys={() => openPanel('apiKeys')}
@@ -63,16 +70,10 @@ export function ProjectResources({ project }: { project: ProjectDetails }) {
         projectId={project.id}
         publishDeliveryCount={publishDeliveryCount}
       />
-      <nav className={styles.tabs} aria-label="Project views">
-        <Tab active={panel === 'apiKeys'} label="API keys" onClick={() => setPanel('apiKeys')} />
-        <Tab active={panel === 'endpoints'} label="Endpoints" onClick={() => setPanel('endpoints')} />
-        <Tab active={panel === 'testEvents'} label="Test events" onClick={() => setPanel('testEvents')} />
-        <Tab active={panel === 'operations'} label="Deliveries" onClick={() => setPanel('operations')} />
-      </nav>
       {panel === 'apiKeys' ? <ApiKeyPanel onRawKeyCreated={() => setApiKeyCreated(true)} projectId={project.id} /> : null}
       {panel === 'endpoints' ? <EndpointPanel projectId={project.id} /> : null}
-      {panel === 'testEvents' ? <TestEventsPanel key={project.id} onPublishAccepted={(result) => recordPublishedEvent(result.deliveryCount)} onViewDeliveries={openDeliveries} projectId={project.id} /> : null}
-      {panel === 'operations' ? <DeliveryOperations projectId={project.id} /> : null}
+      {panel === 'testEvents' ? <TestEventsPanel key={project.id} onOpenEndpoints={() => openPanel('endpoints')} onPublishAccepted={(result) => recordPublishedEvent(result.deliveryCount)} onViewDeliveries={openDeliveries} projectId={project.id} /> : null}
+      {panel === 'operations' ? <DeliveryOperations onOpenEndpoints={() => openPanel('endpoints')} projectId={project.id} /> : null}
     </section>
   )
 }

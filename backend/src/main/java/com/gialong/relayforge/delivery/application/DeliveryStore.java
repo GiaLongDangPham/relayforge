@@ -11,6 +11,7 @@ import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
 import com.gialong.relayforge.delivery.api.processing.CircuitBreakerSettings;
 import com.gialong.relayforge.delivery.api.processing.ClaimedDelivery;
 import com.gialong.relayforge.delivery.api.history.DeliveryDisplayStatus;
+import com.gialong.relayforge.delivery.api.history.DeliveryProjectHealth;
 import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshot;
 import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
 import com.gialong.relayforge.delivery.api.history.AttemptHistorySummary;
@@ -112,6 +113,8 @@ public interface DeliveryStore {
     Optional<HistoryRecords.EventRecord> findHistoryEvent(UUID projectId, UUID eventId);
 
     EventDeliverySummary summarizeEventDeliveries(UUID projectId, UUID eventId);
+
+    DeliveryProjectHealth projectDeliveryHealth(UUID projectId, Collection<UUID> enabledEndpointIds);
 
     List<HistoryRecords.DeliveryRecord> listEventHistoryDeliveries(
             UUID projectId,

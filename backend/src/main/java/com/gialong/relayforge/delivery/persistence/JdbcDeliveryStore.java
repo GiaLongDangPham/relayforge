@@ -34,6 +34,7 @@ import com.gialong.relayforge.delivery.api.processing.DispatchInstruction;
 import com.gialong.relayforge.delivery.api.history.AttemptHistoryStatus;
 import com.gialong.relayforge.delivery.api.history.AttemptHistorySummary;
 import com.gialong.relayforge.delivery.api.history.DeliveryDisplayStatus;
+import com.gialong.relayforge.delivery.api.history.DeliveryProjectHealth;
 import com.gialong.relayforge.delivery.api.history.DeliveryStoredState;
 import com.gialong.relayforge.delivery.api.history.EventDeliverySummary;
 import com.gialong.relayforge.delivery.api.operations.DeliveryOperationalSnapshot;
@@ -891,6 +892,52 @@ public class JdbcDeliveryStore implements DeliveryStore, EndpointCircuitStore {
                 ),
                 projectId,
                 eventId
+        );
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public DeliveryProjectHealth projectDeliveryHealth(UUID projectId, Collection<UUID> enabledEndpointIds) {
+        List<UUID> enabledIds = List.copyOf(enabledEndpointIds);
+        List<Object> parameters = new ArrayList<>();
+        String enabledMembership;
+        String enabledEndpointCte;
+        if (enabledIds.isEmpty()) {
+            enabledEndpointCte = "";
+            enabledMembership = "false";
+        } else {
+            enabledEndpointCte = "with enabled_endpoint(id) as (values "
+                    + String.join(", ", java.util.Collections.nCopies(enabledIds.size(), "(?::uuid)"))
+                    + ") ";
+            parameters.addAll(enabledIds);
+            enabledMembership = "delivery.endpoint_id in (select id from enabled_endpoint)";
+        }
+        String sql = enabledEndpointCte
+                + "select CURRENT_TIMESTAMP as observed_at, "
+                + "count(*) filter (where delivery.state = 'PENDING' and delivery.due_at <= CURRENT_TIMESTAMP "
+                + "and " + enabledMembership + ") as due_enabled_count, "
+                + "min(delivery.due_at) filter (where delivery.state = 'PENDING' "
+                + "and delivery.due_at <= CURRENT_TIMESTAMP and " + enabledMembership + ") as oldest_due_enabled_at, "
+                + "count(*) filter (where delivery.state = 'PENDING' and delivery.attempt_count > 0 "
+                + "and delivery.due_at > CURRENT_TIMESTAMP and " + enabledMembership + ") as retry_scheduled_count, "
+                + "count(*) filter (where delivery.state = 'CLAIMED' and " + enabledMembership + ") as in_flight_count, "
+                + "count(*) filter (where delivery.state in ('PENDING', 'CLAIMED') and not ("
+                + enabledMembership + ")) as paused_count, "
+                + "count(*) filter (where delivery.state = 'EXHAUSTED') as exhausted_count "
+                + "from public.deliveries delivery where delivery.project_id = ?";
+        parameters.add(projectId);
+        return jdbcTemplate.queryForObject(
+                sql,
+                (resultSet, rowNumber) -> new DeliveryProjectHealth(
+                        instant(resultSet, "observed_at"),
+                        resultSet.getLong("due_enabled_count"),
+                        instant(resultSet, "oldest_due_enabled_at"),
+                        resultSet.getLong("retry_scheduled_count"),
+                        resultSet.getLong("in_flight_count"),
+                        resultSet.getLong("paused_count"),
+                        resultSet.getLong("exhausted_count")
+                ),
+                parameters.toArray()
         );
     }
 

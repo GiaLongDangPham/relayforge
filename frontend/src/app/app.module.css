@@ -6,6 +6,35 @@
   padding: clamp(20px, 4vw, 48px);
 }
 
+.compactFrame {
+  max-width: 100rem;
+  padding-block: 1rem;
+  padding-inline: clamp(1.25rem, 3vw, 3rem);
+}
+
+.compactFrame .appHeader {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.compactFrame .appHeader h1 {
+  font-size: 1.35rem;
+  margin: 0;
+}
+
+.skipLink {
+  position: absolute;
+  transform: translateY(-200%);
+}
+
+.skipLink:focus-visible {
+  position: relative;
+  display: block;
+  transform: none;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -96,6 +125,11 @@
 @media (max-width: 720px) {
   .pageFrame {
     padding: 20px;
+  }
+
+  .compactFrame {
+    padding-block: 1rem;
+    padding-inline: 1.25rem;
   }
 
   .appHeader {

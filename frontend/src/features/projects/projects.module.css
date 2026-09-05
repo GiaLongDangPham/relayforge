@@ -1,15 +1,17 @@
 .workspace {
   display: grid;
   align-items: start;
-  gap: clamp(24px, 4vw, 48px);
-  grid-template-columns: minmax(18rem, 0.72fr) minmax(0, 1.5fr);
-  padding-top: clamp(24px, 4vw, 40px);
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr);
+  padding-top: 1rem;
 }
 
 .projectListPanel {
   align-content: start;
-  display: grid;
-  gap: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .sectionHeading h2,
@@ -24,6 +26,7 @@
 }
 
 .createForm {
+  flex-basis: 100%;
   background: color-mix(in srgb, var(--surface) 72%, var(--surface-raised));
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -80,8 +83,9 @@
   display: grid;
   font-weight: 600;
   gap: 6px;
-  min-height: 76px;
-  padding: 14px 16px;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.75rem;
+  overflow-wrap: anywhere;
   text-align: left;
 }
 
@@ -124,6 +128,50 @@
   margin-top: 8px;
   padding-top: 16px;
 }
+
+.projectContext {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.projectIdentity { min-width: 0; flex: 1 1 15rem; }
+.projectIdentity h2 { font-size: 1.125rem; margin: 0; overflow-wrap: anywhere; }
+.projectIdentity > p { display: none; }
+.projectDetailsPanel { min-width: 0; }
+.projectSettings { border: 0; padding: 0; margin: 0; }
+.projectSettings[open] { flex-basis: 100%; }
+.projectSettings summary { padding-block: 0.625rem; }
+.settingsContent { max-width: 40rem; }
+.createForm input, .renameForm input { min-width: 0; width: 100%; }
+
+.pickerTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border-strong);
+  max-width: 100%;
+  text-align: start;
+}
+.pickerTrigger > span:first-child { overflow-wrap: anywhere; min-width: 0; }
+.pickerDialog {
+  color: var(--text);
+  background: var(--surface);
+  border: 0.0625rem solid var(--border-strong);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  width: min(32rem, calc(100% - 2rem));
+  max-height: 80svh;
+  overscroll-behavior: contain;
+}
+.pickerDialog::backdrop { background: rgb(0 0 0 / 55%); }
+.pickerHeading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.pickerHeading h2 { font-size: 1.125rem; margin: 0; }
+.pickerList { display: grid; gap: 0.5rem; overflow-y: auto; max-height: 55svh; margin-top: 1rem; padding: 0.25rem; }
 
 .projectSettings summary {
   color: var(--muted);

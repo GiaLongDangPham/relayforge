@@ -16,6 +16,7 @@ import com.gialong.relayforge.delivery.api.history.DeliveryDisplayStatus;
 import com.gialong.relayforge.delivery.api.history.DeliveryHistory;
 import com.gialong.relayforge.delivery.api.history.DeliveryHistoryDetails;
 import com.gialong.relayforge.delivery.api.history.DeliveryHistoryPage;
+import com.gialong.relayforge.delivery.api.history.DeliveryProjectHealth;
 import com.gialong.relayforge.delivery.api.replay.DeliveryReplayer;
 import com.gialong.relayforge.delivery.api.history.EventHistoryDetails;
 import com.gialong.relayforge.delivery.api.history.EventHistoryPage;
@@ -23,6 +24,7 @@ import com.gialong.relayforge.delivery.api.replay.ReplayDeliveryResult;
 import com.gialong.relayforge.identity.api.VerifiedOwner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -58,6 +60,16 @@ final class DeliveryHistoryController {
         this.deliveryHistory = Objects.requireNonNull(deliveryHistory, "deliveryHistory must not be null");
         this.deliveryReplayer = Objects.requireNonNull(deliveryReplayer, "deliveryReplayer must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+    }
+
+    @GetMapping("/delivery-health")
+    ResponseEntity<DeliveryProjectHealth> findProjectHealth(
+            Authentication authentication,
+            @PathVariable UUID projectId
+    ) {
+        DeliveryProjectHealth health = deliveryHistory.findProjectHealth(ownerId(authentication), projectId)
+                .orElseThrow(DeliveryHistoryNotFoundException::new);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(health);
     }
 
     @GetMapping("/events")

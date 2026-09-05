@@ -11,6 +11,7 @@ type DeliveryUpdateHint = {
 const historyQuerySegments = new Set([
   'event-history',
   'event-history-detail',
+  'delivery-health',
   'delivery-history',
   'delivery-history-detail',
   'attempt-history',
@@ -30,14 +31,18 @@ export function useDeliveryUpdateInvalidation(projectId: string) {
 
     source.onopen = invalidateHistory
     source.onerror = invalidateHistory
-    source.addEventListener('delivery.changed', (event) => {
+    const handleDeliveryChanged = (event: Event) => {
       const hint = parseDeliveryUpdateHint(event)
       if (hint?.projectId === projectId) {
         invalidateHistory()
       }
-    })
+    }
+    source.addEventListener('delivery.changed', handleDeliveryChanged)
 
-    return () => source.close()
+    return () => {
+      source.removeEventListener('delivery.changed', handleDeliveryChanged)
+      source.close()
+    }
   }, [projectId, queryClient])
 }
 

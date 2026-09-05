@@ -9,6 +9,95 @@
   gap: 16px;
 }
 
+.health {
+  background: var(--surface-raised);
+  border: 0.0625rem solid var(--border);
+  border-radius: 0.875rem;
+  display: grid;
+  gap: 1rem;
+  padding: 1.125rem;
+}
+
+.healthHeading {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  justify-content: space-between;
+}
+
+.healthHeading h4,
+.healthHeading p {
+  margin: 0;
+}
+
+.healthHeading > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.healthMetrics {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.healthMetric {
+  background: var(--input);
+  border: 0.0625rem solid var(--border);
+  border-radius: 0.625rem;
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.75rem;
+}
+
+.healthMetric strong {
+  font-size: 1.45rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.healthMetric span {
+  font-weight: 700;
+}
+
+.healthConclusion {
+  align-items: center;
+  background: var(--input);
+  border: 0.0625rem solid var(--border);
+  border-radius: 0.625rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  justify-content: space-between;
+  padding: 0.875rem;
+}
+
+.healthConclusion > div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.healthConclusion p,
+.statusGuidance {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.technicalDetails {
+  border-top: 1px solid var(--border);
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+.technicalDetails summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 700;
+}
+
 .heading {
   align-items: start;
   display: flex;
@@ -128,6 +217,12 @@
   color: var(--muted);
 }
 
+.needsReplay {
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .card p {
   line-height: 1.5;
   margin: 10px 0 0;
@@ -139,6 +234,11 @@
   font-size: 1.05rem;
   font-weight: 700;
   overflow-wrap: anywhere;
+}
+
+.statusGuidance {
+  border-inline-start: 0.1875rem solid var(--accent);
+  padding-inline-start: 0.75rem;
 }
 
 pre {
@@ -177,6 +277,10 @@ pre {
   }
 
   .heading > button {
+    width: 100%;
+  }
+
+  .healthConclusion > button {
     width: 100%;
   }
 }

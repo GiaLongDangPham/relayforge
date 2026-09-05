@@ -9,6 +9,8 @@ import java.util.UUID;
  */
 public interface DeliveryHistory {
 
+    Optional<DeliveryProjectHealth> findProjectHealth(UUID ownerId, UUID projectId);
+
     Optional<EventHistoryPage> listEvents(UUID ownerId, UUID projectId, String eventType, int limit, String cursor);
 
     Optional<EventHistoryDetails> findEvent(UUID ownerId, UUID projectId, UUID eventId);

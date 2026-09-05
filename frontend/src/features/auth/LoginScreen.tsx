@@ -41,12 +41,11 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         <main className={styles.loginLayout} id="sign-in-content">
           <section className={styles.loginIntroduction}>
             <p className={appStyles.eyebrow}>Private owner workspace</p>
-            <h1>Inspect your webhook operations.</h1>
-            <p>Sign in to manage your own projects, endpoints, delivery history, and exhausted-delivery replay.</p>
+            <h1>Manage your webhooks.</h1>
+            <p>Create endpoints, send test events, and inspect deliveries.</p>
           </section>
           <form className={`${appStyles.panel} ${styles.loginForm}`} onSubmit={submit}>
             <h2>Sign in</h2>
-            <p className={styles.formDescription}>Use the owner account configured for this RelayForge environment.</p>
             <label>
               Login name
               <input
@@ -55,6 +54,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                 name="loginName"
                 onChange={(event) => setLoginName(event.target.value)}
                 required
+                type="text"
                 value={loginName}
               />
             </label>

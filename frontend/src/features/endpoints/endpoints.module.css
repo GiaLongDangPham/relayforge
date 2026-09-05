@@ -88,6 +88,33 @@
   gap: 8px;
 }
 
+.fieldLabel {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.field {
+  display: grid;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.advancedSettings {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.advancedSettings summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.advancedSettings[open] summary {
+  margin-bottom: 14px;
+}
+
 .editor input:not([type='checkbox']) {
   background: var(--input);
   border: 1px solid var(--border-strong);

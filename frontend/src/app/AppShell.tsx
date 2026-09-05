@@ -26,10 +26,10 @@ export function AppShell({ owner, onLogout, children }: AppShellProps) {
   }
 
   return (
-    <PageFrame>
+    <PageFrame compact>
+      <a className={styles.skipLink} href="#workspace">Skip to workspace</a>
       <header className={styles.appHeader}>
         <div>
-          <p className={styles.eyebrow}>Outbound webhook operations</p>
           <h1>RelayForge</h1>
         </div>
         <div className={styles.ownerActions}>

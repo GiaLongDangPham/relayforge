@@ -12,6 +12,7 @@ import com.gialong.relayforge.delivery.api.replay.ReplayIdempotencyConflictExcep
 import com.gialong.relayforge.RelayForgeApplication;
 import com.gialong.relayforge.delivery.api.history.DeliveryDisplayStatus;
 import com.gialong.relayforge.delivery.api.history.DeliveryHistory;
+import com.gialong.relayforge.delivery.api.history.DeliveryProjectHealth;
 import com.gialong.relayforge.delivery.api.replay.DeliveryReplayer;
 import com.gialong.relayforge.delivery.api.history.EventHistoryPage;
 import com.gialong.relayforge.delivery.api.replay.ReplayDeliveryResult;
@@ -132,6 +133,67 @@ class DeliveryHistoryReplayIntegrationTests {
                     assertThat(attempt.responsePreview()).isEqualTo("&lt;receiver&gt;&amp;accepted");
                     assertThat(attempt.destinationFingerprint()).doesNotContain("example");
                 });
+    }
+
+    @Test
+    void readsProjectHealthFromCurrentEndpointStateWithoutExposingDeliveryDetails() {
+        UUID ownerId = bootstrap("history.health.owner").ownerId();
+        UUID otherOwnerId = bootstrap("history.health.other").ownerId();
+        ProjectDetails project = projectCatalog.create(ownerId, "History health project");
+        var createdEndpoint = endpointCatalog.create(
+                ownerId,
+                project.id(),
+                "Health receiver",
+                "https://health.example/webhooks",
+                List.of("invoice.paid"),
+                true
+        ).orElseThrow();
+
+        PublishEventResult due = eventPublisher.publish(project.id(), "health-due", "invoice.paid", "{}");
+        PublishEventResult retry = eventPublisher.publish(project.id(), "health-retry", "invoice.paid", "{}");
+        PublishEventResult inFlight = eventPublisher.publish(project.id(), "health-in-flight", "invoice.paid", "{}");
+        PublishEventResult exhausted = eventPublisher.publish(project.id(), "health-exhausted", "invoice.paid", "{}");
+        UUID retryDeliveryId = deliveryIdForEvent(retry.eventId());
+        UUID inFlightDeliveryId = deliveryIdForEvent(inFlight.eventId());
+        UUID exhaustedDeliveryId = deliveryIdForEvent(exhausted.eventId());
+        jdbcTemplate.update(
+                "update deliveries set attempt_count = 1, due_at = CURRENT_TIMESTAMP + interval '1 minute' where id = ?",
+                retryDeliveryId
+        );
+        jdbcTemplate.update(
+                "update deliveries set state = 'CLAIMED', due_at = null, claim_token = ?, "
+                        + "lease_expires_at = CURRENT_TIMESTAMP + interval '1 minute' where id = ?",
+                UUID.randomUUID(),
+                inFlightDeliveryId
+        );
+        exhaust(exhaustedDeliveryId);
+
+        DeliveryProjectHealth enabledHealth = deliveryHistory.findProjectHealth(ownerId, project.id()).orElseThrow();
+        assertThat(enabledHealth.observedAt()).isNotNull();
+        assertThat(enabledHealth.dueEnabledCount()).isEqualTo(1);
+        assertThat(enabledHealth.oldestDueEnabledAt()).isNotNull();
+        assertThat(enabledHealth.retryScheduledCount()).isEqualTo(1);
+        assertThat(enabledHealth.inFlightCount()).isEqualTo(1);
+        assertThat(enabledHealth.pausedCount()).isZero();
+        assertThat(enabledHealth.exhaustedCount()).isEqualTo(1);
+        assertThat(enabledHealth.toString()).doesNotContain(due.eventId().toString()).doesNotContain("health.example");
+        assertThat(deliveryHistory.findProjectHealth(otherOwnerId, project.id())).isEmpty();
+
+        endpointCatalog.setEnabled(
+                ownerId,
+                project.id(),
+                createdEndpoint.endpoint().id(),
+                false,
+                createdEndpoint.endpoint().version()
+        ).orElseThrow();
+
+        DeliveryProjectHealth pausedHealth = deliveryHistory.findProjectHealth(ownerId, project.id()).orElseThrow();
+        assertThat(pausedHealth.dueEnabledCount()).isZero();
+        assertThat(pausedHealth.oldestDueEnabledAt()).isNull();
+        assertThat(pausedHealth.retryScheduledCount()).isZero();
+        assertThat(pausedHealth.inFlightCount()).isZero();
+        assertThat(pausedHealth.pausedCount()).isEqualTo(3);
+        assertThat(pausedHealth.exhaustedCount()).isEqualTo(1);
     }
 
     @Test

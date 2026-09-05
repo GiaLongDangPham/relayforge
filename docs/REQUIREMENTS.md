@@ -403,6 +403,24 @@ response succeeds, or the owner opens the existing Delivery view after a routed
 publish. This transient guide state may live only in the selected-project React
 tree and contains no raw key, signing secret, event payload, or credential.
 
+U4.1 presentation: project selection uses a compact dialog with bounded scrolling
+and existing pagination. The four workspace views precede optional guidance.
+Existing projects open Deliveries with guidance collapsed; projects just created
+open Endpoints with guidance expanded. Only the current step explains its action;
+completed steps retain a compact label. Collapsing guidance never resets forms
+or progress. Existing-key users can go directly to Test events; an accepted
+publish also proves usable-key access for this walkthrough. A missing creation
+fact must never be described as proof that the owner lacks a key.
+Changing project resets project-local form, secret and walkthrough state;
+renaming the same project does not. Guidance state remains transient.
+
+The private workspace may represent only the selected project ID in the `/app`
+query string so a reload restores the owner's context. The client validates that
+ID through the existing owner-scoped paginated project read, requesting further
+pages only while resolving that ID. It must not put raw material, form drafts,
+guide progress, event or delivery selection in the URL; an unresolved ID falls
+back to the first available owned project (or no selection when none exist).
+
 ### 13.2 Guided first-success path
 
 The private dashboard guides one safe, optional local success path in this
@@ -485,3 +503,68 @@ U2 onboarding acceptance must prove:
 - each current-step CTA visibly reveals and programmatically focuses its named
   existing workspace, while opening the workspace alone leaves guide progress
   unchanged.
+
+## 14. Owner delivery-health observation
+
+The private Delivery workspace may show one safe, project-scoped aggregate
+observation to orient an authenticated owner before they drill into paginated
+event history. It distinguishes work due at enabled endpoints, persisted future
+retries, in-flight claims, backlog paused by an endpoint disablement, and
+retained exhausted deliveries. This does not change the delivery state machine,
+create a worker command, expose operator telemetry, or promise that an
+individual delivery can be claimed immediately: local worker admission and an
+endpoint circuit may still defer due enabled work.
+
+The observation is owner-authorized, REST/PostgreSQL-authoritative, and
+aggregate-only. It must expose no event, delivery, endpoint, destination,
+payload, token, secret, receiver, or global worker metric data. SSE can only
+invalidate it for a REST refetch; five-second polling remains the dashboard's
+recovery path. Individual delivery inspection and manual replay remain in the
+existing history workflow.
+
+The UI must say that an all-zero observation means no delivery currently needs
+attention in the five counted categories; it does not mean that the project has
+no succeeded or permanently failed outcomes. It must give concise meaning for
+the existing owner-visible `PENDING`, `CLAIMED`, `RETRY_SCHEDULED`, `PAUSED`,
+`SUCCEEDED`, `FAILED_PERMANENT`, and `EXHAUSTED` statuses. A paused delivery
+may hand off to the existing Endpoints view because enabling its endpoint is an
+available action. An exhausted delivery remains replayable only from its
+individual history detail; this presentation must not create a bulk command,
+new API, or state transition.
+
+## 15. Private-dashboard data-state presentation
+
+The private dashboard distinguishes an initial read from a valid empty result,
+a background refresh/pagination read, and a failed read. It must not present an
+empty-state claim while the authoritative read is pending or unavailable.
+When an initial/list read fails, the owner sees resource-specific context and
+an in-place retry. If previously loaded records remain available, they remain
+visible and the failure must say that they may be stale; it must not discard
+them or replace them with onboarding advice.
+
+The dashboard may use small code-native React/CSS primitives for neutral
+loading, valid empty, recoverable read error, and bounded operation-result
+presentation. Those primitives carry presentation only: they do not introduce
+a toast service, client-side global state, automatic retry, browser storage,
+API call, or delivery-domain policy.
+
+Resource-specific meaning remains local. In particular, raw API keys and
+signing secrets remain in their existing one-time presentation; event-publish
+acceptance continues to state its accepted event/delivery count rather than a
+receiver result; and replay, endpoint state, and delivery guidance retain their
+existing individual actions and wording. Form validation remains attached to
+its field. A submit missing a project API key must explain the problem and move
+focus to that input rather than silently disabling the only submit action.
+
+Routine refreshes do not announce the whole workspace. Targeted non-urgent
+operation results may use a polite local status; untied read/mutation failures
+may use an alert and remain visible until the owner acts or navigates away.
+
+The private dashboard's visual baseline preserves readable text at 4.5:1 or
+higher against its rendered surface, and input boundaries plus visible focus
+indicators at 3:1 or higher against their adjacent surface. Keyboard-visible
+focus covers links, buttons, inputs, textareas, summaries, and programmatic
+workspace targets; forced-colors mode uses a system focus color. Decorative
+motion is opt-in under `prefers-reduced-motion: no-preference`; reduced-motion
+users retain immediate functional state feedback without transition or scale
+motion.

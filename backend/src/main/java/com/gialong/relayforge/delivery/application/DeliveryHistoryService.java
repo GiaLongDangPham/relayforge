@@ -19,6 +19,7 @@ import com.gialong.relayforge.delivery.api.history.DeliveryEndpointMetadata;
 import com.gialong.relayforge.delivery.api.history.DeliveryHistory;
 import com.gialong.relayforge.delivery.api.history.DeliveryHistoryDetails;
 import com.gialong.relayforge.delivery.api.history.DeliveryHistoryPage;
+import com.gialong.relayforge.delivery.api.history.DeliveryProjectHealth;
 import com.gialong.relayforge.delivery.api.history.DeliveryHistorySummary;
 import com.gialong.relayforge.delivery.api.history.EventHistoryDetails;
 import com.gialong.relayforge.delivery.api.history.EventHistoryPage;
@@ -69,6 +70,21 @@ final class DeliveryHistoryService implements DeliveryHistory {
                 Objects.requireNonNull(transactionManager, "transactionManager must not be null")
         );
         this.readTransaction.setReadOnly(true);
+    }
+
+    @Override
+    public Optional<DeliveryProjectHealth> findProjectHealth(UUID ownerId, UUID projectId) {
+        UUID requiredOwnerId = requireId(ownerId, "ownerId");
+        UUID requiredProjectId = requireId(projectId, "projectId");
+        return inReadTransaction(() -> {
+            if (projectCatalog.findOwned(requiredOwnerId, requiredProjectId).isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(deliveryStore.projectDeliveryHealth(
+                    requiredProjectId,
+                    endpointHistoryQuery.findEnabledEndpointIds(requiredProjectId)
+            ));
+        });
     }
 
     @Override

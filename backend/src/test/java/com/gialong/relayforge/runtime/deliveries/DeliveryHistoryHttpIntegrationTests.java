@@ -101,6 +101,14 @@ class DeliveryHistoryHttpIntegrationTests {
             HttpClient ownerBrowser = browserClient();
             login(ownerBrowser, baseUri, OWNER_LOGIN);
             URI eventList = baseUri.resolve("/api/v1/projects/" + project.id() + "/events");
+            URI healthUri = baseUri.resolve("/api/v1/projects/" + project.id() + "/delivery-health");
+            HttpResponse<String> health = ownerBrowser.send(
+                    HttpRequest.newBuilder(healthUri).GET().build(), BodyHandlers.ofString()
+            );
+            assertThat(health.statusCode()).isEqualTo(200);
+            assertThat(health.headers().firstValue("Cache-Control")).hasValue("no-store");
+            assertThat(health.body()).contains("\"observedAt\"").contains("\"dueEnabledCount\"")
+                    .doesNotContain(project.id().toString()).doesNotContain("receiver").doesNotContain("inv-http");
             HttpResponse<String> list = ownerBrowser.send(
                     HttpRequest.newBuilder(eventList).GET().build(), BodyHandlers.ofString()
             );
@@ -162,6 +170,10 @@ class DeliveryHistoryHttpIntegrationTests {
                     HttpRequest.newBuilder(eventDetail).GET().build(), BodyHandlers.ofString()
             );
             assertProblem(crossOwner, 404, "RESOURCE_NOT_FOUND");
+            HttpResponse<String> crossOwnerHealth = otherBrowser.send(
+                    HttpRequest.newBuilder(healthUri).GET().build(), BodyHandlers.ofString()
+            );
+            assertProblem(crossOwnerHealth, 404, "RESOURCE_NOT_FOUND");
             HttpResponse<String> crossOwnerUpdates = otherBrowser.send(
                     HttpRequest.newBuilder(updatesUri).GET().build(),
                     BodyHandlers.ofString()
